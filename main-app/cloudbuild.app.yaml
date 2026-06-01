@@ -1,0 +1,56 @@
+steps:
+  - name: python:3.11-slim
+    entrypoint: sh
+    args:
+      - -c
+      - pip install --no-cache-dir -r backend/requirements.txt && python backend/scripts/build_catalog_read_model.py --output backend/read-model/catalog.json
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile
+      - --build-arg
+      - VITE_API_BASE_URL=$_VITE_API_BASE_URL
+      - --build-arg
+      - VITE_TRYON_BASE_URL=$_VITE_TRYON_BASE_URL
+      - --build-arg
+      - VITE_ADMIN_BASE_URL=$_VITE_ADMIN_BASE_URL
+      - -t
+      - asia-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/$_IMAGE_NAME:$_TAG
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - asia-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/$_IMAGE_NAME:$_TAG
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - $_SERVICE_NAME
+      - --image
+      - asia-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/$_IMAGE_NAME:$_TAG
+      - --region
+      - $_REGION
+      - --platform
+      - managed
+      - --allow-unauthenticated
+      - --port
+      - '8080'
+      - --cpu
+      - '1'
+      - --memory
+      - 512Mi
+      - --concurrency
+      - '40'
+      - --timeout
+      - '120'
+      - --min-instances
+      - '0'
+      - --max-instances
+      - '3'
+      - --clear-cloudsql-instances
+      - --set-env-vars
+      - PUBLIC_IMAGE_BASE_URL=$_PUBLIC_IMAGE_BASE_URL,CORS_ALLOW_ORIGINS=$_CORS_ALLOW_ORIGINS,ENABLE_DEBUG_PAGES=$_ENABLE_DEBUG_PAGES,GCS_BUCKET_NAME=$_GCS_BUCKET_NAME,ADMIN_API_URL=$_ADMIN_API_URL,INGEST_SECRET_KEY=$_INGEST_SECRET_KEY,CATALOG_READ_MODEL_PATH=/app/backend/read-model/catalog.json
+images:
+  - asia-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/$_IMAGE_NAME:$_TAG

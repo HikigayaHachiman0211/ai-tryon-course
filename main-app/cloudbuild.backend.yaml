@@ -1,0 +1,11 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - backend/Dockerfile
+      - -t
+      - asia-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/$_IMAGE_NAME:$_TAG
+      - .
+images:
+  - asia-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/$_IMAGE_NAME:$_TAG

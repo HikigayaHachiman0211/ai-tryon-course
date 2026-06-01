@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# 环境配置
+.env
+.env.local
+gcp-credentials.json
+
+# IDE
+.idea/
+.vscode/
+
+# 临时文件
+uploads/
+assets/
+history/
+*.log
+
+# Git
+.git/
+.gitignore
+
+# 大型文档 (减少部署时间)
+generate-content.md

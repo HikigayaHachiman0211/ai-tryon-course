@@ -1,0 +1,401 @@
+:root {
+    /* === Apple Design System (Light Default) === */
+    --bg-color: #f5f5f7;
+    --bg-primary: #ffffff;
+    --bg-secondary: #f5f5f7;
+    --bg-dark: #000000;
+    --card-bg: #ffffff;
+    --card-bg-dark: #1d1d1f;
+    --card-border: rgba(0, 0, 0, 0.06);
+    --accent-color: #0071e3;
+    --accent-glow: rgba(0, 113, 227, 0.08);
+    --accent-link: #0066cc;
+    --accent-secondary: #147ce5;
+    --accent-light: #0071e3;
+    --text-primary: #1d1d1f;
+    --text-primary-dark: #ffffff;
+    --text-secondary: #86868b;
+    --text-muted: #86868b;
+    --gradient-1: transparent;
+    --gradient-2: transparent;
+    --surface-strong: #ffffff;
+    --surface-soft: #f5f5f7;
+    --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.08);
+    --border-light: #d2d2d7;
+    --border-subtle: rgba(0, 0, 0, 0.04);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'SF Pro Display', 'SF Pro Text', -apple-system, BlinkMacSystemFont,
+        'Noto Sans SC', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Background globes — hidden in Apple design */
+.background-globes {
+    display: none !important;
+}
+
+.globe,
+.globe-1,
+.globe-2,
+.globe-3 {
+    display: none !important;
+}
+
+@keyframes float {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(30px, 50px); }
+}
+
+.app-container {
+    width: 95%;
+    max-width: 1400px;
+    padding: 2rem;
+    background: transparent;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+    min-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+header h1 {
+    font-size: 56px;
+    font-weight: 600;
+    letter-spacing: -0.28px;
+    line-height: 1.07;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.highlight {
+    color: var(--accent-color);
+}
+
+header p {
+    color: var(--text-secondary);
+    font-size: 17px;
+    line-height: 1.47;
+    letter-spacing: -0.374px;
+}
+
+.grid-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 2rem;
+    flex-grow: 1;
+}
+
+.glass-panel {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    box-shadow: var(--shadow-card);
+}
+
+.glass-panel:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.step-badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--bg-secondary);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1.2rem;
+    margin-right: 1rem;
+    color: var(--accent-color);
+}
+
+.header-text h2 {
+    font-size: 1.25rem;
+    font-weight: 500;
+}
+
+.header-text p {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.upload-area {
+    flex-grow: 1;
+    border: 2px dashed var(--border-light);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-secondary);
+}
+
+.upload-area:hover,
+.upload-area.dragover {
+    border-color: var(--accent-color);
+    background: rgba(0, 113, 227, 0.04);
+}
+
+.preview-container {
+    text-align: center;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.preview-container img {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.upload-icon {
+    font-size: 3rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+
+.controls {
+    margin-bottom: 1.5rem;
+}
+
+.api-input-group {
+    position: relative;
+    margin-bottom: 1rem;
+}
+
+.api-input-group input {
+    width: 100%;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    padding: 0.8rem 1rem 0.8rem 2.5rem;
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.api-input-group input:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.12);
+}
+
+.input-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary);
+}
+
+.glow-button {
+    width: 100%;
+    padding: 1rem;
+    background: var(--accent-color);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-weight: 400;
+    font-size: 17px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.3s ease;
+}
+
+.glow-button:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+}
+
+.glow-button:not(:disabled):hover {
+    background: #0077ed;
+}
+
+.result-display {
+    flex-grow: 1;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+    position: relative;
+}
+
+.result-image {
+    max-width: 100%;
+    border-radius: 8px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+    animation: fadeIn 0.5s ease;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.placeholder-state {
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.placeholder-state i {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+/* Loading Scanner Animation */
+.scanner {
+    width: 60px;
+    height: 60px;
+    border: 3px solid transparent;
+    border-top-color: var(--accent-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1rem;
+}
+
+.scanner::before {
+    content: '';
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    right: 5px;
+    bottom: 5px;
+    border: 3px solid transparent;
+    border-top-color: var(--accent-color);
+    border-radius: 50%;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+footer {
+    text-align: center;
+    margin-top: 2rem;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    opacity: 0.7;
+}
+
+@media (max-width: 768px) {
+    header h1 {
+        font-size: 2rem;
+    }
+
+    .grid-container {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* === Image Loading Reliability === */
+
+/* Skeleton / shimmer placeholder */
+.img-skeleton {
+    background: var(--bg-secondary);
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px;
+}
+.img-skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.04), transparent);
+    animation: shimmer 1.5s ease-in-out infinite;
+}
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+/* Image error fallback */
+img.img-error {
+    opacity: 0.5;
+    object-fit: contain !important;
+}
+.img-error-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    min-height: 120px;
+    padding: 16px;
+}
+.img-error-placeholder i {
+    font-size: 1.5rem;
+    opacity: 0.4;
+}
+
+/* Smooth image reveal */
+img[data-loaded="true"] {
+    animation: imgReveal 0.3s ease;
+}
+@keyframes imgReveal {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}

@@ -1,0 +1,47 @@
+Create a photorealistic virtual try-on result using two inputs.
+Input 1 is the model photo.
+Input 2 is the garment reference photo.
+
+Primary goal:
+Dress the person from Input 1 in the exact garment from Input 2 as naturally and realistically as possible.
+
+Identity and scene preservation:
+- Preserve the same person from Input 1: face, hairstyle, skin tone, body shape, pose, camera angle, and background should remain consistent.
+- Keep the original composition and lighting of Input 1 unless the user explicitly asks for a change.
+- Preserve the original face geometry and expression from Input 1. Do not beautify, de-age, reshape, or substantially redraw the face.
+- Preserve the original body proportions from Input 1. Do not change head size, shoulder width, neck length, chest position, waist placement, arm length, hand size, or torso length.
+- Treat this as a clothing replacement task, not a full character regeneration task. Edit the clothing area first and keep the person intact.
+
+Garment fidelity requirements:
+- Treat Input 2 as the exact product reference, not a loose inspiration.
+- Preserve the garment category and structure from Input 2. Do not change a blouse into a dress, tank top, off-shoulder top, corset, or any other different clothing type.
+- Preserve neckline, collar, lapel, sleeves, cuffs, hem length, waistline, silhouette, trim, lace, bow, buttons, pleats, seams, panel lines, and decorative details.
+- Preserve the original colors, fabric feel, pattern direction, stripe spacing, and material characteristics.
+- Keep the overall fit realistic on the model's body while respecting the garment's original cut.
+
+Natural try-on quality:
+- Make the clothing follow the model's pose with believable drape, tension, folds, and occlusion.
+- Ensure sleeves connect naturally to shoulders and arms, collars sit correctly around the neck, and garment edges align cleanly with the body.
+- Preserve hands, arms, and body anatomy correctly without distortion.
+- Ensure the neck, shoulders, clavicle, chest, waist, elbows, wrists, and hands stay anatomically coherent with the original photo.
+- The garment must fit the existing body from Input 1 instead of reshaping the body to match the garment.
+- Match the face, skin, and body with the same depth, perspective, lighting direction, shadow softness, color temperature, and image sharpness as Input 1 so the result does not look composited.
+- Match garment sharpness, blur level, texture frequency, sensor noise, denoising strength, contrast, saturation, and dynamic range to the rest of Input 1.
+- Keep realistic contact shadows and ambient occlusion at the collar, armpits, waist, hips, cuffs, lapels, hem, and overlap areas so the garment feels physically attached to the body.
+- Preserve natural edge transitions with no halo, cutout border, pasted-on look, double outline, jagged edge, or mismatched inpainting patch.
+- If the reference includes a matching skirt, shorts, pants, dress section, or any lower-body piece, replace the original lower-body clothing from Input 1 completely in the covered area instead of leaving it visible underneath.
+- If the reference is a coordinated two-piece outfit, keep the top and bottom as one matched set and do not mix the original lower garment from Input 1 into the result.
+- The final image should look like a real photograph of the same person actually wearing the referenced garment.
+
+Strict negatives:
+- Do not redesign the outfit.
+- Do not remove major garment elements.
+- Do not expose more skin than the garment design implies.
+- Do not replace the person with another identity.
+- Do not add unrelated accessories or jewelry unless they already exist in Input 1 or are explicitly requested.
+- Do not generate a different face style, enlarged eyes, overly smooth skin, doll-like features, or an airbrushed beauty-filter look.
+- Do not change body shape to an unrealistic hourglass form or create mismatched shoulders, chest, or arms.
+- Do not leave obvious compositing seams, pasted-on garment regions, mismatched resolution between clothing and background, or a garment that looks sharper or blurrier than the person and scene.
+
+Style:
+High-end fashion photography, realistic fabric texture, clean detail reproduction, natural skin rendering, physically plausible lighting.

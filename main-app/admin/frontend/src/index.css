@@ -1,0 +1,39 @@
+body {
+  margin: 0;
+  background: #f5f5f7;
+}
+
+/* Apple-style frosted glass nav */
+.ant-pro-layout .ant-layout-sider {
+  background: rgba(255, 255, 255, 0.72) !important;
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* Pill-style primary buttons */
+.ant-btn-primary {
+  border-radius: 980px;
+}
+
+/* Card styling */
+.ant-card {
+  border: none;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+/* Table subtle styling */
+.ant-table-thead > tr > th {
+  background: #f5f5f7 !important;
+  font-weight: 600;
+}
+
+/* Statistic cards */
+.stat-card .ant-statistic-title {
+  color: rgba(0, 0, 0, 0.48);
+  font-size: 14px;
+}
+
+.stat-card .ant-statistic-content-value {
+  color: #1d1d1f;
+  font-weight: 600;
+}

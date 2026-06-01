@@ -1,0 +1,22 @@
+services:
+  admin:
+    build: .
+    ports:
+      - "8081:8081"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/ai_tryon
+      - JWT_SECRET_KEY=<your-jwt-secret-at-least-32-characters>
+      - ADMIN_INIT_USERNAME=admin
+      - ADMIN_INIT_PASSWORD=<your-admin-password>
+      - MAIN_SITE_URL=http://main-site:8080
+      - GCS_BUCKET_NAME=<your-gcs-bucket>
+      - PUBLIC_IMAGE_BASE_URL=https://storage.googleapis.com/<your-gcs-bucket>/<your-image-prefix>"5432:5432"
+    environment:
+      - POSTGRES_DB=ai_tryon
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=<your-postgres-password>
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

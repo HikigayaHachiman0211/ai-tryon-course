@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+
+# 环境配置
+.env
+.env.local
+*.env
+gcp-credentials.json
+
+# 虚拟环境
+venv/
+.venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 临时上传文件 (Cloud Run 无状态，不需要)
+uploads/
+assets/
+history/
+
+# 缓存
+.cache/
+*.log
+
+# Git
+.git/
+.gitignore
+
+# 文档 (可选保留)
+# generate-content.md
