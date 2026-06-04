@@ -13,6 +13,8 @@ import httpx
 
 from app.catalog_seed import BRAND_ALIASES, extract_brand_tag, get_platform_label, infer_brand_name, infer_platform_key
 from app.database import Product, SIZE_ORDER, normalize_size
+from app.ai_runtime_config import resolve_provider_config, resolve_effective_provider
+from app.prompt_loader import load_active_prompt
 
 import re as _re_module
 import urllib.parse as _urllib_parse
@@ -28,6 +30,94 @@ DEEPSEEK_MODELS = [
     "deepseek-reasoner",
 ]
 DEEPSEEK_API_BASE = "https://api.deepseek.com"
+
+DEFAULT_MIMO_API_BASE = "https://api.xiaomimimo.com/v1"
+DEFAULT_MIMO_MODEL = os.getenv("MIMO_MODEL", "mimo-v2.5")
+MIMO_API_BASE = os.getenv("MIMO_API_BASE", DEFAULT_MIMO_API_BASE).rstrip("/")
+MIMO_API_KEY = os.getenv("MIMO_API_KEY", "")
+MIMO_AUTH_HEADER = os.getenv("MIMO_AUTH_HEADER", "api-key").strip().lower()
+MIMO_MODELS = ["mimo-v2.5", "mimo-v2.5-pro", "mimo-v2-omni"]
+
+
+def _sanitize_error_for_log(exc: Exception) -> str:
+    """Sanitize exception message to strip any sensitive data (API keys, base64, etc).
+
+    Ordering matters: longer/more-specific patterns run first so shorter
+    patterns don't partially consume the string and leave secrets exposed.
+    """
+    text = str(exc)
+    # 1. Authorization header with Bearer token — must match the full value
+    text = re.sub(
+        r"Authorization\s*[:=]\s*Bearer\s+\S+",
+        "Authorization: Bearer [REDACTED]",
+        text,
+        flags=re.IGNORECASE,
+    )
+    # 2. api-key / api_key header with value
+    text = re.sub(
+        r"api[_-]?key\s*[:=]\s*\S+",
+        "api-key=[REDACTED]",
+        text,
+        flags=re.IGNORECASE,
+    )
+    # 3. Query-string ?key=...
+    text = re.sub(r"\?key=\S+", "?key=[REDACTED]", text, flags=re.IGNORECASE)
+    # 4. Standalone Bearer token (if not already caught by #1)
+    text = re.sub(r"Bearer\s+\S+", "Bearer [REDACTED]", text, flags=re.IGNORECASE)
+    # 5. Inline base64 data URLs
+    text = re.sub(
+        r"data:[a-z]+/[a-z]+;base64,[A-Za-z0-9+/=]{40,}",
+        "data:[REDACTED]",
+        text,
+        flags=re.IGNORECASE,
+    )
+    # Truncate very long messages that might contain request bodies
+    if len(text) > 300:
+        text = text[:300] + "..."
+    return text
+
+
+def _run_sanitization_self_test() -> None:
+    """Minimal assertions to guarantee no token leakage survives sanitization."""
+    cases = [
+        (
+            "Request failed: Authorization: Bearer demo-secret-token-12345",
+            "demo-secret-token-12345",
+        ),
+        (
+            "HTTP 401: api-key: abcdefghijklmnop",
+            "abcdefghijklmnop",
+        ),
+        (
+            "Error from https://api.example.com/v1?key=AIzaSyD-SECRET",
+            "AIzaSyD-SECRET",
+        ),
+        (
+            "Inline image data:image/jpeg;base64," + "A" * 80,
+            "AAAA",
+        ),
+        (
+            "Header set: Authorization=Bearer ghp_xxxxxxxxxxxx",
+            "ghp_xxxxxxxxxxxx",
+        ),
+    ]
+    for raw, secret in cases:
+        cleaned = _sanitize_error_for_log(Exception(raw))
+        assert secret not in cleaned, (
+            f"Sanitization leak: '{secret}' found in '{cleaned}'"
+        )
+
+
+# Run self-test once at import time (zero-cost after module is loaded)
+_run_sanitization_self_test()
+
+
+def normalize_vision_provider(value: str | None) -> str | None:
+    """Normalize vision provider request value. Returns None if not specified."""
+    if not value:
+        return None
+    provider = value.strip().lower()
+    return provider if provider in {"mimo", "gemini", "auto"} else None
 
 COLOR_GROUPS = {
     "black": ["黑", "曜石黑", "极夜黑", "幻影黑", "静谧黑", "摩卡黑", "深炭黑", "青光黑"],
@@ -482,6 +572,73 @@ def call_gemini_profile(
     return strip_json_block("\n".join(texts))
 
 
+def call_gemini_text_profile(
+    *,
+    api_key: str,
+    gender: str | None,
+    mbti: str | None,
+    color_preference: str,
+    size: str | None,
+    style_preference: str | None,
+    model: str,
+) -> dict[str, Any] | None:
+    """Gemini text-only profile inference (no image). Uses generateContent without inline_data."""
+    prompt = f"""你是服装搭配分析助手。请根据用户提供的信息，推断体型特征和推荐方案，输出一个 JSON 对象。
+
+已知条件：
+- 颜色偏好: {color_preference}
+- 用户性别: {gender or '未提供'}
+- MBTI: {mbti or '未提供'}
+- 用户已提供尺码: {size or '未提供'}
+- 用户已提供款式偏好: {style_preference or '未提供'}
+
+返回字段（JSON 格式）：
+{{
+  "recommended_size": "XS/S/M/L/XL/2XL/3XL/4XL/5XL/unknown 之一",
+  "body_shape": "偏瘦/标准/微胖/高壮/H型/梨形/倒三角/沙漏型/O型/未知 之一",
+  "suggested_style": "常规短外套/短款/轻薄款/绗缝款（排骨款）/面包服/中长款大衣/长款/巴恩风/工装风 之一",
+  "reasoning": "50字内中文解释"
+}}
+
+要求：
+- 综合所有已知条件进行推断。
+- 如果信息不足无法可靠判断，请写 unknown 或 未知。
+""".strip()
+
+    payload = {
+        "contents": [
+            {
+                "parts": [{"text": prompt}],
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.2,
+            "responseMimeType": "application/json",
+        },
+    }
+
+    response = httpx.post(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+        params={"key": api_key},
+        json=payload,
+        timeout=30.0,
+    )
+    response.raise_for_status()
+    response_json = response.json()
+
+    texts: list[str] = []
+    for candidate in response_json.get("candidates", []):
+        content = candidate.get("content") or {}
+        for part in content.get("parts", []):
+            if "text" in part:
+                texts.append(part["text"])
+
+    if not texts:
+        return None
+
+    return strip_json_block("\n".join(texts))
+
+
 def call_deepseek_profile(
     *,
     api_key: str,
@@ -545,6 +702,154 @@ def call_deepseek_profile(
         return None
 
     content = choices[0].get("message", {}).get("content", "")
+    if not content:
+        return None
+
+    return strip_json_block(content)
+
+
+def call_mimo_profile(
+    *,
+    api_key: str,
+    gender: str | None,
+    mbti: str | None,
+    color_preference: str,
+    size: str | None,
+    style_preference: str | None,
+    model: str | None = None,
+    image_bytes: bytes | None = None,
+    mime_type: str | None = None,
+    prompt_override: str | None = None,
+    base_url: str | None = None,
+    auth_type: str | None = None,
+    auth_header_name: str | None = None,
+) -> dict[str, Any] | None:
+    api_base = (base_url or MIMO_API_BASE or DEFAULT_MIMO_API_BASE).rstrip("/")
+    if not api_base:
+        return None
+    effective_key = api_key or MIMO_API_KEY
+    if not effective_key:
+        return None
+
+    # Normalize model: default mimo-v2.5, allow mimo-v2-omni
+    normalized_model = (model or DEFAULT_MIMO_MODEL or "mimo-v2.5").strip()
+    if normalized_model not in MIMO_MODELS:
+        normalized_model = "mimo-v2.5"
+
+    # Use prompt_override if provided, otherwise load from DB or use defaults
+    system_msg = "你是专业的冬季羽绒服搭配分析助手。请根据用户信息和照片输出严格 JSON，不要输出多余解释。"
+
+    _prompt_vars = {
+        "color_preference": color_preference,
+        "gender": gender or "未提供",
+        "mbti": mbti or "未提供",
+        "size": size or "未提供",
+        "style_preference": style_preference or "未提供",
+    }
+
+    _DEFAULT_TEXT_PROMPT = (
+        "请根据以下用户信息推断体型特征和推荐方案，输出一个 JSON 对象。\n\n"
+        "已知条件：\n"
+        "- 颜色偏好: {color_preference}\n"
+        "- 用户性别: {gender}\n"
+        "- MBTI: {mbti}\n"
+        "- 用户已提供尺码: {size}\n"
+        "- 用户已提供款式偏好: {style_preference}\n\n"
+        "返回字段（JSON 格式）：\n"
+        '{\n'
+        '  "recommended_size": "XS/S/M/L/XL/2XL/3XL/4XL/5XL/unknown 之一",\n'
+        '  "body_shape": "偏瘦/标准/微胖/高壮/H型/梨形/倒三角/沙漏型/O型/未知 之一",\n'
+        '  "suggested_style": "常规短外套/短款/轻薄款/绗缝款（排骨款）/面包服/中长款大衣/长款/巴恩风/工装风 之一",\n'
+        '  "reasoning": "50字内中文解释"\n'
+        '}\n\n'
+        "要求：\n"
+        "- 综合所有已知条件进行推断。\n"
+        "- 如果信息不足无法可靠判断，请写 unknown 或 未知。"
+    )
+
+    _DEFAULT_MULTIMODAL_PROMPT = (
+        "请根据照片和以下用户偏好，分析身型特征并推荐羽绒服方案，输出严格 JSON。\n\n"
+        "已知条件：\n"
+        "- 颜色偏好: {color_preference}\n"
+        "- 用户性别: {gender}\n"
+        "- MBTI: {mbti}\n"
+        "- 用户已提供尺码: {size}\n"
+        "- 用户已提供款式偏好: {style_preference}\n\n"
+        "返回字段（JSON 格式）：\n"
+        '{\n'
+        '  "recommended_size": "XS/S/M/L/XL/2XL/3XL/4XL/5XL/unknown 之一",\n'
+        '  "body_shape": "偏瘦/标准/微胖/高壮/H型/梨形/倒三角/沙漏型/O型/未知 之一",\n'
+        '  "suggested_style": "常规短外套/短款/轻薄款/绗缝款（排骨款）/面包服/中长款大衣/长款/巴恩风/工装风 之一",\n'
+        '  "reasoning": "50字内中文解释"\n'
+        '}\n\n'
+        "要求：\n"
+        "- 结合照片中的人物身型、穿着风格与已知条件综合分析。\n"
+        "- 如果照片或信息不足无法可靠判断，请写 unknown 或 未知。"
+    )
+
+    if prompt_override:
+        text_prompt = prompt_override
+        multimodal_prompt = prompt_override
+    else:
+        # Try loading from DB prompt management, fall back to defaults
+        text_prompt = load_active_prompt("mimo_image_profile_analysis", _DEFAULT_TEXT_PROMPT, _prompt_vars)
+        multimodal_prompt = load_active_prompt("mimo_image_profile_analysis", _DEFAULT_MULTIMODAL_PROMPT, _prompt_vars)
+
+    if image_bytes:
+        encoded = base64.b64encode(image_bytes).decode("utf-8")
+        effective_mime = mime_type or "image/jpeg"
+        data_url = f"data:{effective_mime};base64,{encoded}"
+        user_content = [
+            {"type": "image_url", "image_url": {"url": data_url}},
+            {"type": "text", "text": multimodal_prompt},
+        ]
+    else:
+        user_content = text_prompt
+
+    messages = [
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": user_content},
+    ]
+
+    payload = {
+        "model": normalized_model,
+        "messages": messages,
+        "temperature": 0.2,
+        # MiMo v2.5 may spend several hundred tokens in reasoning_content before
+        # emitting the final JSON in message.content. 512 tokens often truncates
+        # before content is produced, which looks like an empty model response.
+        "max_completion_tokens": 2048,
+        "stream": False,
+    }
+
+    # Build auth header: default api-key, switchable to Authorization: Bearer
+    # Use runtime auth_type/auth_header_name from provider config if available
+    effective_auth_type = (auth_type or "").strip().lower()
+    effective_header_name = (auth_header_name or "").strip().lower()
+
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if effective_auth_type == "bearer" or effective_header_name == "authorization":
+        headers["Authorization"] = f"Bearer {effective_key}"
+    else:
+        # Default: api-key header (MiMo official)
+        headers["api-key"] = effective_key
+
+    response = httpx.post(
+        f"{api_base}/chat/completions",
+        headers=headers,
+        json=payload,
+        timeout=30.0,
+    )
+    response.raise_for_status()
+    response_json = response.json()
+
+    choices = response_json.get("choices", [])
+    if not choices:
+        return None
+
+    # Read content, ignore reasoning_content
+    message = choices[0].get("message", {})
+    content = message.get("content", "")
     if not content:
         return None
 
@@ -620,75 +925,155 @@ def resolve_user_profile(
     gemini_model: str | None,
     deepseek_api_key: str | None = None,
     deepseek_model: str | None = None,
+    mimo_api_key: str | None = None,
+    mimo_model: str | None = None,
     ai_provider: str | None = None,
+    vision_provider: str | None = None,
 ) -> dict[str, Any]:
-    gemini_key = gemini_api_key or os.getenv("GEMINI_API_KEY")
-    deepseek_key = deepseek_api_key or os.getenv("DEEPSEEK_API_KEY")
-    provider = (ai_provider or "auto").strip().lower()
     resolved_size = normalize_size(size)
     resolved_style = normalize_style_preference(style_preference)
+    user_size = resolved_size  # preserve user input
+    user_style = resolved_style  # preserve user input
     body_shape: str | None = None
     ai_reasoning: str | None = None
     size_source = "user" if resolved_size else "unknown"
     style_source = "user" if resolved_style else "unknown"
     ai_result: dict[str, Any] | None = None
     used_provider = "none"
+    vision_used = "none"
+    mimo_multimodal_used = False
+    provider_errors: list[str] = []
+    ai_attempted = False
+    rule_fallback_used = False
 
-    needs_ai = not resolved_size or not resolved_style
+    # Always try AI — not just when fields are missing
+    should_try_ai = True
+    has_image = bool(image_bytes)
 
-    # --- Gemini attempt ---
-    if needs_ai and provider in ("auto", "gemini") and image_bytes and gemini_key:
-        try:
-            ai_result = call_gemini_profile(
-                image_bytes=image_bytes,
-                mime_type=mime_type,
-                api_key=gemini_key,
-                gender=gender,
-                mbti=mbti,
-                color_preference=color_preference,
-                size=size,
-                style_preference=style_preference,
-                model=gemini_model or DEFAULT_GEMINI_MODEL,
+    # --- Resolve fallback chains from feature config (DB → code defaults) ---
+    _, text_chain = resolve_effective_provider("recommendation", request_provider=ai_provider)
+    _, vision_chain = resolve_effective_provider("vision_analysis", request_provider=vision_provider)
+
+    # --- Helper: resolve a single provider's config ---
+    def _get_cfg(pk: str) -> dict[str, Any]:
+        req_key: str | None = None
+        req_model: str | None = None
+        if pk == "mimo":
+            req_key, req_model = mimo_api_key, mimo_model
+        elif pk == "gemini":
+            req_key, req_model = gemini_api_key, gemini_model
+        elif pk == "deepseek":
+            req_key, req_model = deepseek_api_key, deepseek_model
+        return resolve_provider_config(pk, request_api_key=req_key, request_model=req_model)
+
+    # --- Helper: call a provider (multimodal if image, text otherwise) ---
+    def _try_call(pk: str, cfg: dict[str, Any], *, use_image: bool) -> dict[str, Any] | None:
+        api_key = cfg["api_key"]
+        model = cfg["default_model"]
+        if not api_key:
+            # Record specific reason instead of generic "not configured"
+            reason = cfg.get("failure_reason", "")
+            if reason:
+                provider_errors.append(reason)
+            return None
+        if pk == "mimo":
+            return call_mimo_profile(
+                api_key=api_key, gender=gender, mbti=mbti,
+                color_preference=color_preference, size=size,
+                style_preference=style_preference, model=model,
+                image_bytes=image_bytes if use_image else None,
+                mime_type=mime_type if use_image else None,
+                base_url=cfg.get("base_url"),
+                auth_type=cfg.get("auth_type"),
+                auth_header_name=cfg.get("auth_header_name"),
             )
-            if ai_result:
-                used_provider = "gemini"
-        except Exception as exc:
-            ai_reasoning = f"Gemini 分析失败: {exc}"
-
-    # --- Deepseek attempt (fallback in auto, or explicit choice) ---
-    if needs_ai and not ai_result and provider in ("auto", "deepseek") and deepseek_key:
-        try:
-            ai_result = call_deepseek_profile(
-                api_key=deepseek_key,
-                gender=gender,
-                mbti=mbti,
-                color_preference=color_preference,
-                size=size,
-                style_preference=style_preference,
-                model=deepseek_model or DEFAULT_DEEPSEEK_MODEL,
+        if pk == "gemini":
+            if use_image:
+                return call_gemini_profile(
+                    image_bytes=image_bytes, mime_type=mime_type,
+                    api_key=api_key, gender=gender, mbti=mbti,
+                    color_preference=color_preference, size=size,
+                    style_preference=style_preference, model=model,
+                )
+            # Text-only Gemini — no image, use text generateContent
+            return call_gemini_text_profile(
+                api_key=api_key, gender=gender, mbti=mbti,
+                color_preference=color_preference, size=size,
+                style_preference=style_preference, model=model,
             )
-            if ai_result:
-                used_provider = "deepseek"
-                ai_reasoning = None
-        except Exception as exc:
-            fallback_msg = f"Deepseek 分析失败: {exc}"
-            ai_reasoning = f"{ai_reasoning}; {fallback_msg}" if ai_reasoning else fallback_msg
+        if pk == "deepseek":
+            return call_deepseek_profile(
+                api_key=api_key, gender=gender, mbti=mbti,
+                color_preference=color_preference, size=size,
+                style_preference=style_preference, model=model,
+            )
+        return None
 
-    if not ai_result and needs_ai and ai_reasoning is None:
-        ai_reasoning = "未配置 AI 引擎密钥，已回退为规则推断"
+    # ===== Vision fallback chain (when image is available) =====
+    if should_try_ai and has_image:
+        ai_attempted = True
+        for pk in vision_chain:
+            if pk == "rule":
+                break
+            cfg = _get_cfg(pk)
+            if not cfg["api_key"]:
+                continue
+            try:
+                result = _try_call(pk, cfg, use_image=True)
+                if result:
+                    ai_result = result
+                    used_provider = pk
+                    vision_used = pk
+                    if pk == "mimo":
+                        mimo_multimodal_used = True
+                    break
+                provider_errors.append(f"{pk} 图像分析返回为空或非 JSON")
+            except Exception as exc:
+                provider_errors.append(f"{pk} 图像分析失败: {_sanitize_error_for_log(exc)}")
+
+    # ===== Text fallback chain (always, as backup or primary) =====
+    if should_try_ai and not ai_result:
+        ai_attempted = True
+        for pk in text_chain:
+            if pk == "rule":
+                break
+            cfg = _get_cfg(pk)
+            if not cfg["api_key"]:
+                continue
+            try:
+                result = _try_call(pk, cfg, use_image=False)
+                if result:
+                    ai_result = result
+                    used_provider = pk
+                    break
+                provider_errors.append(f"{pk} 文本分析返回为空或非 JSON")
+            except Exception as exc:
+                provider_errors.append(f"{pk} 文本分析失败: {_sanitize_error_for_log(exc)}")
+
+    if not ai_result:
+        rule_fallback_used = True
+
+    if not ai_result and ai_reasoning is None:
+        if provider_errors:
+            ai_reasoning = f"AI 推断失败，已回退为规则推断。原因：{'; '.join(provider_errors[:3])}"
+        else:
+            ai_reasoning = "未配置 AI 引擎密钥，已回退为规则推断"
 
     if ai_result:
         body_shape = normalize_body_shape(str(ai_result.get("body_shape") or ""))
         result_reasoning = str(ai_result.get("reasoning") or "").strip()
         if result_reasoning:
             ai_reasoning = result_reasoning
-        if not resolved_size:
-            resolved_size = normalize_size(str(ai_result.get("recommended_size") or ""))
-            if resolved_size:
+        # Only fill size/style from AI if user didn't provide them
+        if not user_size:
+            ai_size = normalize_size(str(ai_result.get("recommended_size") or ""))
+            if ai_size:
+                resolved_size = ai_size
                 size_source = used_provider
-        if not resolved_style:
-            resolved_style = normalize_style_preference(str(ai_result.get("suggested_style") or ""))
-            if resolved_style:
+        if not user_style:
+            ai_style = normalize_style_preference(str(ai_result.get("suggested_style") or ""))
+            if ai_style:
+                resolved_style = ai_style
                 style_source = used_provider
 
     if not body_shape:
@@ -703,6 +1088,10 @@ def resolve_user_profile(
         resolved_style = infer_style_heuristically(body_shape, mbti)
         style_source = "heuristic"
 
+    # Resolve effective models for return values
+    mimo_cfg = _get_cfg("mimo")
+    gemini_cfg = _get_cfg("gemini")
+
     reasoning = ai_reasoning or build_inference_reason(body_shape, resolved_size, resolved_style, mbti)
     return {
         "resolved_size": resolved_size,
@@ -711,9 +1100,17 @@ def resolve_user_profile(
         "size_source": size_source,
         "style_source": style_source,
         "reasoning": reasoning,
-        "gemini_model": gemini_model or DEFAULT_GEMINI_MODEL,
+        "gemini_model": gemini_cfg["default_model"],
         "gemini_used": used_provider == "gemini",
         "ai_provider": used_provider,
+        "vision_provider": vision_chain[0] if vision_chain else "mimo",
+        "vision_provider_used": vision_used,
+        "mimo_model": mimo_cfg["default_model"],
+        "mimo_used": used_provider == "mimo",
+        "mimo_multimodal_used": mimo_multimodal_used,
+        "ai_attempted": ai_attempted,
+        "rule_fallback_used": rule_fallback_used,
+        "provider_error_summary": "; ".join(provider_errors) if provider_errors else None,
     }
 
 
@@ -974,7 +1371,10 @@ def recommend_products(
     gemini_model: str | None,
     deepseek_api_key: str | None = None,
     deepseek_model: str | None = None,
+    mimo_api_key: str | None = None,
+    mimo_model: str | None = None,
     ai_provider: str | None = None,
+    vision_provider: str | None = None,
     price_min: float | None,
     price_max: float | None,
 ) -> dict[str, Any]:
@@ -992,7 +1392,10 @@ def recommend_products(
         gemini_model=gemini_model,
         deepseek_api_key=deepseek_api_key,
         deepseek_model=deepseek_model,
+        mimo_api_key=mimo_api_key,
+        mimo_model=mimo_model,
         ai_provider=ai_provider,
+        vision_provider=vision_provider,
     )
 
     if not products:
@@ -1357,7 +1760,10 @@ def analyze_selected_product(
     gemini_model: str | None,
     deepseek_api_key: str | None = None,
     deepseek_model: str | None = None,
+    mimo_api_key: str | None = None,
+    mimo_model: str | None = None,
     ai_provider: str | None = None,
+    vision_provider: str | None = None,
     price_min: float | None,
     price_max: float | None,
 ) -> dict[str, Any]:
@@ -1374,7 +1780,10 @@ def analyze_selected_product(
         gemini_model=gemini_model,
         deepseek_api_key=deepseek_api_key,
         deepseek_model=deepseek_model,
+        mimo_api_key=mimo_api_key,
+        mimo_model=mimo_model,
         ai_provider=ai_provider,
+        vision_provider=vision_provider,
     )
 
     color_score = score_color(color_preference, product.color_family)
