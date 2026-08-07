@@ -16,15 +16,18 @@ import pathlib
 import tempfile
 import re
 import glob
+import ipaddress
+import socket
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from urllib.parse import urlparse, unquote, quote
+from urllib.parse import urlparse, urljoin, unquote, quote
 from typing import Optional, List, Dict, Any, Tuple
 
 import PIL.Image
 import httpx
 from google import genai
 from app.products import load_catalog, list_products, get_filter_options
+from app.admin_runtime_config import resolve_tryon_runtime_config, get_tryon_runtime_status
 from app import admin_report as _admin_report
 try:
     from google.cloud import firestore
@@ -36,12 +39,10 @@ except Exception:
     storage = None
 
 
-# ===== Vertex / Project Config =====
-GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "")
+# ===== Project Config =====
+GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "").strip()
 GCP_LOCATION = os.environ.get("GCP_LOCATION", "asia-east1")
-VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "global")
-VERTEX_AI_API_KEY = os.environ.get("VERTEX_AI_API_KEY", "")
-DEFAULT_API_KEY = os.environ.get("GEMINI_API_KEY", "vertex-ai")
+DEFAULT_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 RECOMMEND_APP_URL = str(os.environ.get("VITE_RECOMMEND_APP_URL", "") or "").strip()
 TRYON_EMBED_MODE = str(os.environ.get("VITE_TRYON_EMBED_MODE", "standalone") or "standalone").strip().lower()
 if TRYON_EMBED_MODE not in ("standalone", "embed"):
@@ -50,30 +51,25 @@ RESULTS_GCS_BUCKET = str(os.environ.get("RESULTS_GCS_BUCKET", "") or "").strip()
 RESULTS_GCS_PREFIX = str(os.environ.get("RESULTS_GCS_PREFIX", "tryon-results") or "tryon-results").strip().strip("/")
 UPLOADS_GCS_PREFIX = str(os.environ.get("UPLOADS_GCS_PREFIX", "tryon-uploads") or "tryon-uploads").strip().strip("/")
 INTAKE_MAX_IMAGE_BYTES = 15 * 1024 * 1024
+# CGNAT (RFC 6598, 100.64.0.0/10) is not flagged as private by ipaddress in Python 3.10
+_SSRF_BLOCKED_NETWORKS = [ipaddress.ip_network("100.64.0.0/10")]
 IMAGE_DATA_URL_RE = re.compile(r"^data:(image/[a-zA-Z0-9.+-]+);base64,(.+)$", re.IGNORECASE | re.DOTALL)
 
 MODEL_MAP = {
     "flash": {
         "ids": ["gemini-3.1-flash-image-preview", "gemini-2.5-flash-image"],
-        "name": "Nano Banana 2",
+        "name": "Gemini Flash Image",
     },
     "pro": {
         "ids": ["gemini-3-pro-image-preview", "gemini-3-pro-image"],
-        "name": "Nano Banana Pro",
+        "name": "Gemini Pro Image",
     },
 }
 DEFAULT_MODEL = "flash"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WORKSPACE_DIR = os.path.dirname(BASE_DIR)
-CREDENTIALS_PATH = os.path.join(BASE_DIR, "gcp-credentials.json")
 PROMPT_PATH = os.path.join(BASE_DIR, "prompt.txt")
-LOCAL_PROXY_CONFIG_PATH = os.path.join(BASE_DIR, "local_proxy_config.json")
-AI_STUDIO_CONFIG_PATH = os.path.join(BASE_DIR, "ai_studio_config.json")
-LOCAL_ANTIGRAVITY_DIRS = [
-    os.path.join(os.path.expanduser("~"), ".antigravity_tools"),
-    os.path.join(WORKSPACE_DIR, ".antigravity_tools"),
-]
 
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 ASSET_DIR = os.path.join(BASE_DIR, "assets")
@@ -83,45 +79,12 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(ASSET_DIR, exist_ok=True)
 os.makedirs(HISTORY_FILES_DIR, exist_ok=True)
 
-DEFAULT_LOCAL_PROXY_CONFIG: Dict[str, Any] = {
-    "enabled": False,
-    "base_url": "http://127.0.0.1:8045",
-    "api_key": "",
-    "timeout_seconds": 180,
-    "flash_model": "gemini-3.1-flash-image",
-    "pro_model": "gemini-3-pro-image",
-}
-
-DEFAULT_AI_STUDIO_CONFIG: Dict[str, Any] = {
-    "api_key": "",
-    "flash_model": "gemini-3.1-flash-image-preview",
-    "pro_model": "gemini-3-pro-image-preview",
-}
-
-
-# ===== Clients =====
-vertex_client = None
-
-
-def init_vertex_client():
-    global vertex_client
-    if VERTEX_AI_API_KEY:
-        vertex_client = genai.Client(api_key=VERTEX_AI_API_KEY)
-        print(f"[VertexAI] Initialized by API key, project={GCP_PROJECT_ID}")
-        return
-
-    if os.path.exists(CREDENTIALS_PATH):
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = CREDENTIALS_PATH
-
-    vertex_client = genai.Client(
-        vertexai=True,
-        project=GCP_PROJECT_ID,
-        location=VERTEX_LOCATION,
-    )
-    print(f"[VertexAI] Initialized by ADC/Service Account, project={GCP_PROJECT_ID}, location={VERTEX_LOCATION}")
-
-
-init_vertex_client()
+AI_STUDIO_DOC_LINKS = [
+    "https://ai.google.dev/gemini-api/docs/quickstart?hl=zh-cn",
+    "https://ai.google.dev/gemini-api/docs/image-generation?hl=zh-cn",
+    "https://ai.google.dev/gemini-api/docs/pricing?hl=zh-cn",
+    "https://ai.google.dev/gemini-api/docs/safety-settings",
+]
 
 if firestore is not None:
     try:
@@ -145,343 +108,9 @@ else:
     storage_client = None
 
 
-def _sanitize_local_proxy_config(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    payload = dict(DEFAULT_LOCAL_PROXY_CONFIG)
-    if isinstance(raw, dict):
-        payload.update(raw)
-    base_url = str(payload.get("base_url", DEFAULT_LOCAL_PROXY_CONFIG["base_url"]) or "").strip()
-    if not base_url:
-        base_url = DEFAULT_LOCAL_PROXY_CONFIG["base_url"]
-    flash_model = str(payload.get("flash_model", DEFAULT_LOCAL_PROXY_CONFIG["flash_model"]) or "").strip()
-    pro_model = str(payload.get("pro_model", DEFAULT_LOCAL_PROXY_CONFIG["pro_model"]) or "").strip()
-    timeout_raw = payload.get("timeout_seconds", DEFAULT_LOCAL_PROXY_CONFIG["timeout_seconds"])
-    try:
-        timeout_seconds = int(timeout_raw)
-    except Exception:
-        timeout_seconds = int(DEFAULT_LOCAL_PROXY_CONFIG["timeout_seconds"])
-    return {
-        "enabled": bool(payload.get("enabled", False)),
-        "base_url": base_url.rstrip("/"),
-        "api_key": str(payload.get("api_key", "") or "").strip(),
-        "timeout_seconds": max(30, min(600, timeout_seconds)),
-        "flash_model": flash_model or DEFAULT_LOCAL_PROXY_CONFIG["flash_model"],
-        "pro_model": pro_model or DEFAULT_LOCAL_PROXY_CONFIG["pro_model"],
-    }
-
-
-def _load_local_proxy_config() -> Dict[str, Any]:
-    try:
-        if os.path.exists(LOCAL_PROXY_CONFIG_PATH):
-            with open(LOCAL_PROXY_CONFIG_PATH, "r", encoding="utf-8") as f:
-                return _sanitize_local_proxy_config(json.load(f))
-    except Exception as e:
-        print(f"[LocalProxy] load config failed: {e}")
-    return dict(DEFAULT_LOCAL_PROXY_CONFIG)
-
-
-def _save_local_proxy_config(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    payload = _sanitize_local_proxy_config(raw)
-    with open(LOCAL_PROXY_CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-    return payload
-
-
-def _sanitize_ai_studio_config(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    payload = dict(DEFAULT_AI_STUDIO_CONFIG)
-    if isinstance(raw, dict):
-        payload.update(raw)
-    flash_model = str(payload.get("flash_model", DEFAULT_AI_STUDIO_CONFIG["flash_model"]) or "").strip()
-    pro_model = str(payload.get("pro_model", DEFAULT_AI_STUDIO_CONFIG["pro_model"]) or "").strip()
-    if flash_model == "gemini-2.5-flash-image":
-        flash_model = DEFAULT_AI_STUDIO_CONFIG["flash_model"]
-    return {
-        "api_key": str(payload.get("api_key", "") or "").strip(),
-        "flash_model": flash_model or DEFAULT_AI_STUDIO_CONFIG["flash_model"],
-        "pro_model": pro_model or DEFAULT_AI_STUDIO_CONFIG["pro_model"],
-    }
-
-
-def _load_ai_studio_config() -> Dict[str, Any]:
-    try:
-        if os.path.exists(AI_STUDIO_CONFIG_PATH):
-            with open(AI_STUDIO_CONFIG_PATH, "r", encoding="utf-8") as f:
-                return _sanitize_ai_studio_config(json.load(f))
-    except Exception as e:
-        print(f"[AIStudio] load config failed: {e}")
-    return dict(DEFAULT_AI_STUDIO_CONFIG)
-
-
-def _save_ai_studio_config(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    payload = _sanitize_ai_studio_config(raw)
-    with open(AI_STUDIO_CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-    return payload
-
-
-def _mask_secret(secret: str) -> str:
-    value = str(secret or "").strip()
-    if not value:
-        return ""
-    if len(value) <= 8:
-        return f"{value[:2]}***{value[-2:]}"
-    return f"{value[:4]}...{value[-4:]}"
-
-
-def _proxy_api_base(base_url: str) -> str:
-    normalized = str(base_url or "").strip().rstrip("/")
-    if not normalized:
-        return ""
-    if normalized.endswith("/v1beta"):
-        return normalized
-    return f"{normalized}/v1beta"
-
-
-def _proxy_root_base(base_url: str) -> str:
-    normalized = str(base_url or "").strip().rstrip("/")
-    if normalized.endswith("/v1beta"):
-        return normalized[:-7].rstrip("/")
-    return normalized
-
-
-def _proxy_openai_base(base_url: str) -> str:
-    root = _proxy_root_base(base_url)
-    if not root:
-        return ""
-    if root.endswith("/v1"):
-        return root
-    return f"{root}/v1"
-
-
-def _normalize_proxy_model_name(name: Optional[str]) -> str:
-    text = str(name or "").strip()
-    if not text:
-        return ""
-    return text.rsplit("/", 1)[-1]
-
-
-def _proxy_headers(request_key: Optional[str]) -> Dict[str, str]:
-    token = str(request_key or "").strip()
-    headers: Dict[str, str] = {}
-    if token:
-        headers["x-goog-api-key"] = token
-        headers["Authorization"] = f"Bearer {token}"
-    return headers
-
-
-def _extract_proxy_error_message(payload: Any) -> str:
-    if isinstance(payload, dict):
-        error = payload.get("error")
-        if isinstance(error, dict):
-            message = str(error.get("message") or "").strip()
-            status = str(error.get("status") or "").strip()
-            if message:
-                try:
-                    nested = json.loads(message)
-                except Exception:
-                    nested = None
-                if isinstance(nested, dict):
-                    nested_error = nested.get("error")
-                    if isinstance(nested_error, dict):
-                        nested_message = str(nested_error.get("message") or "").strip()
-                        nested_status = str(nested_error.get("status") or "").strip()
-                        if nested_message:
-                            return f"{nested_status}: {nested_message}" if nested_status else nested_message
-                return f"{status}: {message}" if status else message
-    if isinstance(payload, str):
-        return payload.strip()
-    return ""
-
-
-def _summarize_proxy_response_error(status_code: int, body_text: str, payload: Any = None) -> str:
-    message = _extract_proxy_error_message(payload)
-    if not message:
-        try:
-            message = _extract_proxy_error_message(json.loads(body_text))
-        except Exception:
-            message = ""
-    if not message:
-        message = (body_text or "").strip()[:600]
-    message = " ".join(message.split())
-    return f"HTTP {status_code} - {message}" if message else f"HTTP {status_code}"
-
-
-async def _fetch_proxy_model_names(
-    client: httpx.AsyncClient,
-    base_url: str,
-    request_key: Optional[str],
-) -> List[str]:
-    response = await client.get(
-        f"{_proxy_api_base(base_url)}/models",
-        headers=_proxy_headers(request_key),
-    )
-    if response.status_code != 200:
-        return []
-    try:
-        payload = response.json()
-    except Exception:
-        return []
-    names: List[str] = []
-    for item in (payload.get("models") or []) if isinstance(payload, dict) else []:
-        name = _normalize_proxy_model_name((item or {}).get("name"))
-        if name and name not in names:
-            names.append(name)
-    return names
-
-
-def _guess_proxy_image_model(
-    model_names: List[str],
-    preferred: Optional[str],
-    family: str,
-) -> str:
-    preferred_name = _normalize_proxy_model_name(preferred)
-    if preferred_name and preferred_name in model_names:
-        return preferred_name
-
-    if family == "flash":
-        keywords = ("flash-image", "flash_image")
-    else:
-        keywords = ("pro-image", "pro_image")
-
-    for name in model_names:
-        lower = name.lower()
-        if any(keyword in lower for keyword in keywords):
-            return name
-    return ""
-
-
-def _select_proxy_model_candidates(
-    model_key: str,
-    proxy_config: Dict[str, Any],
-    model_names: Optional[List[str]],
-) -> List[str]:
-    flash_model = _normalize_proxy_model_name(proxy_config.get("flash_model"))
-    pro_model = _normalize_proxy_model_name(proxy_config.get("pro_model"))
-    available = list(model_names or [])
-
-    requested = flash_model if model_key == "flash" else pro_model
-    fallback = pro_model if model_key == "flash" else flash_model
-    candidates: List[str] = []
-
-    def add(value: Optional[str]):
-        name = _normalize_proxy_model_name(value)
-        if name and name not in candidates:
-            candidates.append(name)
-
-    add(requested)
-
-    if available:
-        requested_guess = _guess_proxy_image_model(available, requested, model_key)
-        fallback_guess = _guess_proxy_image_model(available, fallback, "pro" if model_key == "flash" else "flash")
-        add(requested_guess)
-
-        if model_key == "flash":
-            add(fallback_guess)
-            add(fallback)
-        else:
-            add(fallback_guess)
-    else:
-        if model_key == "flash":
-            add(fallback)
-
-    return candidates
-
-
-def _collect_local_antigravity_proxy_diagnostics() -> Dict[str, Any]:
-    result: Dict[str, Any] = {
-        "found": False,
-        "base_dir": None,
-        "enabled_account_count": 0,
-        "disabled_account_count": 0,
-        "preferred_account_id": None,
-        "enabled_accounts": [],
-        "disabled_accounts": [],
-        "enabled_image_models": [],
-    }
-
-    base_dir = ""
-    for candidate in LOCAL_ANTIGRAVITY_DIRS:
-        if os.path.isdir(os.path.join(candidate, "accounts")):
-            base_dir = candidate
-            break
-
-    if not base_dir:
-        return result
-
-    result["found"] = True
-    result["base_dir"] = base_dir
-    accounts_dir = os.path.join(base_dir, "accounts")
-    gui_config_path = os.path.join(base_dir, "gui_config.json")
-
-    try:
-        if os.path.exists(gui_config_path):
-            with open(gui_config_path, "r", encoding="utf-8") as f:
-                gui_config = json.load(f)
-            result["preferred_account_id"] = gui_config.get("preferred_account_id")
-    except Exception as e:
-        result["gui_config_error"] = str(e)
-
-    enabled_models: Dict[str, int] = {}
-
-    for path in sorted(glob.glob(os.path.join(accounts_dir, "*.json"))):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception:
-            continue
-
-        quota_models = ((data.get("quota") or {}).get("models") or [])
-        image_models: Dict[str, int] = {}
-        for item in quota_models:
-            if not isinstance(item, dict):
-                continue
-            name = str(item.get("name") or "").strip()
-            if "image" not in name.lower():
-                continue
-            try:
-                percentage = int(item.get("percentage") or 0)
-            except Exception:
-                percentage = 0
-            image_models[name] = percentage
-
-        account_summary = {
-            "id": data.get("id"),
-            "email": data.get("email"),
-            "proxy_disabled": bool(data.get("proxy_disabled")),
-            "image_models": image_models,
-        }
-
-        if account_summary["proxy_disabled"]:
-            result["disabled_accounts"].append(account_summary)
-            result["disabled_account_count"] += 1
-            continue
-
-        result["enabled_accounts"].append(account_summary)
-        result["enabled_account_count"] += 1
-        for name, percentage in image_models.items():
-            if percentage > 0:
-                enabled_models[name] = max(enabled_models.get(name, 0), percentage)
-
-    result["enabled_image_models"] = sorted(enabled_models.keys())
-    return result
-
-
-def _resolve_provider_mode(provider_mode: Optional[str], nanobanana_api_key: Optional[str]) -> str:
-    mode = str(provider_mode or "auto").strip().lower()
-    if mode in ("vertex", "direct", "official"):
-        return "direct"
-    if mode in ("aistudio", "ai-studio", "google-ai-studio", "googleaistudio"):
-        return "aistudio"
-    if mode == "nanobanana":
-        return "nanobanana"
-    if mode == "proxy":
-        return "proxy"
-
-    proxy_config = _load_local_proxy_config()
-    if proxy_config.get("enabled"):
-        return "proxy"
-    if str(nanobanana_api_key or "").strip():
-        return "nanobanana"
-    return "direct"
+def _rate_identity() -> str:
+    """Rate limit identity based on config source, not raw key."""
+    return "tryon_config"
 
 
 # ===== Cleanup =====
@@ -579,21 +208,9 @@ RATE_LIMIT_STATE: Dict[str, Dict[str, Dict[str, Any]]] = {}
 RATE_LIMIT_LOCK = asyncio.Lock()
 
 
-def _mask_key(api_key: str) -> str:
-    k = (api_key or "").strip()
-    if not k:
-        return "N/A"
-    if len(k) <= 8:
-        return f"{k[:2]}***{k[-2:]}"
-    return f"{k[:4]}...{k[-4:]}"
-
-
-def _record_key_usage(api_key: Optional[str], model_key: str, success: bool):
-    key = (api_key or "").strip()
-    if not key or key.lower() in ("vertex-ai", "mock"):
-        return
-    row = KEY_USAGE.get(key) or {
-        "key_masked": _mask_key(key),
+def _record_key_usage(model_key: str, success: bool):
+    """Record model usage stats (no key exposure)."""
+    row = KEY_USAGE.get("tryon") or {
         "calls": 0,
         "success": 0,
         "failed": 0,
@@ -607,7 +224,7 @@ def _record_key_usage(api_key: Optional[str], model_key: str, success: bool):
         row["failed"] += 1
     row["cost"] += float(MODEL_PRICING.get(model_key, MODEL_PRICING["flash"]))
     row["last_used"] = time.strftime("%Y-%m-%d %H:%M:%S")
-    KEY_USAGE[key] = row
+    KEY_USAGE["tryon"] = row
 
 
 def _append_error_log(message: str, context: str = "", detail: str = "", analysis: str = "") -> Dict[str, Any]:
@@ -623,27 +240,6 @@ def _append_error_log(message: str, context: str = "", detail: str = "", analysi
     if len(ERROR_LOGS) > 500:
         del ERROR_LOGS[500:]
     return item
-
-
-def _rate_identity(
-    api_key: Optional[str],
-    nanobanana_api_key: Optional[str],
-    proxy_api_key: Optional[str] = None,
-    provider_mode: Optional[str] = None,
-) -> str:
-    k = (api_key or "").strip()
-    nk = (nanobanana_api_key or "").strip()
-    pk = (proxy_api_key or "").strip()
-    mode = str(provider_mode or "").strip().lower()
-    if mode == "proxy" and pk:
-        return f"proxy:{pk}"
-    if k and k.lower() not in ("vertex-ai", "mock"):
-        return f"api:{k}"
-    if nk:
-        return f"nano:{nk}"
-    if pk:
-        return f"proxy:{pk}"
-    return "default"
 
 
 def _pt_day_key(now_ts: Optional[float] = None) -> str:
@@ -1084,40 +680,40 @@ def _extract_error_status_text(error: Exception) -> str:
     return ""
 
 
-def _summarize_direct_generation_error(error: Exception, provider: str) -> str:
+def _summarize_direct_generation_error(error: Exception) -> str:
     raw = " ".join(str(error or "").split())
     lower = raw.lower()
-    provider_label = "Google AI Studio" if provider == "aistudio" else "Vertex AI"
 
     if "consumer_invalid" in lower or ("permission_denied" in lower and "aiplatform.googleapis.com" in lower):
         return (
-            "Vertex AI 返回了 403 / CONSUMER_INVALID。当前请求很可能走到了 Vertex 路径，"
-            "但当前项目、账单、区域或服务账号并不满足 Vertex AI 的调用要求。"
-            "如果你使用的是 Google AI Studio / Gemini API 密钥，请切换到 Google AI Studio 接口；"
-            "如果你本来就要走 Vertex，请检查 Cloud Run 运行身份、Vertex AI API 启用状态和项目配置。"
+            "Google AI Studio / Gemini API 返回权限或项目配置错误。请检查：\n"
+            "1. API Key 是否属于当前项目；\n"
+            "2. Gemini API 是否已启用；\n"
+            "3. 当前 Key 是否有可用配额和账单；\n"
+            "4. 模型 ID 是否支持当前接口。"
         )
     if "permission_denied" in lower or "403" in lower:
-        return f"{provider_label} 返回了 HTTP 403。请检查当前认证方式、IAM 权限以及相关 API 是否已启用。"
+        return "Google AI Studio 返回了 HTTP 403。请检查 API Key 是否有效、Gemini API 是否已启用。"
     if "resource_exhausted" in lower or "429" in lower or "quota" in lower or "rate" in lower:
-        return f"{provider_label} 触发了配额或限流。请稍后重试，或切换到其他可用的 API 密钥或项目。"
+        return "Google AI Studio 触发了配额或限流。请稍后重试，或检查 API Key 配额。"
     if "api key not valid" in lower or "invalid api key" in lower:
-        return f"{provider_label} 拒绝了当前 API 密钥。请确认密钥有效，并且它属于当前所选通道。"
+        return "Google AI Studio 拒绝了当前 API 密钥。请确认密钥有效且属于当前项目。"
     if "returned empty parts" in lower or "does not contain image bytes" in lower:
-        return f"{provider_label} 已返回响应，但没有生成可用的图片数据。"
+        return "Google AI Studio 已返回响应，但没有生成可用的图片数据。"
 
     status_text = _extract_error_status_text(error)
     if status_text:
-        return f"{provider_label} 请求失败，状态为 {status_text}：{raw[:420]}"
-    return f"{provider_label} 请求失败：{raw[:420]}"
+        return f"Google AI Studio 请求失败，状态为 {status_text}：{raw[:420]}"
+    return f"Google AI Studio 请求失败：{raw[:420]}"
 
-def _extract_image_bytes_from_vertex_response(response) -> bytes:
+def _extract_image_bytes_from_genai_response(response) -> bytes:
     parts = getattr(response, "parts", None)
     if not parts:
         reason = None
         if getattr(response, "candidates", None):
             cand = response.candidates[0]
             reason = _finish_reason_desc(getattr(cand, "finish_reason", None))
-        raise RuntimeError(f"Vertex 返回了空的 parts，finish_reason={reason}")
+        raise RuntimeError(f"Google AI Studio 返回了空的 parts，finish_reason={reason}")
 
     for part in parts:
         inline = getattr(part, "inline_data", None)
@@ -1133,367 +729,61 @@ def _extract_image_bytes_from_vertex_response(response) -> bytes:
         if data:
             return data
 
-    raise RuntimeError("Vertex response does not contain image bytes")
+    raise RuntimeError("Google AI Studio response does not contain image bytes")
 
 
-def _resolve_ai_studio_generation_config(model_key: str) -> Dict[str, Any]:
-    config = _load_ai_studio_config()
-    flash_model = str(config.get("flash_model") or "").strip()
-    pro_model = str(config.get("pro_model") or "").strip()
-    model_ids = [flash_model] if model_key == "flash" else [pro_model]
+def _resolve_tryon_generation_config(model_key: str) -> Dict[str, Any]:
+    """Resolve generation config from admin DB via runtime config module."""
+    try:
+        config = resolve_tryon_runtime_config()
+    except RuntimeError as exc:
+        raise RuntimeError(str(exc))
 
+    if not config.get("enabled"):
+        raise RuntimeError("试衣服务当前已由管理员停用")
+
+    api_key = config.get("api_key", "")
+    if not api_key:
+        raise RuntimeError("试衣服务 API Key 未配置，请联系管理员")
+
+    flash_model = config.get("flash_model", "")
+    pro_model = config.get("pro_model", "")
+
+    if model_key == "flash":
+        model_ids = [flash_model] if flash_model else []
+    else:
+        model_ids = [pro_model] if pro_model else []
+
+    # Append fallback model IDs from MODEL_MAP
     for model_id in MODEL_MAP.get(model_key, {}).get("ids") or []:
         if model_id and model_id not in model_ids:
             model_ids.append(model_id)
 
     return {
-        "api_key": str(config.get("api_key") or "").strip(),
+        "api_key": api_key,
         "model_ids": [item for item in model_ids if item],
     }
 
 
-def _resolve_direct_api_key(api_key: Optional[str], provider_mode: Optional[str]) -> str:
-    mode = str(provider_mode or "").strip().lower()
-    supplied = str(api_key or "").strip()
-    if supplied:
-        return supplied
-    if mode == "aistudio":
-        return str(_load_ai_studio_config().get("api_key") or "").strip()
-    return ""
+def _validate_model_key(model: Optional[str]) -> str:
+    value = str(model or DEFAULT_MODEL).strip().lower()
+    if value not in MODEL_MAP:
+        raise ValueError("不支持的模型类型，仅允许 flash 或 pro")
+    return value
 
 
-def _usage_key_for_mode(
-    api_key: Optional[str],
-    nanobanana_api_key: Optional[str],
-    proxy_api_key: Optional[str],
-    provider_mode: Optional[str],
-) -> str:
-    mode = str(provider_mode or "").strip().lower()
-    if mode == "proxy":
-        return str(proxy_api_key or "").strip()
-    if mode == "nanobanana":
-        return str(nanobanana_api_key or "").strip()
-    if mode == "aistudio":
-        return _resolve_direct_api_key(api_key, mode)
-    return ""
-
-
-def _extract_image_bytes_from_gemini_payload(payload: Dict[str, Any]) -> bytes:
-    root = payload.get("response") if isinstance(payload, dict) and isinstance(payload.get("response"), dict) else payload
-    candidates = root.get("candidates") or []
-    empty_parts = False
-    finish_reasons: List[str] = []
-    for candidate in candidates:
-        finish_reason = str(candidate.get("finishReason") or "").strip()
-        if finish_reason:
-            finish_reasons.append(finish_reason)
-        content = candidate.get("content") or {}
-        parts = content.get("parts") or []
-        if isinstance(parts, list) and len(parts) == 0:
-            empty_parts = True
-        for part in parts:
-            inline = part.get("inline_data") or part.get("inlineData") or {}
-            mime_type = str(inline.get("mime_type") or inline.get("mimeType") or "")
-            data = inline.get("data")
-            if mime_type.startswith("image/") and data:
-                try:
-                    return base64.b64decode(data)
-                except Exception as e:
-                    raise RuntimeError(f"Proxy image decode failed: {e}") from e
-
-    prompt_feedback = root.get("promptFeedback") or {}
-    block_reason = prompt_feedback.get("blockReason")
-    if block_reason:
-        raise RuntimeError(f"Proxy request blocked: {block_reason}")
-
-    texts: List[str] = []
-    for candidate in candidates:
-        content = candidate.get("content") or {}
-        parts = content.get("parts") or []
-        for part in parts:
-            text = str(part.get("text") or "").strip()
-            if text:
-                texts.append(text)
-    if texts:
-            raise RuntimeError(f"反代返回了文本而不是图片：{' | '.join(texts)[:400]}")
-
-    if empty_parts:
-        suffix = f" (finishReason={', '.join(finish_reasons)})" if finish_reasons else ""
-        raise RuntimeError(f"反代返回了空的 Gemini candidates，且没有图片字节数据{suffix}")
-
-    raise RuntimeError("Proxy response does not contain image bytes")
-
-
-def _extract_image_bytes_from_openai_payload(payload: Dict[str, Any]) -> bytes:
-    choices = payload.get("choices") or []
-    pattern = re.compile(r"data:image/[^;]+;base64,([A-Za-z0-9+/=]+)")
-    texts: List[str] = []
-
-    for choice in choices:
-        message = (choice or {}).get("message") or {}
-        content = message.get("content")
-        chunks: List[str] = []
-        if isinstance(content, str):
-            chunks.append(content)
-        elif isinstance(content, list):
-            for item in content:
-                if isinstance(item, str):
-                    chunks.append(item)
-                elif isinstance(item, dict):
-                    text = str(item.get("text") or item.get("content") or "").strip()
-                    if text:
-                        chunks.append(text)
-
-        for chunk in chunks:
-            match = pattern.search(chunk)
-            if match:
-                try:
-                    return base64.b64decode(match.group(1))
-                except Exception as e:
-                    raise RuntimeError(f"Proxy image decode failed: {e}") from e
-            stripped = chunk.strip()
-            if stripped:
-                texts.append(stripped)
-
-    if texts:
-            raise RuntimeError(f"反代返回了文本而不是图片：{' | '.join(texts)[:400]}")
-    raise RuntimeError("Proxy response does not contain image bytes")
-
-
-def _extract_image_bytes_from_openai_images_payload(payload: Dict[str, Any]) -> bytes:
-    data_items = payload.get("data") or []
-    urls: List[str] = []
-
-    for item in data_items if isinstance(data_items, list) else []:
-        if not isinstance(item, dict):
-            continue
-
-        b64_json = item.get("b64_json")
-        if b64_json:
-            try:
-                return base64.b64decode(b64_json)
-            except Exception as e:
-                raise RuntimeError(f"Proxy image decode failed: {e}") from e
-
-        url = str(item.get("url") or "").strip()
-        if url:
-            urls.append(url)
-
-    if urls:
-                raise RuntimeError(f"反代返回了图片 URL，而不是内联字节数据：{' | '.join(urls[:2])}")
-
-    error_message = _extract_proxy_error_message(payload)
-    if error_message:
-        raise RuntimeError(error_message)
-
-    raise RuntimeError("Proxy images response does not contain image bytes")
-
-
-def _nearest_proxy_aspect_ratio(image_path: str) -> str:
-    ratios = {
-        "1:1": 1.0,
-        "3:4": 3 / 4,
-        "4:3": 4 / 3,
-        "9:16": 9 / 16,
-        "16:9": 16 / 9,
-        "21:9": 21 / 9,
-    }
+def _require_tryon_runtime_config() -> Dict[str, Any]:
     try:
-        with PIL.Image.open(image_path) as img:
-            width = max(1, int(getattr(img, "width", 1) or 1))
-            height = max(1, int(getattr(img, "height", 1) or 1))
-    except Exception:
-        return "3:4"
-
-    target = width / height
-    return min(ratios.items(), key=lambda item: abs(item[1] - target))[0]
-
-
-def _prepare_proxy_edit_upload(path: str, target_format: str) -> Dict[str, Any]:
-    fmt = str(target_format or "").strip().upper()
-    filename = "image.png" if fmt == "PNG" else "image.jpg"
-    mime_type = "image/png" if fmt == "PNG" else "image/jpeg"
-
-    with PIL.Image.open(path) as img:
-        buffer = io.BytesIO()
-        if fmt == "PNG":
-            normalized = img.convert("RGBA") if "A" in img.getbands() else img.convert("RGB")
-            normalized.save(buffer, format="PNG")
-        else:
-            normalized = img.convert("RGB")
-            normalized.save(buffer, format="JPEG", quality=95)
-
-    return {
-        "filename": filename,
-        "mime_type": mime_type,
-        "data": buffer.getvalue(),
-    }
+        config = resolve_tryon_runtime_config()
+    except RuntimeError as exc:
+        raise RuntimeError(str(exc)) from exc
+    if not config.get("enabled"):
+        raise RuntimeError("试衣服务当前已由管理员停用")
+    if not config.get("api_key"):
+        raise RuntimeError("试衣服务 API Key 未配置或无法解密，请联系管理员")
+    return config
 
 
-def _build_local_proxy_tryon_error(errors: List[str], diagnostics: Optional[Dict[str, Any]] = None) -> RuntimeError:
-    detail = " | ".join(str(err or "").strip() for err in errors if str(err or "").strip())
-    detail = " ".join(detail.split())[:1200]
-    message = (
-        "当前本地反代已连通，但没有返回可用的试衣编辑结果。"
-        "本项目已停止使用会忽略参考图的文生图回退，避免继续生成与模特图、服装图完全不符的图片。"
-        "请在 Antigravity 中确认 `/v1/images/edits` 可用，且账号池对图片模型具备真实的多图编辑能力；"
-        "否则请切换到官方直连或 Nano Banana。"
-    )
-    if isinstance(diagnostics, dict) and diagnostics.get("found"):
-        enabled_accounts = diagnostics.get("enabled_accounts") or []
-        enabled_models = diagnostics.get("enabled_image_models") or []
-        enabled_emails = [str(item.get("email") or item.get("id") or "未知账号").strip() for item in enabled_accounts if isinstance(item, dict)]
-        account_hint = (
-            f" 当前本机 Antigravity 反代池已启用账号数: {len(enabled_accounts)}。"
-            f" 已启用账号的图片模型: {', '.join(enabled_models) if enabled_models else '无'}。"
-        )
-        if enabled_emails:
-            account_hint += f" 当前实际启用账号: {', '.join(enabled_emails)}。"
-            if len(enabled_emails) == 1:
-                account_hint += " 这说明当前请求已经进入该账号对应的 API 反代池。"
-        message += account_hint
-    if detail:
-        message += f" 原始错误: {detail}"
-    return RuntimeError(message)
-
-
-async def _call_local_proxy_image(
-    prompt: str,
-    model_path: str,
-    garment_path: str,
-    model_key: str,
-    proxy_config: Dict[str, Any],
-    proxy_api_key_override: Optional[str],
-) -> bytes:
-    base_url = str(proxy_config.get("base_url") or "").strip()
-    if not base_url:
-        raise RuntimeError("本地反代的接口地址为空")
-
-    timeout_seconds = int(proxy_config.get("timeout_seconds") or DEFAULT_LOCAL_PROXY_CONFIG["timeout_seconds"])
-    request_key = str(proxy_api_key_override or proxy_config.get("api_key") or "").strip()
-
-    aspect_ratio = _nearest_proxy_aspect_ratio(model_path)
-    main_upload = _prepare_proxy_edit_upload(model_path, "PNG")
-    garment_upload = _prepare_proxy_edit_upload(garment_path, "JPEG")
-
-    edit_headers = _proxy_headers(request_key)
-    errors: List[str] = []
-    diagnostics = _collect_local_antigravity_proxy_diagnostics()
-
-    async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=True) as client:
-        available_models: List[str] = []
-        try:
-            available_models = await _fetch_proxy_model_names(client, base_url, request_key)
-        except Exception as e:
-            print(f"[LocalProxy] model list probe failed: {e}")
-
-        candidate_models = _select_proxy_model_candidates(model_key, proxy_config, available_models)
-        enabled_models = set(diagnostics.get("enabled_image_models") or [])
-        if enabled_models:
-            filtered_models = [name for name in candidate_models if name in enabled_models]
-            if filtered_models:
-                candidate_models = filtered_models
-        if not candidate_models:
-            raise _build_local_proxy_tryon_error(
-                [f"未在本机 Antigravity 已启用反代账号中发现可用图片模型，mode={model_key}"],
-                diagnostics=diagnostics,
-            )
-
-        for idx, proxy_model in enumerate(candidate_models):
-            protocol_errors: List[str] = []
-
-            edit_endpoint = f"{_proxy_openai_base(base_url)}/images/edits"
-            response = await client.post(
-                edit_endpoint,
-                headers=edit_headers,
-                data={
-                    "prompt": prompt,
-                    "model": proxy_model,
-                    "n": "1",
-                    "response_format": "b64_json",
-                    "aspect_ratio": aspect_ratio,
-                },
-                files=[
-                    ("image", (main_upload["filename"], main_upload["data"], main_upload["mime_type"])),
-                    ("image1", (garment_upload["filename"], garment_upload["data"], garment_upload["mime_type"])),
-                ],
-            )
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                except Exception as e:
-                    raise RuntimeError(f"本地反代返回了无效的 JSON：{e}") from e
-                try:
-                    img_bytes = _extract_image_bytes_from_openai_images_payload(data)
-                except Exception as e:
-                    error_summary = str(e)
-                    protocol_errors.append(f"images.edits: {error_summary}")
-                else:
-                    if idx > 0:
-                        print(f"[LocalProxy] fallback succeeded: {candidate_models[0]} -> {proxy_model}")
-                    return img_bytes
-            else:
-                body = response.text[:1200]
-                parsed_payload = None
-                try:
-                    parsed_payload = response.json()
-                except Exception:
-                    parsed_payload = None
-                error_summary = _summarize_proxy_response_error(response.status_code, body, parsed_payload)
-                protocol_errors.append(f"images.edits: {error_summary}")
-
-            error_summary = " ; ".join(protocol_errors)
-            errors.append(f"{proxy_model}: {error_summary}")
-            if idx + 1 < len(candidate_models):
-                print(f"[LocalProxy] retrying with fallback model after {proxy_model} failed: {error_summary}")
-
-    raise _build_local_proxy_tryon_error(errors, diagnostics=diagnostics)
-
-async def _call_vertex_image(prompt: str, model_path: str, garment_path: str, model_key: str) -> bytes:
-    model_info = MODEL_MAP.get(model_key, MODEL_MAP[DEFAULT_MODEL])
-    model_ids = list(model_info.get("ids") or [])
-    if not model_ids:
-        raise RuntimeError(f"Vertex 模型配置缺少 model_key={model_key} 对应的模型 ID")
-
-    img_model = PIL.Image.open(model_path)
-    img_garment = PIL.Image.open(garment_path)
-    request_contents = [prompt, img_model, img_garment]
-
-    loop = asyncio.get_event_loop()
-    last_error = None
-    config = _build_direct_generate_config()
-
-    for model_id in model_ids:
-        for attempt in range(3):
-            try:
-                response = await loop.run_in_executor(
-                    None,
-                    lambda current_model=model_id: vertex_client.models.generate_content(
-                        model=current_model,
-                        contents=request_contents,
-                        config=config,
-                    ),
-                )
-                return _extract_image_bytes_from_vertex_response(response)
-            except Exception as e:
-                last_error = e
-                err = str(e).lower()
-                is_retryable = ("429" in err) or ("resource_exhausted" in err) or ("rate" in err) or ("quota" in err)
-                missing_or_denied = (
-                    ("permission_denied" in err)
-                    or ("aiplatform.endpoints.predict" in err)
-                    or ("not found" in err)
-                    or ("does not exist" in err)
-                    or ("or it may not exist" in err)
-                )
-                if is_retryable and attempt < 2:
-                    await asyncio.sleep(2 + attempt * 2)
-                    continue
-                if missing_or_denied:
-                    break
-                break
-
-    raise RuntimeError(_summarize_direct_generation_error(last_error or RuntimeError("unknown vertex error"), "direct"))
 
 
 async def _call_ai_studio_image(
@@ -1501,13 +791,9 @@ async def _call_ai_studio_image(
     model_path: str,
     garment_path: str,
     model_key: str,
-    api_key: str,
 ) -> bytes:
-    request_key = str(api_key or "").strip()
-    if not request_key:
-        raise RuntimeError("Google AI Studio 接口缺少 Gemini API 密钥。请在左侧 AI Studio 侧边栏保存默认密钥，或在主面板中填写 AI Studio 密钥。")
-
-    resolved = _resolve_ai_studio_generation_config(model_key)
+    resolved = _resolve_tryon_generation_config(model_key)
+    request_key = resolved["api_key"]
     model_ids = list(resolved.get("model_ids") or [])
     if not model_ids:
         raise RuntimeError(f"AI Studio 模型配置缺少 model_key={model_key} 对应的模型 ID")
@@ -1532,7 +818,7 @@ async def _call_ai_studio_image(
                         config=config,
                     ),
                 )
-                return _extract_image_bytes_from_vertex_response(response)
+                return _extract_image_bytes_from_genai_response(response)
             except Exception as e:
                 last_error = e
                 err = str(e).lower()
@@ -1552,76 +838,7 @@ async def _call_ai_studio_image(
                     break
                 break
 
-    raise RuntimeError(_summarize_direct_generation_error(last_error or RuntimeError("unknown ai studio error"), "aistudio"))
-
-
-async def _call_nanobanana_image(
-    prompt: str,
-    model_key: str,
-    model_filename: str,
-    garment_filename: str,
-    base_url: str,
-    nanobanana_api_key: str,
-) -> bytes:
-    endpoint = "generate-2" if model_key == "flash" else "generate-pro"
-    image_urls = [
-        f"{base_url}/uploads/{model_filename}",
-        f"{base_url}/uploads/{garment_filename}",
-    ]
-
-    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-        submit_resp = await client.post(
-            f"https://api.nanobananaapi.ai/api/v1/nanobanana/{endpoint}",
-            headers={
-                "Authorization": f"Bearer {nanobanana_api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "prompt": prompt,
-                "type": "TEXTTOIAMGE",
-                "numImages": 1,
-                "imageUrls": image_urls,
-            },
-        )
-
-        if submit_resp.status_code != 200:
-            raise RuntimeError(f"NanoBanana submit failed: HTTP {submit_resp.status_code} - {submit_resp.text}")
-
-        submit_data = submit_resp.json()
-        if submit_data.get("code") != 200:
-            raise RuntimeError(f"NanoBanana submit error: {submit_data.get('msg')}")
-
-        task_id = submit_data.get("data", {}).get("taskId")
-        if not task_id:
-            raise RuntimeError("NanoBanana submit response missing taskId")
-
-        result_image_url = None
-        for _ in range(100):
-            poll_resp = await client.get(
-                f"https://api.nanobananaapi.ai/api/v1/nanobanana/record-info?taskId={task_id}",
-                headers={"Authorization": f"Bearer {nanobanana_api_key}"},
-            )
-            poll_data = poll_resp.json()
-
-            if poll_data.get("code") != 200:
-                raise RuntimeError(f"NanoBanana polling error: {poll_data.get('msg')}")
-
-            flag = poll_data.get("successFlag", 0)
-            if flag == 1:
-                result_image_url = poll_data.get("response", {}).get("resultImageUrl")
-                break
-            if flag in (2, 3):
-                raise RuntimeError(f"NanoBanana task failed: {poll_data.get('errorMessage', 'unknown')}" )
-
-            await asyncio.sleep(3)
-
-        if not result_image_url:
-            raise RuntimeError("NanoBanana polling timeout")
-
-        image_resp = await client.get(result_image_url)
-        if image_resp.status_code != 200 or not image_resp.content:
-            raise RuntimeError("NanoBanana image download failed")
-        return image_resp.content
+    raise RuntimeError(_summarize_direct_generation_error(last_error or RuntimeError("unknown ai studio error")))
 
 
 async def _ensure_local_file(filename: str, cloud_url: Optional[str]) -> str:
@@ -1652,11 +869,6 @@ async def _generate_tryon_image_bytes(
     freedom: int,
     garment_type: Optional[str],
     model_key: str,
-    provider_mode: Optional[str],
-    proxy_api_key: Optional[str],
-    nanobanana_api_key: Optional[str],
-    api_key: Optional[str],
-    base_url: str,
     model_cloud_url: Optional[str] = None,
     garment_cloud_url: Optional[str] = None,
 ) -> bytes:
@@ -1668,42 +880,13 @@ async def _generate_tryon_image_bytes(
         raise RuntimeError(f"未找到服装图片：{garment_filename}")
 
     prompt = _build_prompt(custom_prompt, prompt_mode or "append", freedom, garment_type)
-    mode = str(provider_mode or "").strip().lower()
 
-    if mode == "proxy":
-        proxy_config = _load_local_proxy_config()
-        return await _call_local_proxy_image(
-            prompt=prompt,
-            model_path=model_path,
-            garment_path=garment_path,
-            model_key=model_key,
-            proxy_config=proxy_config,
-            proxy_api_key_override=proxy_api_key,
-        )
-
-    if mode == "nanobanana" and not (nanobanana_api_key and nanobanana_api_key.strip()):
-        raise RuntimeError("Nano Banana mode is selected, but no Nano Banana API Key is configured")
-
-    if mode == "nanobanana" and nanobanana_api_key and nanobanana_api_key.strip():
-        return await _call_nanobanana_image(
-            prompt=prompt,
-            model_key=model_key,
-            model_filename=model_filename,
-            garment_filename=garment_filename,
-            base_url=base_url,
-            nanobanana_api_key=nanobanana_api_key.strip(),
-        )
-
-    if mode == "aistudio":
-        return await _call_ai_studio_image(
-            prompt=prompt,
-            model_path=model_path,
-            garment_path=garment_path,
-            model_key=model_key,
-            api_key=_resolve_direct_api_key(api_key, mode),
-        )
-
-    return await _call_vertex_image(prompt, model_path, garment_path, model_key)
+    return await _call_ai_studio_image(
+        prompt=prompt,
+        model_path=model_path,
+        garment_path=garment_path,
+        model_key=model_key,
+    )
 
 
 def _validate_single_model(target_image: List[str]):
@@ -1715,25 +898,18 @@ def _validate_single_model(target_image: List[str]):
 
 async def _process_task(
     task_id: str,
-    base_url: str,
     target_image: List[str],
     reference_image: str,
-    api_key: Optional[str],
-    proxy_api_key: Optional[str],
-    nanobanana_api_key: Optional[str],
     custom_prompt: Optional[str],
     prompt_mode: Optional[str],
     freedom: Optional[int],
     garment_type: Optional[str],
     model: Optional[str],
-    provider_mode: Optional[str],
     target_image_cloud_url: Optional[str] = None,
     reference_image_cloud_url: Optional[str] = None,
 ):
     task = TASKS[task_id]
-    model_key = model if model in MODEL_MAP else DEFAULT_MODEL
-    effective_mode = _resolve_provider_mode(provider_mode, nanobanana_api_key)
-    effective_direct_api_key = _resolve_direct_api_key(api_key, effective_mode)
+    model_key = _validate_model_key(model)
 
     def update(progress: Optional[int] = None, message: Optional[str] = None, status: Optional[str] = None):
         if progress is not None:
@@ -1751,9 +927,16 @@ async def _process_task(
         if not reference_image:
             raise ValueError("请上传 1 张服装图片")
 
-        current_api_key = effective_direct_api_key or DEFAULT_API_KEY
+        # Check runtime config availability
+        try:
+            runtime_cfg = resolve_tryon_runtime_config()
+        except RuntimeError as exc:
+            raise RuntimeError(str(exc))
 
-        if current_api_key.lower() == "mock":
+        if not runtime_cfg.get("enabled"):
+            raise RuntimeError("试衣服务当前已由管理员停用")
+
+        if runtime_cfg.get("api_key", "").lower() == "mock":
             task["status"] = "completed"
             task["progress"] = 100
             task["message"] = "模拟生成完成"
@@ -1763,8 +946,7 @@ async def _process_task(
 
         freedom_level = max(0, min(10, int(freedom or 5)))
         prompt_text = _build_prompt(custom_prompt, prompt_mode or "append", freedom_level, garment_type)
-        rate_key = effective_direct_api_key if effective_mode == "aistudio" else api_key
-        rate_identity = _rate_identity(rate_key, nanobanana_api_key, proxy_api_key, effective_mode)
+        rate_identity = _rate_identity()
         token_cost = _estimate_token_cost(prompt_text)
 
         update(18, "检查额度限制...")
@@ -1783,11 +965,6 @@ async def _process_task(
             freedom=freedom_level,
             garment_type=garment_type,
             model_key=model_key,
-            provider_mode=effective_mode,
-            proxy_api_key=proxy_api_key,
-            nanobanana_api_key=nanobanana_api_key,
-            api_key=effective_direct_api_key,
-            base_url=base_url,
             model_cloud_url=target_image_cloud_url,
             garment_cloud_url=reference_image_cloud_url,
         )
@@ -1801,16 +978,19 @@ async def _process_task(
         task["result_display_url"] = out.get("result_display_url")
         task["result_data_url"] = out["result_data_url"]
         task["freedom"] = freedom_level
-        usage_key = _usage_key_for_mode(api_key, nanobanana_api_key, proxy_api_key, effective_mode)
-        _record_key_usage(usage_key, model_key, True)
+        _record_key_usage(model_key, True)
         _persist_task(task_id)
         _dur = (time.time() - float(task.get("created_at") or 0)) * 1000
-        asyncio.create_task(_admin_report.report_tryon_task(
+        # Await (not fire-and-forget): a bare create_task here is dropped under
+        # Cloud Run CPU throttling after the response returns, so the admin
+        # dashboard never received completed try-on tasks. report_tryon_task is
+        # self-contained (own timeout + try/except) so awaiting cannot raise.
+        await _admin_report.report_tryon_task(
             task_id, "completed",
             result_image_url=out.get("result_cloud_url") or out.get("result_display_url") or "",
             duration_ms=_dur,
             model_used=model_key or "flash",
-        ))
+        )
 
     except Exception as e:
         task["status"] = "failed"
@@ -1818,18 +998,18 @@ async def _process_task(
         task["message"] = str(e)
         task["error"] = str(e)
         task["logs"].append(f"Error: {e}")
-        usage_key = _usage_key_for_mode(api_key, nanobanana_api_key, proxy_api_key, effective_mode)
-        _record_key_usage(usage_key, model_key, False)
+        _record_key_usage(model_key, False)
         _append_error_log(str(e), context="generation_task", detail=f"task_id={task_id}")
         _persist_task(task_id)
         _dur = (time.time() - float(task.get("created_at") or 0)) * 1000
-        asyncio.create_task(_admin_report.report_tryon_task(
+        # Await for the same reason as the completed branch above.
+        await _admin_report.report_tryon_task(
             task_id, "failed",
             error_type=type(e).__name__,
             error_detail=str(e)[:500],
             duration_ms=_dur,
             model_used=model_key or "flash",
-        ))
+        )
 
 
 @app.get("/")
@@ -1905,115 +1085,6 @@ async def get_frontend_config():
     }
 
 
-@app.get("/api/local-proxy-config")
-async def get_local_proxy_config():
-    config = _load_local_proxy_config()
-    return {
-        "ok": True,
-        "config": config,
-        "has_api_key": bool(config.get("api_key")),
-        "api_key_masked": _mask_secret(config.get("api_key", "")),
-    }
-
-
-@app.put("/api/local-proxy-config")
-async def update_local_proxy_config(payload: Dict[str, Any]):
-    try:
-        config = _save_local_proxy_config(payload)
-        return {
-            "ok": True,
-            "message": "本地反代配置已保存",
-            "config": config,
-            "has_api_key": bool(config.get("api_key")),
-            "api_key_masked": _mask_secret(config.get("api_key", "")),
-        }
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"ok": False, "error": str(e)})
-
-
-@app.post("/api/local-proxy-config/test")
-async def test_local_proxy_config(payload: Optional[Dict[str, Any]] = None):
-    config = _sanitize_local_proxy_config(payload or _load_local_proxy_config())
-    base_url = str(config.get("base_url") or "").strip()
-    if not base_url:
-        return JSONResponse(status_code=400, content={"ok": False, "error": "base_url is required"})
-
-    request_key = str(config.get("api_key") or "").strip()
-    headers = _proxy_headers(request_key)
-
-    result: Dict[str, Any] = {
-        "ok": False,
-        "health": {"ok": False},
-        "models": {"ok": False, "items": []},
-        "tryon": {
-            "ok": False,
-            "strategy": "openai.images.edits",
-            "warning": "模特试衣现在只会使用真正接收两张图片的编辑接口，不再回退到 /v1/chat/completions 文生图路径。",
-            "note": "连接成功只代表反代服务在线；若图片编辑接口不可用，任务会明确失败，而不会生成与输入无关的图。",
-        },
-        "local_antigravity": _collect_local_antigravity_proxy_diagnostics(),
-    }
-
-    timeout_seconds = int(config.get("timeout_seconds") or DEFAULT_LOCAL_PROXY_CONFIG["timeout_seconds"])
-    async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=True) as client:
-        try:
-            health_resp = await client.get(f"{_proxy_root_base(base_url)}/health")
-            if health_resp.status_code == 404:
-                health_resp = await client.get(f"{_proxy_root_base(base_url)}/healthz")
-            health_ok = health_resp.status_code == 200
-            health_data = None
-            try:
-                health_data = health_resp.json()
-            except Exception:
-                health_data = health_resp.text[:400]
-            result["health"] = {
-                "ok": health_ok,
-                "status_code": health_resp.status_code,
-                "data": health_data,
-            }
-        except Exception as e:
-            result["health"] = {"ok": False, "error": str(e)}
-
-        try:
-            models_resp = await client.get(f"{_proxy_api_base(base_url)}/models", headers=headers)
-            models_data = models_resp.json() if models_resp.headers.get("content-type", "").startswith("application/json") else {}
-            model_items = models_data.get("models") if isinstance(models_data, dict) else []
-            model_names = []
-            for item in model_items or []:
-                name = _normalize_proxy_model_name((item or {}).get("name"))
-                if not name:
-                    continue
-                if name not in model_names:
-                    model_names.append(name)
-            flash_model = str(config.get("flash_model") or "").strip()
-            pro_model = str(config.get("pro_model") or "").strip()
-            effective_flash = _select_proxy_model_candidates("flash", config, model_names)
-            effective_pro = _select_proxy_model_candidates("pro", config, model_names)
-            result["models"] = {
-                "ok": models_resp.status_code == 200,
-                "status_code": models_resp.status_code,
-                "items": model_names[:80],
-                "count": len(model_names),
-                "contains_flash_model": flash_model in model_names if flash_model else False,
-                "contains_pro_model": pro_model in model_names if pro_model else False,
-                "effective_flash_model": effective_flash[0] if effective_flash else "",
-                "effective_pro_model": effective_pro[0] if effective_pro else "",
-                "flash_fallback_to_pro": bool(
-                    effective_flash
-                    and effective_flash[0] != _normalize_proxy_model_name(flash_model)
-                    and effective_flash[0] == _normalize_proxy_model_name(pro_model)
-                ),
-                "candidate_flash_models": effective_flash,
-                "candidate_pro_models": effective_pro,
-            }
-            result["tryon"]["ok"] = bool(models_resp.status_code == 200 and (effective_flash or effective_pro))
-        except Exception as e:
-            result["models"] = {"ok": False, "error": str(e), "items": []}
-
-    result["ok"] = bool(result["health"].get("ok") or result["models"].get("ok"))
-    if not result["ok"]:
-        return JSONResponse(status_code=502, content=result)
-    return result
 
 
 async def _save_upload_file(file: UploadFile) -> Tuple[str, Optional[str]]:
@@ -2074,23 +1145,78 @@ def _save_upload_bytes(image_bytes: bytes, suffix: Optional[str] = None) -> Tupl
     return filename, cloud_url
 
 
+def _check_url_safe_for_ssrf(url: str) -> None:
+    """Raises ValueError if url resolves to a private/internal/metadata address."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("只支持 http / https 图片地址")
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("无效的图片地址（缺少主机名）")
+    try:
+        addr_infos = socket.getaddrinfo(hostname, None)
+    except OSError:
+        raise ValueError("无法解析图片地址的主机名")
+    for _family, _type, _proto, _canonname, sockaddr in addr_infos:
+        raw_ip = sockaddr[0]
+        try:
+            addr = ipaddress.ip_address(raw_ip)
+        except ValueError:
+            continue
+        if (
+            addr.is_loopback
+            or addr.is_private
+            or addr.is_link_local
+            or addr.is_multicast
+            or addr.is_reserved
+            or addr.is_unspecified
+            or any(addr in net for net in _SSRF_BLOCKED_NETWORKS)
+        ):
+            raise ValueError("不允许访问该图片地址")
+
+
 async def _fetch_remote_image_bytes(raw_url: str) -> Tuple[bytes, str]:
     url = str(raw_url or "").strip()
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
         raise ValueError("自动导入只支持 http / https 图片地址")
 
-    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-        response = await client.get(url)
+    _check_url_safe_for_ssrf(url)
 
-    if response.status_code != 200:
-        raise ValueError(f"远程图片下载失败 (HTTP {response.status_code})")
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
+        current_url = url
+        for _hop in range(5):
+            response = await client.get(current_url)
+            if response.status_code in (301, 302, 303, 307, 308):
+                location = response.headers.get("location", "")
+                if not location:
+                    raise ValueError("重定向响应缺少 Location 头")
+                next_url = urljoin(current_url, location)
+                _check_url_safe_for_ssrf(next_url)
+                current_url = next_url
+                continue
+            if response.status_code != 200:
+                raise ValueError(f"远程图片下载失败 (HTTP {response.status_code})")
+            break
+        else:
+            raise ValueError("远程图片重定向次数超过限制")
+
+    content_length = response.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > INTAKE_MAX_IMAGE_BYTES:
+                raise ValueError("远程图片文件过大")
+        except (ValueError, TypeError):
+            pass
 
     content_type = str(response.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
     if content_type and not content_type.startswith("image/"):
         raise ValueError("远程地址返回的不是图片资源")
 
     image_bytes = response.content
+    if len(image_bytes) > INTAKE_MAX_IMAGE_BYTES:
+        raise ValueError("远程图片文件过大")
+
     return image_bytes, content_type
 
 
@@ -2143,30 +1269,10 @@ async def intake_image(payload: Dict[str, Any]):
     except Exception as e:
         return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})
 
-@app.get("/api/ai-studio-config")
-async def get_ai_studio_config():
-    config = _load_ai_studio_config()
-    return {
-        "ok": True,
-        "config": config,
-        "has_api_key": bool(config.get("api_key")),
-        "api_key_masked": _mask_secret(config.get("api_key", "")),
-    }
-
-
-@app.put("/api/ai-studio-config")
-async def update_ai_studio_config(payload: Dict[str, Any]):
-    try:
-        config = _save_ai_studio_config(payload)
-        return {
-            "ok": True,
-            "message": "Google AI Studio 配置已保存",
-            "config": config,
-            "has_api_key": bool(config.get("api_key")),
-            "api_key_masked": _mask_secret(config.get("api_key", "")),
-        }
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"ok": False, "error": str(e)})
+@app.get("/api/runtime-status")
+async def get_runtime_status():
+    """Non-sensitive runtime status. No auth required. No secrets returned."""
+    return get_tryon_runtime_status()
 
 
 
@@ -2199,15 +1305,11 @@ async def submit_task(
     request: Request,
     target_image: List[str] = Form(...),
     reference_image: str = Form(...),
-    api_key: Optional[str] = Form(None),
-    proxy_api_key: Optional[str] = Form(None),
-    nanobanana_api_key: Optional[str] = Form(None),
     custom_prompt: Optional[str] = Form(None),
     prompt_mode: Optional[str] = Form("append"),
     freedom: Optional[int] = Form(5),
     garment_type: Optional[str] = Form(None),
     model: Optional[str] = Form(None),
-    provider_mode: Optional[str] = Form("auto"),
     target_image_cloud_url: Optional[str] = Form(None),
     reference_image_cloud_url: Optional[str] = Form(None),
 ):
@@ -2215,12 +1317,15 @@ async def submit_task(
         _validate_single_model(target_image)
         if not reference_image:
             raise ValueError("请上传 1 张服装图片")
+        model_key = _validate_model_key(model)
+        _require_tryon_runtime_config()
     except Exception as e:
-        return JSONResponse(status_code=400, content={"error": str(e)})
+        status_code = 503 if isinstance(e, RuntimeError) else 400
+        return JSONResponse(status_code=status_code, content={"error": str(e)})
 
     # Dedup guard: prevent identical submissions within 10 seconds
     import hashlib
-    dedup_hash = hashlib.md5(f"{target_image}:{reference_image}:{model}:{provider_mode}:{freedom}".encode()).hexdigest()
+    dedup_hash = hashlib.md5(f"{target_image}:{reference_image}:{model}:{freedom}".encode()).hexdigest()
     now = time.time()
     if dedup_hash in _PENDING_DEDUP and now - _PENDING_DEDUP[dedup_hash] < 10:
         return JSONResponse(status_code=429, content={"error": "请勿重复提交，请稍后再试"})
@@ -2244,25 +1349,19 @@ async def submit_task(
     _prune_old_tasks()
     _persist_task(task_id)
     asyncio.create_task(_admin_report.report_tryon_task(
-        task_id, "pending", model_used=model or "flash",
+        task_id, "pending", model_used=model_key,
     ))
 
-    base_url = str(request.base_url).rstrip("/")
     asyncio.create_task(
         _process_task(
             task_id=task_id,
-            base_url=base_url,
             target_image=target_image,
             reference_image=reference_image,
-            api_key=api_key,
-            proxy_api_key=proxy_api_key,
-            nanobanana_api_key=nanobanana_api_key,
             custom_prompt=custom_prompt,
             prompt_mode=prompt_mode,
             freedom=freedom,
             garment_type=garment_type,
-            model=model,
-            provider_mode=provider_mode,
+            model=model_key,
             target_image_cloud_url=target_image_cloud_url,
             reference_image_cloud_url=reference_image_cloud_url,
         )
@@ -2286,15 +1385,11 @@ async def generate_once(
     request: Request,
     target_image: List[str] = Form(...),
     reference_image: str = Form(...),
-    api_key: Optional[str] = Form(None),
-    proxy_api_key: Optional[str] = Form(None),
-    nanobanana_api_key: Optional[str] = Form(None),
     custom_prompt: Optional[str] = Form(None),
     prompt_mode: Optional[str] = Form("append"),
     freedom: Optional[int] = Form(5),
     garment_type: Optional[str] = Form(None),
     model: Optional[str] = Form(None),
-    provider_mode: Optional[str] = Form("auto"),
     target_image_cloud_url: Optional[str] = Form(None),
     reference_image_cloud_url: Optional[str] = Form(None),
 ):
@@ -2303,13 +1398,11 @@ async def generate_once(
         if not reference_image:
             raise ValueError("请上传 1 张服装图片")
 
-        model_key = model if model in MODEL_MAP else DEFAULT_MODEL
+        model_key = _validate_model_key(model)
+        _require_tryon_runtime_config()
         freedom_level = max(0, min(10, int(freedom or 5)))
         prompt_text = _build_prompt(custom_prompt, prompt_mode or "append", freedom_level, garment_type)
-        effective_mode = _resolve_provider_mode(provider_mode, nanobanana_api_key)
-        effective_direct_api_key = _resolve_direct_api_key(api_key, effective_mode)
-        rate_key = effective_direct_api_key if effective_mode == "aistudio" else api_key
-        rate_identity = _rate_identity(rate_key, nanobanana_api_key, proxy_api_key, effective_mode)
+        rate_identity = _rate_identity()
         token_cost = _estimate_token_cost(prompt_text)
         await _check_and_consume_rate_limit(
             identity=rate_identity,
@@ -2317,7 +1410,6 @@ async def generate_once(
             token_cost=token_cost,
         )
 
-        base_url = str(request.base_url).rstrip("/")
         img_bytes = await _generate_tryon_image_bytes(
             model_filename=target_image[0],
             garment_filename=reference_image,
@@ -2326,11 +1418,6 @@ async def generate_once(
             freedom=freedom_level,
             garment_type=garment_type,
             model_key=model_key,
-            provider_mode=effective_mode,
-            proxy_api_key=proxy_api_key,
-            nanobanana_api_key=nanobanana_api_key,
-            api_key=effective_direct_api_key,
-            base_url=base_url,
             model_cloud_url=target_image_cloud_url,
             garment_cloud_url=reference_image_cloud_url,
         )
@@ -2345,7 +1432,13 @@ async def generate_once(
             "result_data_url": out["result_data_url"],
         }
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        if isinstance(e, ValueError):
+            status_code = 400
+        elif isinstance(e, RuntimeError):
+            status_code = 503
+        else:
+            status_code = 500
+        return JSONResponse(status_code=status_code, content={"error": str(e)})
 
 
 def _extract_local_candidates(raw_url: str) -> List[str]:
@@ -2537,31 +1630,19 @@ async def download_batch(filenames: str = Form(...)):
 @app.get("/api/rate-status")
 async def get_rate_status(
     model: Optional[str] = None,
-    api_key: Optional[str] = None,
-    nanobanana_api_key: Optional[str] = None,
-    proxy_api_key: Optional[str] = None,
-    provider_mode: Optional[str] = None,
 ):
     model_key = model if model in MODEL_MAP else DEFAULT_MODEL
-    effective_mode = _resolve_provider_mode(provider_mode, nanobanana_api_key)
-    proxy_key = (proxy_api_key or "").strip()
-    if effective_mode == "proxy" and not proxy_key:
-        proxy_key = str(_load_local_proxy_config().get("api_key") or "").strip()
-    rate_key = _resolve_direct_api_key(api_key, effective_mode) if effective_mode == "aistudio" else api_key
-    identity = _rate_identity(rate_key, nanobanana_api_key, proxy_key, effective_mode)
+    identity = _rate_identity()
     return {"ok": True, **_rate_status_snapshot(identity, model_key)}
 
 
 @app.get("/api/key-usage")
-async def get_key_usage(api_key: str):
-    key = (api_key or "").strip()
-    if not key:
-        return {"found": False, "error": "api_key required"}
-    row = KEY_USAGE.get(key)
+async def get_key_usage():
+    """Return aggregated usage stats (no key exposure)."""
+    row = KEY_USAGE.get("tryon")
     if not row:
         return {
             "found": False,
-            "key_masked": _mask_key(key),
             "calls": 0,
             "success": 0,
             "failed": 0,
@@ -2597,39 +1678,8 @@ async def update_error_analysis(error_id: str, analysis: str = Form(...)):
     return JSONResponse(status_code=404, content={"error": "error_id not found"})
 
 
-@app.post("/api/vertex-credentials")
-async def upload_vertex_credentials(file: UploadFile = File(...)):
-    try:
-        if not (file.filename or "").lower().endswith(".json"):
-            return JSONResponse(status_code=400, content={"error": "仅允许上传 .json 文件"})
-
-        raw = await file.read()
-        if not raw:
-            return JSONResponse(status_code=400, content={"error": "上传文件为空"})
-
-        parsed = json.loads(raw.decode("utf-8"))
-        if not isinstance(parsed, dict):
-            return JSONResponse(status_code=400, content={"error": "无效的 JSON 数据"})
-        if parsed.get("type") and parsed.get("type") != "service_account":
-            return JSONResponse(status_code=400, content={"error": "请上传 service_account 类型的 JSON"})
-
-        with open(CREDENTIALS_PATH, "wb") as f:
-            f.write(raw)
-        init_vertex_client()
-        return {"ok": True, "message": "Vertex 凭证已上传并生效（重启前有效）"}
-    except Exception as e:
-        _append_error_log(str(e), context="vertex_credentials_upload")
-        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-VERTEX_DOC_LINKS = [
-    "https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/api-errors",
-    "https://cloud.google.com/vertex-ai/generative-ai/docs/start/quickstarts/quickstart-multimodal",
-    "https://ai.google.dev/gemini-api/docs/quickstart?hl=zh-cn",
-    "https://ai.google.dev/gemini-api/docs/image-generation?hl=zh-cn",
-    "https://ai.google.dev/gemini-api/docs/pricing?hl=zh-cn",
-    "https://ai.google.dev/gemini-api/docs/safety-settings",
-]
 
 ERROR_ANALYSIS_MODEL = os.environ.get(
     "ERROR_ANALYSIS_MODEL",
@@ -2642,7 +1692,7 @@ def generate_fallback_analysis(error_message: str) -> str:
 
     def fmt(title: str, cause: str, actions: List[str]) -> str:
         action_text = "\n".join([f"{i + 1}. {a}" for i, a in enumerate(actions)])
-        links = "\n".join([f"- {u}" for u in VERTEX_DOC_LINKS])
+        links = "\n".join([f"- {u}" for u in AI_STUDIO_DOC_LINKS])
         return f"{title}\n\n可能原因:\n{cause}\n\n建议排查:\n{action_text}\n\n参考文档:\n{links}"
 
     if ("task polling failed" in msg) or (("/task/" in msg or "task" in msg) and ("404" in msg or "not found" in msg)):
@@ -2654,20 +1704,14 @@ def generate_fallback_analysis(error_message: str) -> str:
     if ("resource_exhausted" in msg) or ("429" in msg) or ("quota" in msg) or ("rate" in msg):
         return fmt("⏳ 配额或速率限制", "请求超过配额或限流。", [
             "降低并发，增加退避重试。",
-            "检查项目配额和账单。",
+            "检查 Google AI Studio 配额和账单。",
             "必要时切换 key 或等待窗口重置。",
         ])
-    if ("consumer_invalid" in msg) or (("aiplatform.googleapis.com" in msg) and ("permission_denied" in msg)):
-        return fmt("通道与认证不匹配", "当前请求很可能走到了 Vertex AI，但项目、区域、账单或服务账号并不满足 Vertex 调用要求；也可能是把 Google AI Studio / Gemini API 密钥误用在了 Vertex 路径上。", [
-            "如果你的密钥来自 Google AI Studio，请切换到 Google AI Studio 接口。",
-            "如果你要继续使用 Vertex AI，请检查 Cloud Run 服务账号、上传的凭据 JSON 以及 Vertex IAM 权限。",
-            "确认当前 GCP 项目与区域已启用 Vertex AI API。",
-        ])
-    if ("permission_denied" in msg) or ("403" in msg) or ("iam" in msg) or ("serviceusage" in msg):
-        return fmt("🔒 IAM/权限问题", "服务账号权限不足或 API 未启用。", [
-            "确认服务账号有 Vertex AI User 角色。",
-            "确认 Vertex AI API 已启用。",
-            "检查 Cloud Run 运行身份。",
+    if "permission_denied" in msg or "403" in msg:
+        return fmt("🔒 权限问题", "API Key 无效或权限不足。", [
+            "确认 API Key 是否属于当前项目。",
+            "确认 Gemini API 是否已启用。",
+            "检查配额和账单是否正常。",
         ])
     if ("finish_reason" in msg) or ("image_safety" in msg) or ("safety" in msg):
         return fmt("🛡️ 安全策略拦截", "输入或提示词触发安全策略。", [
@@ -2682,29 +1726,32 @@ def generate_fallback_analysis(error_message: str) -> str:
             "记录每次请求耗时。",
         ])
 
-    links = "\n".join([f"- {u}" for u in VERTEX_DOC_LINKS])
-    return f"❓ 未知错误\n\n错误信息: {(error_message or '')[:300]}\n\n建议排查:\n1. 先检查 IAM、配额、区域和 API 启用状态。\n2. 记录完整堆栈和参数。\n3. 对 5xx/超时类错误增加重试。\n\n参考文档:\n{links}"
+    links = "\n".join([f"- {u}" for u in AI_STUDIO_DOC_LINKS])
+    return f"❓ 未知错误\n\n错误信息: {(error_message or '')[:300]}\n\n建议排查:\n1. 检查 API Key 是否有效、Gemini API 是否已启用。\n2. 记录完整堆栈和参数。\n3. 对 5xx/超时类错误增加重试。\n\n参考文档:\n{links}"
 
 
 @app.post("/analyze-error")
 async def analyze_error(
     error_message: str = Form(...),
     error_detail: Optional[str] = Form(None),
-    api_key: Optional[str] = Form(None),
 ):
     merged = (error_message or "") + "\n" + (error_detail or "")
     quick = generate_fallback_analysis(merged)
 
-    current_api_key = (api_key or "").strip()
-    if not current_api_key:
+    # Try to use runtime config for AI analysis
+    try:
+        config = resolve_tryon_runtime_config()
+        api_key = config.get("api_key", "")
+        if not api_key:
+            return {"analysis": quick}
+    except RuntimeError:
         return {"analysis": quick}
 
     try:
-        # User provided key first; fallback model naming for Vertex/Express compatibility.
-        analysis_client = genai.Client(api_key=current_api_key)
+        analysis_client = genai.Client(api_key=api_key)
 
         prompt = (
-            "你是资深 Vertex AI/Gemini 排障工程师。"
+            "你是资深 Google AI Studio / Gemini API 排障工程师。"
             "请根据错误信息输出：1) 根因 2) 证据 3) 3条可执行修复步骤。"
             "尽量简洁，中文输出。\n\n"
             f"错误信息:\n{merged}\n\n"

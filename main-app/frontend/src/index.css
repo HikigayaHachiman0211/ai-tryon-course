@@ -1,4 +1,12 @@
 :root {
+  /* z-index layer tokens — consistent across all components */
+  --z-pet-stage: 820;
+  --z-assistant-button: 850;
+  --z-assistant-panel: 900;
+  --z-call-panel: 910;
+  --z-toast: 1200;
+  --z-modal: 1300;
+
   --bg-main: #000000;
   --bg-card: #1d1d1f;
   --bg-card-hover: #272729;
@@ -943,6 +951,15 @@ input[type=range]::-webkit-slider-runnable-track {
 .history-badge-lab {
   background: rgba(245, 166, 35, 0.15);
   color: var(--accent-warm);
+}
+
+/* ===== Assistant Resizing ===== */
+.assistant-resizing {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+.assistant-resizing * {
+  pointer-events: none !important;
 }
 
 /* Nav history button */

@@ -12,7 +12,10 @@ export interface RecommendationRequest {
   gemini_model?: string;
   deepseek_api_key?: string;
   deepseek_model?: string;
+  mimo_api_key?: string;
+  mimo_model?: string;
   ai_provider?: string;
+  vision_provider?: 'mimo' | 'gemini' | 'auto';
 }
 
 export interface RadarData {
@@ -30,6 +33,14 @@ export interface ProfileInference {
   gemini_model: string;
   gemini_used: boolean;
   ai_provider: string;
+  vision_provider?: string;
+  vision_provider_used?: string;
+  mimo_model?: string;
+  mimo_used?: boolean;
+  mimo_multimodal_used?: boolean;
+  ai_attempted?: boolean;
+  rule_fallback_used?: boolean;
+  provider_error_summary?: string | null;
 }
 
 export interface ProductCardBase {
@@ -77,6 +88,7 @@ export interface RecommendationResponse {
   inference: ProfileInference;
   items: RecommendedItem[];
   message?: string;
+  user_photo_url?: string;
 }
 
 export interface ProductCatalogResponse {

@@ -22,6 +22,8 @@ from app.history import MAX_HISTORY_ENTRIES, generate_result_id, get_history_det
 from app.history import _read_local_index, _write_local_index, _ensure_local_dirs
 from app.recommendation import analyze_selected_product, list_catalog_products, recommend_products
 from app import admin_report, gcs_storage
+from app.assistant.router import router as assistant_router
+from app.assistant.voice.voice_router import router as voice_router
 
 logger = logging.getLogger(__name__)
 mimetypes.add_type("image/webp", ".webp")
@@ -54,6 +56,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+app.include_router(assistant_router)
+app.include_router(voice_router)
+
 default_debug_pages = "false" if os.getenv("K_SERVICE") else "true"
 debug_pages_enabled = os.getenv("ENABLE_DEBUG_PAGES", default_debug_pages).strip().lower() == "true"
 
@@ -186,6 +192,66 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/health/deep")
+def health_deep() -> dict:
+    checks: dict[str, dict] = {}
+
+    try:
+        with SessionLocal() as session:
+            checks["cloud_sql"] = {
+                "ok": True,
+                "product_count": count_products(session),
+            }
+    except Exception as exc:
+        logger.warning("Main deep health Cloud SQL check failed: %s", exc)
+        checks["cloud_sql"] = {"ok": False, "error": exc.__class__.__name__}
+
+    try:
+        bucket = gcs_storage._ensure_bucket()
+        if bucket is None:
+            checks["cloud_storage"] = {
+                "ok": False,
+                "bucket": gcs_storage.GCS_BUCKET_NAME,
+                "error": "bucket_unavailable",
+            }
+        else:
+            sample_count = sum(1 for _ in bucket.list_blobs(max_results=1))
+            checks["cloud_storage"] = {
+                "ok": True,
+                "bucket": gcs_storage.GCS_BUCKET_NAME,
+                "sample_count": sample_count,
+            }
+    except Exception as exc:
+        logger.warning("Main deep health Cloud Storage check failed: %s", exc)
+        checks["cloud_storage"] = {
+            "ok": False,
+            "bucket": gcs_storage.GCS_BUCKET_NAME,
+            "error": exc.__class__.__name__,
+        }
+
+    try:
+        from app.ai_runtime_config import get_diagnostics
+
+        diagnostics = get_diagnostics()
+        checks["ai_runtime"] = {
+            "ok": bool(diagnostics.get("db_available")),
+            "db_url_source": diagnostics.get("db_url_source"),
+            "tables": diagnostics.get("tables", {}),
+            "providers": diagnostics.get("providers", {}),
+            "features": diagnostics.get("features", {}),
+        }
+    except Exception as exc:
+        logger.warning("Main deep health AI runtime check failed: %s", exc)
+        checks["ai_runtime"] = {"ok": False, "error": exc.__class__.__name__}
+
+    ok = all(check.get("ok") for check in checks.values())
+    return {
+        "status": "ok" if ok else "degraded",
+        "service": "main",
+        "checks": checks,
+    }
+
+
 @app.get("/")
 def root():
     if frontend_index_file.exists():
@@ -216,6 +282,21 @@ def get_recent_error_events(request: Request, limit: int = 50) -> dict:
         "request_id": get_request_id(request),
         "count": limit,
         "items": get_recent_errors(limit=limit),
+    }
+
+
+@app.get("/api/debug/ai-runtime")
+def get_ai_runtime_debug(request: Request) -> dict:
+    """Return non-sensitive AI runtime diagnostics.
+
+    Shows DB source, provider status, feature config — without exposing API keys.
+    Only available when debug pages are enabled.
+    """
+    ensure_debug_pages_enabled()
+    from app.ai_runtime_config import get_diagnostics
+    return {
+        "request_id": get_request_id(request),
+        **get_diagnostics(),
     }
 
 
@@ -269,7 +350,10 @@ def recommend(
     gemini_model: str | None = Form(default=None, description="可覆盖默认模型名"),
     deepseek_api_key: str | None = Form(default=None, description="前端传入的 Deepseek API Key"),
     deepseek_model: str | None = Form(default=None, description="可覆盖默认 Deepseek 模型名"),
-    ai_provider: str | None = Form(default=None, description="AI 引擎选择: auto / gemini / deepseek"),
+    mimo_api_key: str | None = Form(default=None, description="前端传入的 MiMo API Key"),
+    mimo_model: str | None = Form(default=None, description="可覆盖默认 MiMo 模型名"),
+    ai_provider: str | None = Form(default=None, description="AI 引擎选择: auto / gemini / deepseek / mimo"),
+    vision_provider: str | None = Form(default=None, description="图像分析引擎: mimo / gemini / auto (默认由后台配置决定)"),
 ):
     if price_min is not None and price_max is not None and price_min > price_max:
         raise AppError(
@@ -303,7 +387,10 @@ def recommend(
         gemini_model=gemini_model,
         deepseek_api_key=deepseek_api_key,
         deepseek_model=deepseek_model,
+        mimo_api_key=mimo_api_key,
+        mimo_model=mimo_model,
         ai_provider=ai_provider,
+        vision_provider=vision_provider,
         price_min=price_min,
         price_max=price_max,
     )
@@ -343,7 +430,7 @@ def recommend(
         ai_body_shape=inference.get("body_shape"),
         ai_suggested_style=inference.get("resolved_style"),
         ai_reasoning=inference.get("reasoning"),
-        used_fallback=not inference.get("gemini_used", False),
+        used_fallback=inference.get("rule_fallback_used", not inference.get("gemini_used", False) and not inference.get("mimo_used", False)),
     )
 
     return result
@@ -367,7 +454,10 @@ def analyze_style_lab(
     gemini_model: str | None = Form(default=None, description="可覆盖默认模型名"),
     deepseek_api_key: str | None = Form(default=None, description="前端传入的 Deepseek API Key"),
     deepseek_model: str | None = Form(default=None, description="可覆盖默认 Deepseek 模型名"),
-    ai_provider: str | None = Form(default=None, description="AI 引擎选择: auto / gemini / deepseek"),
+    mimo_api_key: str | None = Form(default=None, description="前端传入的 MiMo API Key"),
+    mimo_model: str | None = Form(default=None, description="可覆盖默认 MiMo 模型名"),
+    ai_provider: str | None = Form(default=None, description="AI 引擎选择: auto / gemini / deepseek / mimo"),
+    vision_provider: str | None = Form(default=None, description="图像分析引擎: mimo / gemini / auto (默认由后台配置决定)"),
 ):
     product = get_catalog_product(product_id)
     if product is None:
@@ -404,7 +494,10 @@ def analyze_style_lab(
         gemini_model=gemini_model,
         deepseek_api_key=deepseek_api_key,
         deepseek_model=deepseek_model,
+        mimo_api_key=mimo_api_key,
+        mimo_model=mimo_model,
         ai_provider=ai_provider,
+        vision_provider=vision_provider,
         price_min=price_min,
         price_max=price_max,
     )

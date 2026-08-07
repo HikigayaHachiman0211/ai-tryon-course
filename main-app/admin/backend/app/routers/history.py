@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -24,13 +25,39 @@ def _load_index() -> list[dict]:
         return []
 
 
+def _format_timestamp(ts: str | None) -> str | None:
+    """Format the Shanghai-ISO index timestamp to 'YYYY-MM-DD HH:MM:SS'."""
+    if not ts:
+        return ts
+    try:
+        return datetime.fromisoformat(ts).strftime("%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return ts
+
+
+def _to_list_item(entry: dict) -> dict:
+    """Map a raw GCS index entry to the structure expected by the admin frontend.
+
+    The main site writes 'timestamp' / 'item_count' (and never a session id),
+    while the table reads 'created_at' / 'result_count' / 'summary'.
+    """
+    return {
+        "id": entry.get("id"),
+        "created_at": _format_timestamp(entry.get("timestamp")),
+        "result_count": entry.get("item_count"),
+        "summary": entry.get("summary"),
+        "thumbnail_url": entry.get("thumbnail_url"),
+        "type": entry.get("type"),
+    }
+
+
 @router.get("")
 def list_history(page: int = 1, size: int = 20, admin=Depends(get_current_admin)):
     index = _load_index()
     index.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
     total = len(index)
     start = (page - 1) * size
-    return {"total": total, "items": index[start: start + size]}
+    return {"total": total, "items": [_to_list_item(e) for e in index[start: start + size]]}
 
 
 @router.get("/{result_id}")

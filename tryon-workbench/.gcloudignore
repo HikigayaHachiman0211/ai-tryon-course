@@ -3,11 +3,19 @@ __pycache__/
 *.py[cod]
 venv/
 .venv/
+.venv*/
+.pytest_cache/
 
 # 环境配置
 .env
 .env.local
 gcp-credentials.json
+*credentials*.json
+*service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
 
 # IDE
 .idea/

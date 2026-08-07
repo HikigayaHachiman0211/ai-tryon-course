@@ -7,8 +7,22 @@ import type {
   StyleLabAnalysisResponse,
 } from './types';
 
+const resolveApiBaseURL = (): string => {
+  const configuredBaseURL = import.meta.env.VITE_API_BASE_URL?.trim();
+  const isHttpURL = /^https?:\/\//i.test(configuredBaseURL || '');
+  const isSameOriginPath = configuredBaseURL?.startsWith('/');
+
+  if (configuredBaseURL && (isHttpURL || isSameOriginPath)) {
+    return configuredBaseURL;
+  }
+
+  return import.meta.env.PROD ? '/' : 'http://localhost:8000';
+};
+
+const API_BASE_URL = resolveApiBaseURL();
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+  baseURL: API_BASE_URL,
 });
 
 export const getHealth = async () => {
@@ -30,7 +44,10 @@ const appendProfileFields = (formData: FormData, data: RecommendationRequest) =>
   if (data.gemini_model) formData.append('gemini_model', data.gemini_model);
   if (data.deepseek_api_key) formData.append('deepseek_api_key', data.deepseek_api_key);
   if (data.deepseek_model) formData.append('deepseek_model', data.deepseek_model);
+  if (data.mimo_api_key) formData.append('mimo_api_key', data.mimo_api_key);
+  if (data.mimo_model) formData.append('mimo_model', data.mimo_model);
   if (data.ai_provider) formData.append('ai_provider', data.ai_provider);
+  if (data.vision_provider) formData.append('vision_provider', data.vision_provider);
 };
 
 export const getRecommend = async (data: RecommendationRequest): Promise<RecommendationResponse> => {
@@ -102,7 +119,7 @@ export const buildImageURL = (path: string) => {
     return path;
   }
 
-  const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+  const baseURL = API_BASE_URL;
   if (baseURL === '/' || baseURL === '') {
     if (typeof window !== 'undefined') {
       return new URL(path, window.location.origin).toString();
@@ -120,5 +137,99 @@ export const getHistory = async (limit = 50): Promise<HistoryListResponse> => {
 
 export const getHistoryDetail = async (resultId: string) => {
   const res = await api.get(`/api/history/${resultId}`);
+  return res.data;
+};
+
+// ---- Assistant API ----
+
+export interface AssistantPublicConfig {
+  enabled: boolean;
+  welcome_message: string;
+  features: {
+    text_chat: boolean;
+    auto_fill: boolean;
+    auto_submit: boolean;
+    style_lab_guide: boolean;
+    tryon_guide: boolean;
+  };
+  defaults: {
+    ai_provider: string;
+    vision_provider: string;
+    mimo_model: string;
+  };
+}
+
+export interface AssistantPageContext {
+  view?: string;
+  current_form?: Record<string, unknown>;
+}
+
+export interface AssistantChatRequest {
+  session_id: string;
+  message: string;
+  page_context?: AssistantPageContext;
+}
+
+export interface RecommendFormPatch {
+  color_preference?: string;
+  brand_preference?: string;
+  gender?: string;
+  price_min?: number | null;
+  price_max?: number | null;
+  mbti?: string;
+  size?: string;
+  style_preference?: string;
+  ai_provider?: string;
+  vision_provider?: string;
+  mimo_model?: string;
+  gemini_model?: string;
+  deepseek_model?: string;
+}
+
+export interface AssistantAction {
+  type: string;
+  form_patch?: RecommendFormPatch;
+  confidence?: number;
+  requires_confirmation?: boolean;
+}
+
+export interface AssistantDebugInfo {
+  provider: string;
+  fallback_used: boolean;
+  latency_ms: number;
+}
+
+export interface AssistantChatResponse {
+  reply: string;
+  intent: string;
+  action: AssistantAction;
+  sources: string[];
+  debug: AssistantDebugInfo;
+}
+
+export interface KnowledgeSearchItem {
+  id: number;
+  question: string;
+  answer: string;
+  score: number;
+}
+
+export interface KnowledgeSearchResponse {
+  items: KnowledgeSearchItem[];
+  total: number;
+}
+
+export const getAssistantConfig = async (): Promise<AssistantPublicConfig> => {
+  const res = await api.get('/api/assistant/config/public');
+  return res.data;
+};
+
+export const postAssistantChat = async (data: AssistantChatRequest): Promise<AssistantChatResponse> => {
+  const res = await api.post('/api/assistant/chat', data);
+  return res.data;
+};
+
+export const searchAssistantKnowledge = async (q: string, limit = 5): Promise<KnowledgeSearchResponse> => {
+  const res = await api.get('/api/assistant/knowledge/search', { params: { q, limit } });
   return res.data;
 };

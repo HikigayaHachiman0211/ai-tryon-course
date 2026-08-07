@@ -9,6 +9,10 @@ from urllib.parse import quote
 
 _CATALOG: list[dict] = []
 
+PUBLIC_IMAGE_BASE_URL = str(os.getenv("PUBLIC_IMAGE_BASE_URL", "") or "").strip()
+PUBLIC_IMAGE_PREFIX = str(os.getenv("PUBLIC_IMAGE_PREFIX", "羽绒服_png") or "羽绒服_png").strip().strip("/")
+RESULTS_GCS_BUCKET = str(os.getenv("RESULTS_GCS_BUCKET", "") or "").strip()
+
 MALE_GENDER_KEYWORDS = ["【男款】", "男士", "男款", "男装", "男子", "男"]
 FEMALE_GENDER_KEYWORDS = ["【女款】", "女士", "女款", "女装", "女子", "女"]
 UNISEX_GENDER_KEYWORDS = ["男女同款", "男女款", "情侣款", "情侣", "中性", "男女士同款", "男女"]
@@ -78,11 +82,22 @@ def _extract_brand(title: str, style_features: list) -> Optional[str]:
 def _build_image_url(image_path: str) -> str:
     if image_path.startswith(("http://", "https://")):
         return image_path
+
     normalized = image_path.replace("\\", "/").lstrip("/")
     filename = Path(normalized).name
-    base = os.getenv("PUBLIC_IMAGE_BASE_URL", "")
-    if base:
-        return f"{base.rstrip('/')}/{quote(filename)}"
+
+    if not filename:
+        return ""
+
+    if PUBLIC_IMAGE_BASE_URL:
+        return f"{PUBLIC_IMAGE_BASE_URL.rstrip('/')}/{quote(filename)}"
+
+    # Fallback for Cloud Run: build public GCS URL when PUBLIC_IMAGE_BASE_URL is absent.
+    if RESULTS_GCS_BUCKET:
+        if PUBLIC_IMAGE_PREFIX:
+            return f"https://storage.googleapis.com/{RESULTS_GCS_BUCKET}/{quote(PUBLIC_IMAGE_PREFIX, safe='/')}/{quote(filename)}"
+        return f"https://storage.googleapis.com/{RESULTS_GCS_BUCKET}/{quote(filename)}"
+
     return ""
 
 

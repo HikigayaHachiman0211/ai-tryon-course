@@ -36,21 +36,9 @@ def init_firestore():
         print(f"[DB] Firestore unavailable, fallback to memory only: {e}")
 
 
-def _mask_key(api_key: str) -> str:
-    k = (api_key or "").strip()
-    if not k:
-        return "N/A"
-    if len(k) <= 8:
-        return f"{k[:2]}***{k[-2:]}"
-    return f"{k[:4]}...{k[-4:]}"
-
-
-def record_key_usage(api_key: Optional[str], model_key: str, success: bool):
-    key = (api_key or "").strip()
-    if not key or key.lower() in ("vertex-ai", "mock"):
-        return
-    row = KEY_USAGE.get(key) or {
-        "key_masked": _mask_key(key),
+def record_model_usage(model_key: str, success: bool):
+    """Record model usage stats (no key exposure)."""
+    row = KEY_USAGE.get("tryon") or {
         "calls": 0,
         "success": 0,
         "failed": 0,
@@ -64,7 +52,7 @@ def record_key_usage(api_key: Optional[str], model_key: str, success: bool):
         row["failed"] += 1
     row["cost"] += float(MODEL_PRICING.get(model_key, MODEL_PRICING["flash"]))
     row["last_used"] = time.strftime("%Y-%m-%d %H:%M:%S")
-    KEY_USAGE[key] = row
+    KEY_USAGE["tryon"] = row
 
 
 def append_error_log(message: str, context: str = "", detail: str = "", analysis: str = "") -> Dict[str, Any]:

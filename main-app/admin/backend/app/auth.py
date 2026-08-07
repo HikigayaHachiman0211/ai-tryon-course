@@ -10,7 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.config import get_settings
 from app.database import AdminUser, get_db
 
-bearer_scheme = HTTPBearer()
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def hash_password(plain: str) -> str:
@@ -30,10 +30,12 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
 
 
 def get_current_admin(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db=Depends(get_db),
 ) -> AdminUser:
     settings = get_settings()
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     token = credentials.credentials
     try:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])

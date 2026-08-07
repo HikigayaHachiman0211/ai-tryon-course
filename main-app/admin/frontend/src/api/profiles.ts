@@ -15,3 +15,7 @@ export function getProfileStats() {
 export function getProfileTryonResults(id: number) {
   return request.get(`/api/admin/profiles/${id}/tryon-results`)
 }
+
+export function deleteProfile(id: number) {
+  return request.delete(`/api/admin/profiles/${id}`)
+}

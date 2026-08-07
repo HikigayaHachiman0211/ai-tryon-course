@@ -3500,85 +3500,6 @@ header {
     }
 }
 
-/* ===== 多 API Key 区域 ===== */
-.api-keys-section {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.extra-api-keys {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    animation: fadeSlideDown 0.3s ease;
-}
-
-.extra-api-keys.hidden {
-    display: none;
-}
-
-@keyframes fadeSlideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-8px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.api-key-num {
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: rgba(0, 212, 255, 0.5);
-    pointer-events: none;
-}
-
-.toggle-keys-btn {
-    background: transparent;
-    border: 1px dashed rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    color: rgba(255, 255, 255, 0.5);
-    padding: 8px 16px;
-    font-size: 0.78rem;
-    cursor: pointer;
-    transition: all 0.3s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-}
-
-.toggle-keys-btn:hover {
-    border-color: var(--accent-color);
-    color: var(--accent-color);
-    background: rgba(0, 212, 255, 0.05);
-}
-
-.toggle-keys-btn.expanded {
-    border-color: rgba(255, 255, 255, 0.15);
-}
-
-.toggle-keys-btn.expanded i {
-    transform: rotate(45deg);
-    transition: transform 0.3s;
-}
-
-@media (max-width: 768px) {
-    .toggle-keys-btn {
-        padding: 10px 16px;
-        font-size: 0.82rem;
-        min-height: 44px;
-    }
-}
-
 /* ============ 历史记录侧边栏 ============ */
 
 .history-toggle-btn {
@@ -3653,26 +3574,12 @@ header {
     border-color: #3b82f6;
     color: #3b82f6;
 }
-.sidebar-icon-vertex {
-    top: 200px;
-}
-.sidebar-icon-vertex:hover {
-    border-color: #4285F4;
-    color: #4285F4;
-}
 .sidebar-icon-aistudio {
     top: 244px;
 }
 .sidebar-icon-aistudio:hover {
     border-color: #f59e0b;
     color: #f59e0b;
-}
-.sidebar-icon-proxy {
-    top: 288px;
-}
-.sidebar-icon-proxy:hover {
-    border-color: #22c55e;
-    color: #22c55e;
 }
 .sidebar-icon-badge {
     position: absolute;
@@ -3760,10 +3667,7 @@ header {
     .sidebar-icon-btn { width: 32px; height: 32px; font-size: 0.75rem; left: 12px; }
     .sidebar-icon-usage { top: 58px; }
     .sidebar-icon-errorlog { top: 98px; }
-    .sidebar-icon-nanobanana { top: 138px; }
-    .sidebar-icon-vertex { top: 178px; }
-    .sidebar-icon-aistudio { top: 218px; }
-    .sidebar-icon-proxy { top: 258px; }
+    .sidebar-icon-aistudio { top: 98px; }
 }
 
 .history-overlay {
@@ -4181,15 +4085,15 @@ header {
         font-size: 16px;
     }
 
-    .proxy-sidebar-actions {
+    .aistudio-sidebar-actions {
         flex-direction: column;
     }
 
-    .proxy-sidebar-actions .usage-query-btn {
+    .aistudio-sidebar-actions .usage-query-btn {
         min-height: 46px;
     }
 
-    .proxy-inline-field label {
+    .aistudio-inline-field label {
         font-size: 0.76rem;
     }
 
@@ -4291,90 +4195,34 @@ header {
     border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.proxy-config-switch {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 12px;
-    color: rgba(255, 255, 255, 0.82);
-    font-size: 0.8rem;
-}
-
-.proxy-form-grid {
+.aistudio-form-grid {
     flex-direction: column;
     gap: 10px;
 }
 
-.proxy-config-input {
+.aistudio-config-input {
     width: 100%;
 }
 
-.proxy-inline-field {
+.aistudio-inline-field {
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
 
-.proxy-inline-field label {
+.aistudio-inline-field label {
     font-size: 0.72rem;
     color: rgba(255, 255, 255, 0.58);
 }
 
-.proxy-sidebar-actions {
+.aistudio-sidebar-actions {
     display: flex;
     gap: 8px;
     margin-top: 12px;
 }
 
-.proxy-sidebar-actions .usage-query-btn {
+.aistudio-sidebar-actions .usage-query-btn {
     flex: 1;
-}
-
-.proxy-guide-card {
-    margin-top: 16px;
-    padding: 14px 14px 12px;
-    border-radius: 14px;
-    border: 1px solid rgba(34, 197, 94, 0.18);
-    background:
-        linear-gradient(180deg, rgba(34, 197, 94, 0.08), rgba(8, 14, 32, 0.52)),
-        rgba(8, 14, 32, 0.72);
-}
-
-.proxy-guide-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #dcfce7;
-    font-size: 0.86rem;
-    font-weight: 700;
-    margin-bottom: 10px;
-}
-
-.proxy-guide-title i {
-    color: #4ade80;
-}
-
-.proxy-guide-steps {
-    margin: 0;
-    padding-left: 18px;
-    color: rgba(255, 255, 255, 0.82);
-    font-size: 0.76rem;
-    line-height: 1.72;
-}
-
-.proxy-guide-steps li + li {
-    margin-top: 8px;
-}
-
-.proxy-guide-note {
-    margin-top: 12px;
-    padding: 10px 12px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px dashed rgba(255, 255, 255, 0.14);
-    color: rgba(255, 255, 255, 0.72);
-    font-size: 0.72rem;
-    line-height: 1.65;
 }
 
 .aistudio-note-card {
@@ -5615,7 +5463,7 @@ header {
     border: none !important;
 }
 
-/* --- Sidebar content (usage, proxy, aistudio) --- */
+/* --- Sidebar content (usage, aistudio) --- */
 .sidebar-content-scroll {
     background: transparent !important;
 }
@@ -5634,24 +5482,6 @@ header {
     background: var(--bg-secondary) !important;
     border-color: var(--card-border) !important;
     color: var(--text-primary) !important;
-}
-.proxy-config-switch {
-    color: var(--text-primary) !important;
-}
-.proxy-guide-card {
-    background: var(--bg-secondary) !important;
-    border-color: rgba(34, 197, 94, 0.15) !important;
-}
-.proxy-guide-title {
-    color: var(--text-primary) !important;
-}
-.proxy-guide-steps {
-    color: var(--text-primary) !important;
-}
-.proxy-guide-note {
-    background: rgba(0, 0, 0, 0.03) !important;
-    border-color: var(--card-border) !important;
-    color: var(--text-secondary) !important;
 }
 .aistudio-note-card {
     background: var(--bg-secondary) !important;

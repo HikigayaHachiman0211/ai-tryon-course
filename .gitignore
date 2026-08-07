@@ -1,6 +1,6 @@
 .env
 .env.*
-!.env.example
+!**/.env.example
 *.db
 *.sqlite
 *.sqlite3
@@ -8,13 +8,24 @@ gcp-credentials.json
 *credentials*.json
 *service-account*.json
 *private-key*
+client_secret*.json
+application_default_credentials.json
+*.pem
+*.key
+*.p12
+*.pfx
 
 node_modules/
 dist/
 build/
 __pycache__/
 *.py[cod]
-.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv*/
 venv/
 
 .vs/
@@ -22,14 +33,17 @@ venv/
 .vscode/
 .DS_Store
 
-uploads/
-assets/
-history/
+**/uploads/
+**/history/
+/tryon-workbench/assets/
 cloudsql-ops/
 downloaded_jd_images/
 img*/
 read-model/
+*.bak
+*.tmp
 
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*

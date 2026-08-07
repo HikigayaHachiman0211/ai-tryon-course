@@ -16,7 +16,8 @@ request.interceptors.request.use((config) => {
 request.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const isLoginRequest = error.config?.url === '/api/auth/login'
+    if (error.response?.status === 401 && !isLoginRequest) {
       localStorage.removeItem('admin_token')
       window.location.hash = ''
       window.location.href = '/login'

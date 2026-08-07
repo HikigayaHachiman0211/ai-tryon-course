@@ -14,6 +14,8 @@ import AnnotationsPage from './pages/AnnotationsPage'
 import ProfilesPage from './pages/ProfilesPage'
 import SampleModelsPage from './pages/SampleModelsPage'
 import SettingsPage from './pages/SettingsPage'
+import AIModelSettingsPage from './pages/AIModelSettingsPage'
+import VoiceClonePage from './pages/VoiceClonePage'
 
 export default function App() {
   return (
@@ -38,6 +40,8 @@ export default function App() {
         <Route path="/profiles" element={<ProfilesPage />} />
         <Route path="/sample-models" element={<SampleModelsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/ai-models" element={<AIModelSettingsPage />} />
+        <Route path="/voice-clones" element={<VoiceClonePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -7,14 +7,14 @@ import httpx
 logger = logging.getLogger(__name__)
 
 ADMIN_API_URL = os.getenv("ADMIN_API_URL", "").rstrip("/")
-INGEST_SECRET_KEY = os.getenv("INGEST_SECRET_KEY", "ai-tryon-ingest-2026")
+INGEST_SECRET_KEY = os.getenv("INGEST_SECRET_KEY", "").strip()
 
 _client: httpx.AsyncClient | None = None
 
 
 def _get_client() -> httpx.AsyncClient | None:
     global _client
-    if not ADMIN_API_URL:
+    if not ADMIN_API_URL or not INGEST_SECRET_KEY:
         return None
     if _client is None:
         _client = httpx.AsyncClient(

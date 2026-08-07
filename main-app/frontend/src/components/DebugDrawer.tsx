@@ -39,11 +39,11 @@ export const DebugDrawer: React.FC = () => {
 
   if (!isOpen) {
     return (
-      <button 
+      <button
         onClick={handleOpen}
         style={{
-          position: 'fixed', bottom: 16, right: 16, 
-          zIndex: 1000, 
+          position: 'fixed', bottom: 16, left: 16,
+          zIndex: 1000,
           background: 'rgba(255,255,255,0.1)',
           border: '1px solid rgba(255,255,255,0.2)',
           color: '#94A3B8',
@@ -61,13 +61,13 @@ export const DebugDrawer: React.FC = () => {
 
   return (
     <div style={{
-      position: 'fixed', top: 0, right: 0, bottom: 0, width: '400px',
+      position: 'fixed', top: 0, left: 0, bottom: 0, width: '400px',
       background: 'rgba(11, 11, 14, 0.95)',
       backdropFilter: 'blur(20px)',
-      borderLeft: '1px solid rgba(255,255,255,0.1)',
+      borderRight: '1px solid rgba(255,255,255,0.1)',
       zIndex: 1001,
       padding: '24px',
-      boxShadow: '-10px 0 30px rgba(0,0,0,0.5)',
+      boxShadow: '10px 0 30px rgba(0,0,0,0.5)',
       display: 'flex', flexDirection: 'column',
       overflow: 'hidden'
     }}>
@@ -77,13 +77,13 @@ export const DebugDrawer: React.FC = () => {
       </div>
 
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-        <button 
-          className={activeTab === 'codes' ? 'btn-secondary' : 'modern-input'} 
+        <button
+          className={activeTab === 'codes' ? 'btn-secondary' : 'modern-input'}
           style={{ width: 'auto', padding: '6px 12px' }}
           onClick={() => fetchData('codes')}
         >错误码</button>
-        <button 
-          className={activeTab === 'recent' ? 'btn-secondary' : 'modern-input'} 
+        <button
+          className={activeTab === 'recent' ? 'btn-secondary' : 'modern-input'}
           style={{ width: 'auto', padding: '6px 12px' }}
           onClick={() => fetchData('recent')}
         >最近错误</button>

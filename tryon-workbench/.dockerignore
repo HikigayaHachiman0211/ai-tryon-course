@@ -12,10 +12,17 @@ __pycache__/
 .env.local
 *.env
 gcp-credentials.json
+*credentials*.json
+*service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
 
 # 虚拟环境
 venv/
 .venv/
+.venv*/
 ENV/
 
 # IDE
@@ -31,6 +38,7 @@ history/
 
 # 缓存
 .cache/
+.pytest_cache/
 *.log
 
 # Git

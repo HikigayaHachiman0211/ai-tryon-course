@@ -4,17 +4,27 @@ services:
     ports:
       - "8081:8081"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/ai_tryon
-      - JWT_SECRET_KEY=<your-jwt-secret-at-least-32-characters>
-      - ADMIN_INIT_USERNAME=admin
-      - ADMIN_INIT_PASSWORD=<your-admin-password>
+      - APP_ENV=development
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in admin/.env}@db:5432/ai_tryon
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in admin/.env}
+      - ADMIN_INIT_USERNAME=${ADMIN_INIT_USERNAME:-admin}
+      - ADMIN_INIT_PASSWORD=${ADMIN_INIT_PASSWORD:?Set ADMIN_INIT_PASSWORD in admin/.env}
+      - INGEST_SECRET_KEY=${INGEST_SECRET_KEY:?Set INGEST_SECRET_KEY in admin/.env}
+      - FERNET_SECRET_KEY=${FERNET_SECRET_KEY:?Set FERNET_SECRET_KEY in admin/.env}
       - MAIN_SITE_URL=http://main-site:8080
-      - GCS_BUCKET_NAME=<your-gcs-bucket>
-      - PUBLIC_IMAGE_BASE_URL=https://storage.googleapis.com/<your-gcs-bucket>/<your-image-prefix>"5432:5432"
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-}
+      - PUBLIC_IMAGE_BASE_URL=${PUBLIC_IMAGE_BASE_URL:-}
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
     environment:
       - POSTGRES_DB=ai_tryon
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=<your-postgres-password>
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in admin/.env}
     volumes:
       - pgdata:/var/lib/postgresql/data
 

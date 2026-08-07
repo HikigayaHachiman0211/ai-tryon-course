@@ -1,84 +1,56 @@
-# AI 羽绒服推荐 — 站长管理后台
+# 站长后台
 
-## 快速开始
+站长后台由 FastAPI 后端和 React 前端组成，提供登录、商品与图片管理、Prompt 管理、AI Provider 配置、推荐记录、试穿任务和系统状态页面。
 
-### Docker Compose（推荐）
+## 本地启动
 
-```bash
-cd admin
+### 后端
+
+```powershell
+Set-Location backend
+Copy-Item .env.example .env
+python -m venv .venv-local
+.\.venv-local\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8081
+```
+
+启动前编辑 `.env`，设置自己的 `JWT_SECRET_KEY`、`ADMIN_INIT_PASSWORD`、`INGEST_SECRET_KEY` 和 `FERNET_SECRET_KEY`。仓库不提供默认登录密码；未设置管理员密码时不会创建管理员账号。
+
+### 前端
+
+```powershell
+Set-Location frontend
+npm ci
+npm run dev -- --host 127.0.0.1 --port 3001
+```
+
+访问 `http://127.0.0.1:3001`。
+
+## Docker Compose
+
+```powershell
+Copy-Item .env.example .env
+# 填写 .env 中所有必填密钥与数据库密码
 docker compose up --build
 ```
 
-访问 http://localhost:8081 ，首次运行前请通过环境变量设置管理员账号和密码。
+Compose 使用 PostgreSQL。`${VAR:?message}` 形式的变量若未填写，Compose 会在启动前直接报错，避免服务以公开默认口令运行。
 
-### 本地开发
-
-**后端：**
-```bash
-cd admin/backend
-pip install -r requirements.txt
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/ai_tryon"
-export JWT_SECRET_KEY="<your-jwt-secret-at-least-32-characters>"
-uvicorn app.main:app --reload --port 8081
-```
-
-**前端：**
-```bash
-cd admin/frontend
-npm install
-npm run dev
-```
-
-前端开发服务器运行在 5173 端口，自动代理 `/api` 请求到 8081。
-
-## 架构
-
-```
-admin/
-├── backend/          # FastAPI 后端
-│   ├── app/
-│   │   ├── main.py          # 入口
-│   │   ├── config.py        # 配置
-│   │   ├── database.py      # ORM 模型
-│   │   ├── auth.py          # JWT 认证
-│   │   ├── routers/         # 11 个路由模块
-│   │   └── services/        # 业务服务
-│   └── requirements.txt
-├── frontend/         # React + Ant Design 前端
-│   ├── src/
-│   │   ├── pages/           # 12 个页面
-│   │   ├── api/             # 11 个 API 模块
-│   │   ├── components/      # 布局 + 路由守卫
-│   │   └── utils/           # Axios 封装
-│   └── package.json
-├── integration/      # 主站集成模块
-├── Dockerfile        # 多阶段构建
-└── docker-compose.yml
-```
-
-## 功能模块
-
-| 模块 | 路由 | 说明 |
-|------|------|------|
-| 仪表盘 | `/` | 概览统计、趋势图、偏好分析 |
-| 商品管理 | `/products` | CRUD、批量导入、链接验证 |
-| 推荐历史 | `/history` | GCS 历史记录浏览 |
-| 系统监控 | `/system` | 健康检查、错误日志、配置 |
-| 图片管理 | `/images` | GCS 图片浏览、上传、孤儿检测 |
-| AI 试穿 | `/tryon-tasks` | 任务队列、成功率、重试 |
-| Prompt 管理 | `/prompts` | Monaco 编辑器、版本对比、测试 |
-| 标注中心 | `/annotations` | 标注审核、置信度、批量操作 |
-| 用户画像 | `/profiles` | 体型分析、尺码分布 |
-| 示例模特 | `/sample-models` | 上传管理、排序、启停 |
-
-## 环境变量
+## 关键环境变量
 
 | 变量 | 必填 | 说明 |
-|------|------|------|
-| `DATABASE_URL` | 是 | PostgreSQL 连接串 |
-| `JWT_SECRET_KEY` | 是 | JWT 签名密钥 |
-| `ADMIN_INIT_USERNAME` | 否 | 初始管理员用户名（默认 admin） |
-| `ADMIN_INIT_PASSWORD` | 否 | 初始管理员密码 |
+|---|---:|---|
+| `DATABASE_URL` | 是 | SQLAlchemy 数据库连接串 |
+| `JWT_SECRET_KEY` | 是 | JWT 签名密钥，生产环境不少于 32 字符 |
+| `ADMIN_INIT_USERNAME` | 否 | 初始管理员用户名，默认 `admin` |
+| `ADMIN_INIT_PASSWORD` | 是 | 初始管理员密码，生产环境不少于 12 字符 |
+| `INGEST_SECRET_KEY` | 是 | 主站、试衣站向后台写入统计数据时使用的共享密钥 |
+| `FERNET_SECRET_KEY` | 是 | 加密后台保存的 Provider API Key |
 | `MAIN_SITE_URL` | 否 | 主站地址 |
-| `GCS_BUCKET_NAME` | 否 | GCS 存储桶 |
-| `GEMINI_API_KEY` | 否 | Gemini API Key（Prompt 测试用） |
+| `TRYON_WORKBENCH_URL` | 否 | 虚拟试衣工作台地址 |
+| `CORS_ALLOW_ORIGINS` | 生产必填 | 逗号分隔的允许来源；生产环境不得使用 `*` |
+| `GCS_BUCKET_NAME` | 使用云存储时 | GCS 桶名 |
+| `PUBLIC_IMAGE_BASE_URL` | 使用公共图片时 | 商品图片公共 URL 前缀 |
+
+真实配置只应存在于未跟踪的 `.env`、Secret Manager 或 CI/CD 密钥中。

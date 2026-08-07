@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
-import { Card, Table, Tag, Row, Col, Statistic, Select, Space, Typography, Modal, Descriptions, Tooltip } from 'antd'
-import { UserOutlined, ManOutlined, WomanOutlined, QuestionCircleOutlined } from '@ant-design/icons'
+import { Card, Table, Tag, Row, Col, Statistic, Select, Space, Typography, Modal, Descriptions, Tooltip, Popconfirm, message, Button } from 'antd'
+import { UserOutlined, ManOutlined, WomanOutlined, QuestionCircleOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import type { ColumnsType } from 'antd/es/table'
-import { listProfiles, getProfile, getProfileStats, getProfileTryonResults } from '../api/profiles'
+import { listProfiles, getProfile, getProfileStats, getProfileTryonResults, deleteProfile } from '../api/profiles'
 
-const { Title } = Typography
+const { Title, Text } = Typography
 const { Option } = Select
+
+const AUTO_REFRESH_MS = 15000
+const LATENCY_HINT = '数据为主站异步上报，可能有数秒延迟；本页每 15 秒自动刷新'
 
 interface ProfileItem {
   id: number
@@ -37,10 +40,27 @@ export default function ProfilesPage() {
       .finally(() => setLoading(false))
   }
 
+  const refresh = () => {
+    fetchData(page)
+    getProfileStats().then((res) => setStats(res.data))
+  }
+
   useEffect(() => {
     fetchData(1); setPage(1)
     getProfileStats().then((res) => setStats(res.data))
   }, [genderFilter])
+
+  useEffect(() => {
+    const timer = setInterval(refresh, AUTO_REFRESH_MS)
+    return () => clearInterval(timer)
+  }, [page, genderFilter])
+
+  const handleDelete = async (id: number) => {
+    await deleteProfile(id)
+    message.success('已删除')
+    fetchData(1); setPage(1)
+    getProfileStats().then((res) => setStats(res.data))
+  }
 
   const showDetail = async (id: number) => {
     const [pRes, tRes] = await Promise.all([getProfile(id), getProfileTryonResults(id)])
@@ -56,7 +76,10 @@ export default function ProfilesPage() {
     { title: '会话', dataIndex: 'session_id', width: 120, ellipsis: true },
     {
       title: '性别', dataIndex: 'gender', width: 80,
-      render: (v: string) => v === '男' ? <Tag icon={<ManOutlined />} color="blue">{v}</Tag> : <Tag icon={<WomanOutlined />} color="pink">{v}</Tag>,
+      render: (v: string) => {
+        const isMale = v === '男' || v?.toLowerCase() === 'male'
+        return isMale ? <Tag icon={<ManOutlined />} color="blue">{v}</Tag> : <Tag icon={<WomanOutlined />} color="pink">{v}</Tag>
+      },
     },
     { title: 'MBTI', dataIndex: 'mbti', width: 80 },
     { title: 'AI 体型', dataIndex: 'ai_body_shape', width: 120 },
@@ -73,14 +96,27 @@ export default function ProfilesPage() {
     },
     { title: '创建时间', dataIndex: 'created_at', width: 180 },
     {
-      title: '操作', width: 80,
-      render: (_, record) => <a onClick={() => showDetail(record.id)}>详情</a>,
+      title: '操作', width: 120,
+      render: (_, record) => (
+        <Space>
+          <a onClick={() => showDetail(record.id)}>详情</a>
+          <Popconfirm title="确认删除该用户画像？" onConfirm={() => handleDelete(record.id)}>
+            <a style={{ color: '#ff4d4f' }}><DeleteOutlined /></a>
+          </Popconfirm>
+        </Space>
+      ),
     },
   ]
 
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 16 }}>用户画像</Title>
+      <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
+        <Space>
+          <Title level={4} style={{ margin: 0 }}>用户画像</Title>
+          <Tooltip title={LATENCY_HINT}><Text type="secondary" style={{ fontSize: 12 }}>数据可能有数秒延迟 ⓘ</Text></Tooltip>
+        </Space>
+        <Button icon={<ReloadOutlined />} onClick={refresh} loading={loading}>刷新</Button>
+      </Space>
 
       {stats && (
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
@@ -130,8 +166,8 @@ export default function ProfilesPage() {
             allowClear
             style={{ width: 120 }}
           >
-            <Option value="男">男</Option>
-            <Option value="女">女</Option>
+            <Option value="male">男</Option>
+            <Option value="female">女</Option>
           </Select>
         </Space>
         <Table

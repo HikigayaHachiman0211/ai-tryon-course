@@ -14,6 +14,8 @@ import {
   TeamOutlined,
   LogoutOutlined,
   SettingOutlined,
+  ApiOutlined,
+  SoundOutlined,
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 
@@ -27,10 +29,12 @@ const menuItems: MenuProps['items'] = [
   { key: '/system', icon: <MonitorOutlined />, label: '系统监控' },
   { key: '/images', icon: <PictureOutlined />, label: '图片管理' },
   { key: '/tryon-tasks', icon: <ThunderboltOutlined />, label: 'AI 试穿' },
+  { key: '/ai-models', icon: <ApiOutlined />, label: 'AI 模型/API' },
   { key: '/prompts', icon: <FileTextOutlined />, label: 'Prompt 管理' },
   { key: '/annotations', icon: <TagsOutlined />, label: '标注中心' },
   { key: '/profiles', icon: <UserOutlined />, label: '用户画像' },
   { key: '/sample-models', icon: <TeamOutlined />, label: '示例模特' },
+  { key: '/voice-clones', icon: <SoundOutlined />, label: '声音克隆' },
 ]
 
 export default function AdminLayout() {

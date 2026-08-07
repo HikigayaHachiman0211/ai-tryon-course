@@ -10,3 +10,4 @@ google-cloud-storage>=3.2.0
 httpx>=0.28
 openpyxl>=3.1
 Pillow>=11.2
+cryptography>=41.0

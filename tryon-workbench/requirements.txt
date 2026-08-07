@@ -9,3 +9,6 @@ httpx
 google-cloud-firestore
 google-cloud-storage
 tzdata
+sqlalchemy
+psycopg[binary]
+cryptography

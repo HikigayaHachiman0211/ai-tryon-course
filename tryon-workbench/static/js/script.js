@@ -12,41 +12,27 @@
         modelType: 'flash',
         running: false,
         abort: false,
-        history: [],
-        activeHistoryId: '',
-        historySelected: new Set(),
         errors: [],
         rateStatus: null,
         minuteResetSec: null,
         dailyResetSec: null,
-        extraKeysExpanded: false,
-        stylePreset: 'default',
-        providerMode: 'direct',
-        proxyConfig: null,
-        aiStudioConfig: null,
-        authUser: '',
-        savedKeys: [],
-        savedKeySelection: new Set(),
         errorAnalyzing: new Set(),
         recommendation: null,
         frontendConfig: null,
         trustedMessageOrigin: '',
+        runtimeAvailable: false,
     };
 
     const MODEL_LIMITS = {
-        flash: { name: 'Nano Banana 2', rpm: 100, tpm: 200000, rpd: 1000 },
-        pro: { name: 'Nano Banana Pro', rpm: 20, tpm: 100000, rpd: 250 },
+        flash: { name: 'Gemini Flash Image', rpm: 100, tpm: 200000, rpd: 1000 },
+        pro: { name: 'Gemini Pro Image', rpm: 20, tpm: 100000, rpd: 250 },
     };
 
     const SAMPLE_MODELS = [
-        { id: 'male-donk', name: 'Donk', gender: 'male', filename: 'Donk.webp' },
-        { id: 'male-monesy', name: 'Monesy', gender: 'male', filename: 'Monesy.webp' },
-        { id: 'male-niko', name: 'Niko', gender: 'male', filename: 'Niko.webp' },
-        { id: 'male-leave7', name: 'Leave7', gender: 'male', filename: 'OA-Leave7.jpg' },
-        { id: 'male-zywoo', name: 'ZywOo', gender: 'male', filename: 'ZywOo.webp' },
-        { id: 'female-liyuu1', name: 'Liyuu 1', gender: 'female', filename: 'Liyuu_1.jpg' },
-        { id: 'female-liyuu2', name: 'Liyuu 2', gender: 'female', filename: 'Liyuu_2.jpg' },
-        { id: 'female-liyuu3', name: 'Liyuu 3', gender: 'female', filename: 'Liyuu_3.jpg' },
+        { id: 'male-mannequin-1', name: '通用男模 1', gender: 'male', filename: 'mannequin-male-1.png' },
+        { id: 'male-mannequin-2', name: '通用男模 2', gender: 'male', filename: 'mannequin-male-2.png' },
+        { id: 'female-mannequin-1', name: '通用女模 1', gender: 'female', filename: 'mannequin-female-1.png' },
+        { id: 'female-mannequin-2', name: '通用女模 2', gender: 'female', filename: 'mannequin-female-2.png' },
     ];
 
     const $ = id => document.getElementById(id);
@@ -78,16 +64,6 @@
         refContinue: $('btn-continue-ref'),
         refPreview: $('btn-preview-ref'),
         refClear: $('btn-clear-reference'),
-        apiKey: $('api-key'),
-        extraKeysWrap: $('extra-api-keys'),
-        extraKey2: $('api-key-2'),
-        extraKey3: $('api-key-3'),
-        extraKey4: $('api-key-4'),
-        extraKey5: $('api-key-5'),
-        toggleExtraKeys: $('toggle-extra-keys'),
-        fillSavedKeysBtn: $('fill-saved-keys-btn'),
-        nanoKey: $('nanobanana-api-key'),
-        nanoSave: $('nanobanana-save-btn'),
         genBtn: $('generate-btn'),
         genText: document.querySelector('#generate-btn .btn-text'),
         abortBtn: $('abort-btn'),
@@ -102,7 +78,6 @@
         freedom: $('freedom-slider'),
         freedomVal: $('freedom-value'),
         freedomRnd: $('freedom-random'),
-        stylePresets: $('style-presets'),
         parallelToggle: $('parallel-gen-toggle'),
         parallelConcurrency: $('parallel-concurrency'),
         parallelConcurrencySlider: $('parallel-concurrency-slider'),
@@ -135,83 +110,13 @@
         promptSystem: $('model-opt-system'),
         garmentTypeInput: $('garment-type-input'),
         garmentTypeClear: $('garment-type-clear'),
-        authForm: $('auth-form'),
-        authStatus: $('auth-status'),
-        authUsername: $('auth-username'),
-        authPassword: $('auth-password'),
-        authError: $('auth-error'),
-        authLoginBtn: $('auth-login-btn'),
-        authRegisterBtn: $('auth-register-btn'),
-        authLogoutBtn: $('auth-logout-btn'),
-        authUsernameDisplay: $('auth-username-display'),
-        manageKeysBtn: $('manage-keys-btn'),
-        keysModalOverlay: $('keys-modal-overlay'),
-        keysModalClose: $('keys-modal-close'),
-        savedKeysList: $('saved-keys-list'),
-        newKeyName: $('new-key-name'),
-        newKeyValue: $('new-key-value'),
-        addKeyBtn: $('add-key-btn'),
-        addKeyError: $('add-key-error'),
-        keysFillSelected: $('keys-fill-selected'),
-        keysFillAll: $('keys-fill-all'),
-
         // Sidebar toggles
-        historyToggle: $('history-toggle-btn'),
-        openHistory: $('open-history-btn'),
-        usageToggle: $('usage-toggle-btn'),
         errorToggle: $('errorlog-toggle-btn'),
-        nanobananaToggle: $('nanobanana-toggle-btn'),
-        vertexToggle: $('vertex-toggle-btn'),
-        aistudioToggle: $('aistudio-toggle-btn'),
-        proxyToggle: $('proxy-toggle-btn'),
 
         // Sidebars
-        historySidebar: $('history-sidebar'),
-        historyOverlay: $('history-overlay'),
-        historyClose: $('history-sidebar-close'),
-        usageSidebar: $('usage-sidebar'),
-        usageOverlay: $('usage-overlay'),
-        usageClose: $('usage-sidebar-close'),
         errorSidebar: $('errorlog-sidebar'),
         errorOverlay: $('errorlog-overlay'),
         errorClose: $('errorlog-sidebar-close'),
-        nanobananaSidebar: $('nanobanana-sidebar'),
-        nanobananaOverlay: $('nanobanana-overlay'),
-        nanobananaClose: $('nanobanana-sidebar-close'),
-        vertexSidebar: $('vertex-sidebar'),
-        vertexOverlay: $('vertex-overlay'),
-        vertexClose: $('vertex-sidebar-close'),
-        aistudioSidebar: $('aistudio-sidebar'),
-        aistudioOverlay: $('aistudio-overlay'),
-        aistudioClose: $('aistudio-sidebar-close'),
-        proxySidebar: $('proxy-sidebar'),
-        proxyOverlay: $('proxy-overlay'),
-        proxyClose: $('proxy-sidebar-close'),
-
-        // Local proxy config
-        proxyEnabled: $('proxy-enabled'),
-        proxyBaseUrl: $('proxy-base-url'),
-        proxyApiKey: $('proxy-api-key'),
-        proxyTimeout: $('proxy-timeout'),
-        proxyFlashModel: $('proxy-flash-model'),
-        proxyProModel: $('proxy-pro-model'),
-        proxySave: $('proxy-save-btn'),
-        proxyTest: $('proxy-test-btn'),
-        proxyTestResult: $('proxy-test-result'),
-        aistudioApiKey: $('aistudio-api-key'),
-        aistudioFlashModel: $('aistudio-flash-model'),
-        aistudioProModel: $('aistudio-pro-model'),
-        aistudioSave: $('aistudio-save-btn'),
-        providerSelector: $('provider-selector'),
-        providerHint: $('provider-mode-hint'),
-
-        // Usage query
-        usageKeyA: $('usage-query-key'),
-        usageBtnA: $('usage-query-btn'),
-        usageResA: $('usage-query-result'),
-        usageKeyB: $('usage-sidebar-key'),
-        usageBtnB: $('usage-sidebar-query-btn'),
-        usageResB: $('usage-sidebar-result'),
 
         // Error log
         errorBadgeIcon: $('errorlog-badge'),
@@ -227,26 +132,6 @@
         errorPanelBody: $('error-log-body'),
         errorPanelChevron: $('error-log-chevron'),
 
-        // History views
-        historyBadge: $('history-badge'),
-        historyListView: $('history-list-view'),
-        historyDetailView: $('history-detail-view'),
-        historyList: $('history-list'),
-        historyBack: $('history-back-btn'),
-        historyTime: $('history-detail-time'),
-        historyRef: $('history-ref-images'),
-        historyTgt: $('history-tgt-images'),
-        historyGen: $('history-gen-images'),
-        historyGenCount: $('history-gen-count'),
-        historyClearAll: $('history-clear-all'),
-        historyDelete: $('history-delete-session'),
-        historyDownloadAll: $('history-download-all'),
-        historyDownloadSelected: $('history-download-selected'),
-        historySelCount: $('history-sel-count'),
-
-        // Vertex
-        vertexFile: $('vertex-key-file'),
-        vertexSave: $('vertex-save-btn'),
         cacheCountdown: $('cache-countdown-time'),
         rateModelLabel: $('rate-model-label'),
         rateRpmUsed: $('rate-rpm-used'),
@@ -296,48 +181,24 @@
         compareResultImg: $('compare-result-img'),
         compareResultPlaceholder: $('compare-result-placeholder'),
         resultRetryBtn: $('result-retry-btn'),
-        cycleStyleBtn: $('cycle-style-btn'),
-        saveHistoryBtn: $('save-history-btn'),
     };
 
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
-    const EXTRA_KEYS_STORAGE = 'tryon_api_keys_extra_v1';
-    const EXTRA_KEYS_EXPANDED_STORAGE = 'tryon_api_keys_expanded_v1';
-    const STYLE_STORAGE = 'tryon_style_preset_v1';
-    const PROVIDER_MODE_STORAGE = 'tryon_provider_mode_v1';
     const PARALLEL_ENABLED_STORAGE = 'tryon_parallel_enabled_v1';
     const PARALLEL_CONCURRENCY_STORAGE = 'tryon_parallel_concurrency_v1';
     const PARALLEL_CONCURRENCY_MIN = 2;
     const PARALLEL_CONCURRENCY_MAX = 20;
     const PARALLEL_CONCURRENCY_DEFAULT = 3;
-    const AUTH_USERS_STORAGE = 'tryon_auth_users_v1';
-    const AUTH_CURRENT_STORAGE = 'tryon_auth_current_v1';
-    const USER_KEYS_PREFIX = 'tryon_user_keys_';
     const ERROR_PANEL_EXPANDED_STORAGE = 'tryon_error_panel_expanded_v1';
-    const HISTORY_TTL_MS = 24 * 60 * 60 * 1000;
     const BRIDGE_SOURCE = 'down-jacket-recommendation';
     const BRIDGE_MESSAGE_TYPES = ['DOWN_JACKET_TRYON_INIT', 'RECOMMENDATION_TRYON_INIT'];
+    const BRIDGE_ACK_TYPE = 'DOWN_JACKET_TRYON_ACK';
+    const BRIDGE_MAX_VERSION = 1;
     const FRONTEND_CONFIG_DEFAULT = {
         recommend_app_url: '',
         tryon_embed_mode: 'standalone',
     };
-    const STYLE_PRESETS = {
-        default: { name: '推荐同款还原', prompt: 'Render a premium winter fashion try-on that faithfully preserves identity, garment silhouette, down volume, quilting detail, hardware, and the recommended color balance.' },
-        urban: { name: '都市通勤', prompt: 'Style the down jacket as polished winter commute photography with refined city context, crisp daylight, and practical premium styling.' },
-        minimal: { name: '高级极简', prompt: 'Create a quiet luxury winter look with restrained palette, precise silhouette, premium fabric texture, and minimalist editorial framing.' },
-        outdoor: { name: '轻户外', prompt: 'Add a light outdoor winter atmosphere with natural daylight, breathable layering, and functional outerwear styling while keeping the garment accurate.' },
-        street: { name: '冬季街头', prompt: 'Give the outfit contemporary winter street energy with realistic city texture and confident styling while preserving the down jacket design.' },
-        layered: { name: '轻薄内搭', prompt: 'Emphasize balanced winter layering, a slimmer silhouette, and refined inner-layer detail at the collar and cuffs.' },
-        puffer: { name: '面包服氛围', prompt: 'Highlight plush puffer volume, soft loft, tactile quilting, and cozy premium winter styling while keeping garment structure faithful.' },
-        editorial: { name: '杂志大片', prompt: 'Render as a luxury fashion magazine editorial with premium set design, crisp lighting, and high-end outerwear campaign composition.' },
-        cinematic: { name: '电影质感', prompt: 'Use cinematic lighting and dramatic film-style color grading while preserving identity and garment details.' },
-        anime: { name: '二次元融合', prompt: 'Blend stylized anime aesthetics with realistic identity and garment structure.' },
-        fantasy: { name: '奇幻史诗', prompt: 'Add epic fantasy atmosphere, magical scene accents, and volumetric light.' },
-        cyberpunk: { name: '赛博朋克', prompt: 'Add cyberpunk neon city mood, futuristic tone, and high-contrast lighting.' },
-        elegant: { name: '优雅写真', prompt: 'Render as elegant fashion editorial photography with premium magazine quality.' },
-    };
-    const STYLE_CYCLE_ORDER = Object.keys(STYLE_PRESETS);
 
     function asTrimmedString(value) {
         return String(value ?? '').trim();
@@ -408,33 +269,78 @@
         }
     }
 
+    const BRIDGE_STR_MAX = 2000;
+
+    function isHttpUrl(value) {
+        if (!value) return false;
+        try {
+            const u = new URL(value);
+            return u.protocol === 'http:' || u.protocol === 'https:';
+        } catch {
+            return false;
+        }
+    }
+
+    function isImageDataUrl(value) {
+        return /^data:image\/(png|jpe?g|webp);base64,/.test(value);
+    }
+
+    function capStr(value) {
+        const s = asTrimmedString(value);
+        return s.length <= BRIDGE_STR_MAX ? s : s.slice(0, BRIDGE_STR_MAX);
+    }
+
     function isTrustedBridgeOrigin(origin) {
         const current = asTrimmedString(origin);
+        // Accept empty origin (same-window edge cases)
         if (!current) return true;
-        const trusted = asTrimmedString(state.trustedMessageOrigin || recommendOriginFromConfig());
-        return !trusted || trusted === current;
+        // Same-origin is always allowed
+        if (current === window.location.origin) return true;
+        // Check against the configured recommend app origin only
+        const trusted = asTrimmedString(recommendOriginFromConfig());
+        if (trusted) return trusted === current;
+        // Fallback: trust the origin derived from the URL-channel payload's returnUrl.
+        // This allows photo delivery via postMessage when recommend_app_url is not configured in admin.
+        const fallback = asTrimmedString(state.trustedMessageOrigin);
+        if (fallback) return fallback === current;
+        return false;
     }
 
     function normalizeBridgePayload(raw) {
         if (!raw || typeof raw !== 'object') return null;
+
+        // Reject payloads that explicitly claim a wrong source
+        const rawSource = asTrimmedString(raw.source);
+        if (rawSource && rawSource !== BRIDGE_SOURCE) return null;
+
+        // Resolve alias fields before validation
+        const rawUserUrl = asTrimmedString(raw.userImageUrl || raw.userImage || raw.modelImageUrl);
+        const rawUserData = asTrimmedString(raw.userImageDataUrl || raw.userImageBase64 || raw.userImageData || raw.modelImageDataUrl);
+        const rawGarmentUrl = asTrimmedString(raw.garmentImageUrl || raw.referenceImageUrl || raw.productImageUrl);
+        const rawGarmentData = asTrimmedString(raw.garmentImageDataUrl || raw.referenceImageDataUrl || raw.productImageDataUrl || raw.garmentImageBase64);
+        const rawReturnUrl = asTrimmedString(raw.returnUrl || raw.recommendationUrl);
+        const rawProductUrl = asTrimmedString(raw.productUrl || raw.product_url);
+
         const payload = {
-            source: asTrimmedString(raw.source) || BRIDGE_SOURCE,
-            userImageUrl: asTrimmedString(raw.userImageUrl || raw.userImage || raw.modelImageUrl),
-            userImageDataUrl: asTrimmedString(raw.userImageDataUrl || raw.userImageBase64 || raw.userImageData || raw.modelImageDataUrl),
-            garmentImageUrl: asTrimmedString(raw.garmentImageUrl || raw.referenceImageUrl || raw.productImageUrl),
-            garmentImageDataUrl: asTrimmedString(raw.garmentImageDataUrl || raw.referenceImageDataUrl || raw.productImageDataUrl || raw.garmentImageBase64),
-            productTitle: asTrimmedString(raw.productTitle),
-            productId: asTrimmedString(raw.productId),
+            source: rawSource || BRIDGE_SOURCE,
+            // URL fields: strip if not a valid http/https URL to prevent open redirect
+            userImageUrl: isHttpUrl(rawUserUrl) ? capStr(rawUserUrl) : '',
+            // Data URL fields: strip if not a recognized image data URL format
+            userImageDataUrl: (rawUserData && isImageDataUrl(rawUserData)) ? rawUserData : '',
+            garmentImageUrl: isHttpUrl(rawGarmentUrl) ? capStr(rawGarmentUrl) : '',
+            garmentImageDataUrl: (rawGarmentData && isImageDataUrl(rawGarmentData)) ? rawGarmentData : '',
+            productTitle: capStr(raw.productTitle),
+            productId: capStr(raw.productId),
             productPrice: raw.productPrice ?? '',
-            styleType: asTrimmedString(raw.styleType),
-            colorFamily: asTrimmedString(raw.colorFamily),
-            sizeHint: asTrimmedString(raw.sizeHint),
-            recommendationReason: asTrimmedString(raw.recommendationReason),
+            styleType: capStr(raw.styleType),
+            colorFamily: capStr(raw.colorFamily),
+            sizeHint: capStr(raw.sizeHint),
+            recommendationReason: capStr(raw.recommendationReason),
             score: raw.score ?? '',
-            returnUrl: asTrimmedString(raw.returnUrl || raw.recommendationUrl),
-            sceneHint: asTrimmedString(raw.sceneHint || raw.scene || raw.occasionHint),
-            fitNote: asTrimmedString(raw.fitNote || raw.silhouetteNote),
-            productUrl: asTrimmedString(raw.productUrl || raw.product_url),
+            returnUrl: isHttpUrl(rawReturnUrl) ? capStr(rawReturnUrl) : '',
+            sceneHint: capStr(raw.sceneHint || raw.scene || raw.occasionHint),
+            fitNote: capStr(raw.fitNote || raw.silhouetteNote),
+            productUrl: isHttpUrl(rawProductUrl) ? capStr(rawProductUrl) : '',
         };
         const hasValue = Object.entries(payload).some(([key, value]) => {
             if (key === 'source') return false;
@@ -644,7 +550,14 @@
         const gen = ++_applyGen;
 
         state.recommendation = payload;
-        if (asTrimmedString(meta.origin)) state.trustedMessageOrigin = asTrimmedString(meta.origin);
+        // Record the opener's origin from returnUrl so postMessage photo delivery works
+        // even when recommend_app_url is not configured in the workbench admin settings.
+        if (meta.channel === 'query' && !state.trustedMessageOrigin && isHttpUrl(payload.returnUrl)) {
+            try {
+                const retOrigin = new URL(payload.returnUrl).origin;
+                if (retOrigin && retOrigin !== window.location.origin) state.trustedMessageOrigin = retOrigin;
+            } catch (_) {}
+        }
         state.results = [];
         state.resultPreviews = [];
         state.selected.clear();
@@ -760,7 +673,9 @@
     }
 
     function navigateToRecommendation(mode = 'return') {
-        const url = asTrimmedString(state.recommendation?.returnUrl || state.frontendConfig?.recommend_app_url);
+        const raw = asTrimmedString(state.recommendation?.returnUrl || state.frontendConfig?.recommend_app_url);
+        // Validate scheme before assigning to location.href to prevent open redirect / XSS
+        const url = isHttpUrl(raw) ? raw : '';
         postBridgeEvent(mode === 'switch' ? 'DOWN_JACKET_TRYON_SWITCH_REQUEST' : 'DOWN_JACKET_TRYON_BACK');
         if (url) {
             window.location.href = url;
@@ -773,313 +688,36 @@
         notify('未配置推荐列表地址。', 'warning');
     }
 
-    function cycleStylePreset() {
-        const currentIndex = STYLE_CYCLE_ORDER.indexOf(state.stylePreset);
-        const next = STYLE_CYCLE_ORDER[(currentIndex + 1 + STYLE_CYCLE_ORDER.length) % STYLE_CYCLE_ORDER.length] || 'default';
-        setStylePreset(next);
-    }
 
     async function handleBridgeMessage(event) {
         if (!isTrustedBridgeOrigin(event.origin)) return;
         const data = event?.data;
         if (!data || typeof data !== 'object') return;
         const type = asTrimmedString(data.type).toUpperCase();
+        // Accept legacy messages (no version field) or version 1; reject future unknown versions
+        const version = data.version;
+        if (version !== undefined && version !== null && Number(version) > BRIDGE_MAX_VERSION) return;
         const rawPayload = (data.payload && typeof data.payload === 'object') ? data.payload : data;
         const payload = normalizeBridgePayload(rawPayload);
         if (!payload) return;
         if (type && !BRIDGE_MESSAGE_TYPES.includes(type) && payload.source !== BRIDGE_SOURCE) return;
         try {
             await applyRecommendationPayload(payload, { channel: 'postMessage', origin: event.origin });
+            // Send ACK so the sender can stop retrying
+            if (event.source && typeof event.source.postMessage === 'function') {
+                const ackOrigin = asTrimmedString(event.origin) || '*';
+                try {
+                    event.source.postMessage({
+                        type: BRIDGE_ACK_TYPE,
+                        version: 1,
+                        productId: asTrimmedString(payload.productId),
+                    }, ackOrigin);
+                } catch (_) { /* ignore ACK delivery failure */ }
+            }
         } catch (e) {
             notify(e.message || '推荐系统联动失败', 'error');
             reportError(e.message || '推荐系统联动失败', '推荐联动-postMessage');
         }
-    }
-
-    function getExtraInputs() {
-        return [el.extraKey2, el.extraKey3, el.extraKey4, el.extraKey5].filter(Boolean);
-    }
-
-    function normalizeKeyList(keys) {
-        const seen = new Set();
-        const out = [];
-        (keys || []).forEach(k => {
-            const key = String(k || '').trim();
-            if (!key || seen.has(key)) return;
-            seen.add(key);
-            out.push(key);
-        });
-        return out;
-    }
-
-    function readExtraApiKeysFromInputs() {
-        return normalizeKeyList(getExtraInputs().map(input => input?.value || ''));
-    }
-
-    function writeExtraApiKeysToInputs(keys) {
-        const arr = normalizeKeyList(keys).slice(0, 4);
-        const inputs = getExtraInputs();
-        for (let i = 0; i < inputs.length; i++) {
-            inputs[i].value = arr[i] || '';
-        }
-    }
-
-    function maskApiKey(key) {
-        const k = String(key || '').trim();
-        if (!k) return 'N/A';
-        if (k.length <= 8) return `${k.slice(0, 2)}***${k.slice(-2)}`;
-        return `${k.slice(0, 4)}...${k.slice(-4)}`;
-    }
-
-    function getApiKeyPool() {
-        const primary = (el.apiKey?.value || '').trim();
-        const extra = readExtraApiKeysFromInputs();
-        const keys = [];
-        if (primary) keys.push(primary);
-        keys.push(...extra);
-        return normalizeKeyList(keys);
-    }
-
-    function saveExtraApiKeys() {
-        const extra = readExtraApiKeysFromInputs();
-        localStorage.setItem(EXTRA_KEYS_STORAGE, JSON.stringify(extra));
-    }
-
-    function updateExtraKeysToggleLabel() {
-        if (!el.toggleExtraKeys) return;
-        const extraCount = readExtraApiKeysFromInputs().length;
-        const expanded = Boolean(state.extraKeysExpanded);
-        if (expanded) {
-            el.toggleExtraKeys.innerHTML = `<i class="fas fa-minus"></i> 收起额外 API Key（已启用 ${extraCount} 个）`;
-        } else {
-            el.toggleExtraKeys.innerHTML = '<i class="fas fa-plus"></i> 添加更多 API Key（分散限额）';
-        }
-    }
-
-    function setExtraKeysExpanded(expanded) {
-        state.extraKeysExpanded = Boolean(expanded);
-        if (el.extraKeysWrap) el.extraKeysWrap.classList.toggle('hidden', !state.extraKeysExpanded);
-        localStorage.setItem(EXTRA_KEYS_EXPANDED_STORAGE, state.extraKeysExpanded ? '1' : '0');
-        updateExtraKeysToggleLabel();
-    }
-
-    function loadExtraApiKeys() {
-        let keys = [];
-        try {
-            keys = JSON.parse(localStorage.getItem(EXTRA_KEYS_STORAGE) || '[]');
-        } catch (_) {
-            keys = [];
-        }
-        writeExtraApiKeysToInputs(Array.isArray(keys) ? keys : []);
-        const expanded = localStorage.getItem(EXTRA_KEYS_EXPANDED_STORAGE) === '1';
-        setExtraKeysExpanded(expanded);
-    }
-
-    function readJsonStorage(key, fallback) {
-        try {
-            const raw = localStorage.getItem(key);
-            if (!raw) return fallback;
-            const parsed = JSON.parse(raw);
-            return parsed == null ? fallback : parsed;
-        } catch (_) {
-            return fallback;
-        }
-    }
-
-    function writeJsonStorage(key, value) {
-        localStorage.setItem(key, JSON.stringify(value));
-    }
-
-    function normalizeUsername(username) {
-        return String(username || '').trim();
-    }
-
-    function authUsers() {
-        const users = readJsonStorage(AUTH_USERS_STORAGE, {});
-        return (users && typeof users === 'object') ? users : {};
-    }
-
-    function saveAuthUsers(users) {
-        writeJsonStorage(AUTH_USERS_STORAGE, users || {});
-    }
-
-    function userKeysStorageKey() {
-        const user = normalizeUsername(state.authUser);
-        return `${USER_KEYS_PREFIX}${user || 'guest'}_v1`;
-    }
-
-    function updateAuthUi() {
-        const loggedIn = Boolean(state.authUser);
-        if (el.authForm) el.authForm.classList.toggle('hidden', loggedIn);
-        if (el.authStatus) el.authStatus.classList.toggle('hidden', !loggedIn);
-        if (el.authUsernameDisplay) el.authUsernameDisplay.textContent = loggedIn ? state.authUser : '';
-        if (el.fillSavedKeysBtn) el.fillSavedKeysBtn.classList.toggle('hidden', !loggedIn || state.savedKeys.length === 0);
-    }
-
-    function setAuthError(message) {
-        if (!el.authError) return;
-        const msg = String(message || '').trim();
-        el.authError.textContent = msg;
-        el.authError.classList.toggle('hidden', !msg);
-    }
-
-    function loadSavedKeys() {
-        const list = readJsonStorage(userKeysStorageKey(), []);
-        state.savedKeys = Array.isArray(list) ? list : [];
-        state.savedKeySelection.clear();
-    }
-
-    function saveSavedKeys() {
-        writeJsonStorage(userKeysStorageKey(), state.savedKeys);
-    }
-
-    function fillApiInputsFromKeys(keys) {
-        const arr = normalizeKeyList(keys).slice(0, 5);
-        const slots = [el.apiKey, ...getExtraInputs()];
-        for (let i = 0; i < slots.length; i++) {
-            if (slots[i]) slots[i].value = arr[i] || '';
-        }
-        onAnyApiKeyChanged();
-    }
-
-    function renderSavedKeysList() {
-        if (!el.savedKeysList) return;
-        if (!state.authUser) {
-            el.savedKeysList.innerHTML = '<div class="usage-empty">请先登录后管理 API Key</div>';
-            if (el.keysFillSelected) el.keysFillSelected.disabled = true;
-            if (el.keysFillAll) el.keysFillAll.disabled = true;
-            return;
-        }
-        if (state.savedKeys.length === 0) {
-            el.savedKeysList.innerHTML = '<div class="usage-empty">暂无已保存 Key</div>';
-            if (el.keysFillSelected) el.keysFillSelected.disabled = true;
-            if (el.keysFillAll) el.keysFillAll.disabled = true;
-            return;
-        }
-        el.savedKeysList.innerHTML = state.savedKeys.map(item => `
-            <label class="saved-key-row" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.08);">
-                <input type="checkbox" data-key-select="${item.id}" ${state.savedKeySelection.has(item.id) ? 'checked' : ''}>
-                <div style="flex:1;min-width:0;">
-                    <div style="font-size:12px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.name || '未命名 Key'}</div>
-                    <div style="font-size:11px;color:rgba(255,255,255,0.6);">${maskApiKey(item.key)}</div>
-                </div>
-                <button type="button" data-key-del="${item.id}" class="errorlog-action-btn danger" style="padding:4px 8px;">删除</button>
-            </label>
-        `).join('');
-
-        [...el.savedKeysList.querySelectorAll('[data-key-select]')].forEach(node => {
-            node.addEventListener('change', () => {
-                const id = node.getAttribute('data-key-select') || '';
-                if (!id) return;
-                if (node.checked) state.savedKeySelection.add(id);
-                else state.savedKeySelection.delete(id);
-                if (el.keysFillSelected) {
-                    el.keysFillSelected.disabled = state.savedKeySelection.size === 0;
-                }
-            });
-        });
-        [...el.savedKeysList.querySelectorAll('[data-key-del]')].forEach(node => {
-            node.addEventListener('click', () => {
-                const id = node.getAttribute('data-key-del') || '';
-                if (!id) return;
-                state.savedKeys = state.savedKeys.filter(item => item.id !== id);
-                state.savedKeySelection.delete(id);
-                saveSavedKeys();
-                renderSavedKeysList();
-                updateAuthUi();
-            });
-        });
-        if (el.keysFillSelected) el.keysFillSelected.disabled = state.savedKeySelection.size === 0;
-        if (el.keysFillAll) el.keysFillAll.disabled = state.savedKeys.length === 0;
-    }
-
-    function openKeysModal() {
-        if (!state.authUser) {
-            notify('请先登录后再管理 API Key。', 'warning');
-            return;
-        }
-        if (!el.keysModalOverlay) return;
-        if (el.addKeyError) {
-            el.addKeyError.textContent = '';
-            el.addKeyError.classList.add('hidden');
-        }
-        renderSavedKeysList();
-        el.keysModalOverlay.classList.remove('hidden');
-    }
-
-    function closeKeysModal() {
-        el.keysModalOverlay?.classList.add('hidden');
-    }
-
-    function setAddKeyError(message) {
-        if (!el.addKeyError) return;
-        const msg = String(message || '').trim();
-        el.addKeyError.textContent = msg;
-        el.addKeyError.classList.toggle('hidden', !msg);
-    }
-
-    function addSavedKey() {
-        if (!state.authUser) {
-            setAddKeyError('请先登录后再保存 Key');
-            return;
-        }
-        const key = String(el.newKeyValue?.value || '').trim();
-        const name = String(el.newKeyName?.value || '').trim();
-        if (!key) {
-            setAddKeyError('请输入 API Key');
-            return;
-        }
-        if (state.savedKeys.some(item => String(item.key || '').trim() === key)) {
-            setAddKeyError('该 API Key 已存在');
-            return;
-        }
-        if (state.savedKeys.length >= 50) {
-            setAddKeyError('最多可保存 50 个 API Key');
-            return;
-        }
-
-        const id = `key_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        const nextName = name || `接口密钥 #${state.savedKeys.length + 1}`;
-        state.savedKeys.unshift({
-            id,
-            name: nextName.slice(0, 50),
-            key,
-            createdAt: Date.now(),
-        });
-        state.savedKeySelection.add(id);
-        saveSavedKeys();
-        renderSavedKeysList();
-        updateAuthUi();
-        if (el.newKeyName) el.newKeyName.value = '';
-        if (el.newKeyValue) el.newKeyValue.value = '';
-        setAddKeyError('');
-        notify('API Key 已保存', 'success');
-    }
-
-    function getSelectedSavedKeyValues() {
-        if (state.savedKeySelection.size === 0) return [];
-        const byId = new Map(state.savedKeys.map(item => [item.id, String(item.key || '').trim()]));
-        return normalizeKeyList(
-            [...state.savedKeySelection]
-                .map(id => byId.get(id) || '')
-                .filter(Boolean)
-        );
-    }
-
-    function fillSavedKeysToInputs(fillAll = false) {
-        if (!state.authUser) {
-            notify('请先登录后再填充 Key。', 'warning');
-            return;
-        }
-        const keys = fillAll
-            ? normalizeKeyList(state.savedKeys.map(item => item.key))
-            : getSelectedSavedKeyValues();
-        if (!keys.length) {
-            notify(fillAll ? '暂无可填充的 Key。' : '请先勾选要填充的 Key。', 'warning');
-            return;
-        }
-        fillApiInputsFromKeys(keys);
-        notify(`已填充 ${Math.min(keys.length, 5)} 个 Key 到输入框。`, 'success');
     }
 
     function setErrorPanelExpanded(expanded, persist = true) {
@@ -1100,85 +738,6 @@
         setErrorPanelExpanded(expanded, false);
     }
 
-    function onAnyApiKeyChanged() {
-        localStorage.setItem('tryon_api_key', (el.apiKey?.value || '').trim());
-        saveExtraApiKeys();
-        updateExtraKeysToggleLabel();
-        renderProviderCards();
-        refreshRateStatus(true);
-    }
-
-    function initAuthState() {
-        state.authUser = normalizeUsername(localStorage.getItem(AUTH_CURRENT_STORAGE) || '');
-        loadSavedKeys();
-        updateAuthUi();
-    }
-
-    function loginUser() {
-        const username = normalizeUsername(el.authUsername?.value || '');
-        const password = String(el.authPassword?.value || '');
-        if (!username || !password) {
-            setAuthError('请输入用户名和密码');
-            return;
-        }
-        const users = authUsers();
-        if (!users[username] || users[username].password !== password) {
-            setAuthError('用户名或密码错误');
-            return;
-        }
-        state.authUser = username;
-        localStorage.setItem(AUTH_CURRENT_STORAGE, username);
-        loadSavedKeys();
-        loadHistory();
-        renderHistoryList();
-        updateAuthUi();
-        setAuthError('');
-        notify(`欢迎回来，${username}`, 'success');
-    }
-
-    function registerUser() {
-        const username = normalizeUsername(el.authUsername?.value || '');
-        const password = String(el.authPassword?.value || '');
-        if (username.length < 3 || password.length < 4) {
-            setAuthError('用户名至少 3 位，密码至少 4 位');
-            return;
-        }
-        const users = authUsers();
-        if (users[username]) {
-            setAuthError('用户名已存在');
-            return;
-        }
-        users[username] = { password, createdAt: Date.now() };
-        saveAuthUsers(users);
-        setAuthError('');
-        notify('注册成功，请登录', 'success');
-    }
-
-    function logoutUser() {
-        state.authUser = '';
-        localStorage.removeItem(AUTH_CURRENT_STORAGE);
-        loadSavedKeys();
-        closeKeysModal();
-        loadHistory();
-        renderHistoryList();
-        updateAuthUi();
-        notify('已退出登录', 'info');
-    }
-
-    function normalizeStyle(style) {
-        return Object.prototype.hasOwnProperty.call(STYLE_PRESETS, style) ? style : 'default';
-    }
-
-    function setStylePreset(style, silent = false) {
-        state.stylePreset = normalizeStyle(style);
-        localStorage.setItem(STYLE_STORAGE, state.stylePreset);
-        const cards = [...document.querySelectorAll('#style-presets .style-card')];
-        cards.forEach(card => card.classList.toggle('active', card.dataset.style === state.stylePreset));
-        if (!silent) {
-            const label = STYLE_PRESETS[state.stylePreset]?.name || '经典还原';
-            notify(`已切换生成风格：${label}`, 'info');
-        }
-    }
 
     function syncParallelUi() {
         if (!el.parallelConcurrencyRow) return;
@@ -1205,261 +764,6 @@
             localStorage.setItem(PARALLEL_CONCURRENCY_STORAGE, String(next));
         }
         return next;
-    }
-
-    function readProxyConfigFromUi() {
-        return {
-            enabled: Boolean(el.proxyEnabled?.checked),
-            base_url: String(el.proxyBaseUrl?.value || '').trim(),
-            api_key: String(el.proxyApiKey?.value || '').trim(),
-            timeout_seconds: Number(el.proxyTimeout?.value || '180') || 180,
-            flash_model: String(el.proxyFlashModel?.value || '').trim(),
-            pro_model: String(el.proxyProModel?.value || '').trim(),
-        };
-    }
-
-    function readAiStudioConfigFromUi() {
-        return {
-            api_key: String(el.aistudioApiKey?.value || '').trim(),
-            flash_model: String(el.aistudioFlashModel?.value || '').trim(),
-            pro_model: String(el.aistudioProModel?.value || '').trim(),
-        };
-    }
-
-    function getAiStudioModelDefaults() {
-        const flashCard = document.querySelector('#model-selector .model-card[data-model="flash"]');
-        const proCard = document.querySelector('#model-selector .model-card[data-model="pro"]');
-        return {
-            flash: {
-                id: String(flashCard?.dataset.aistudioModel || 'gemini-3.1-flash-image-preview').trim(),
-                label: String(flashCard?.dataset.modelAlias || 'Nano Banana 2').trim(),
-            },
-            pro: {
-                id: String(proCard?.dataset.aistudioModel || 'gemini-3-pro-image-preview').trim(),
-                label: String(proCard?.dataset.modelAlias || 'Nano Banana Pro').trim(),
-            },
-        };
-    }
-
-    function fillProxyConfigForm(config) {
-        const cfg = config || {};
-        if (el.proxyEnabled) el.proxyEnabled.checked = Boolean(cfg.enabled);
-        if (el.proxyBaseUrl) el.proxyBaseUrl.value = String(cfg.base_url || 'http://127.0.0.1:8045');
-        if (el.proxyApiKey) el.proxyApiKey.value = String(cfg.api_key || '');
-        if (el.proxyTimeout) el.proxyTimeout.value = String(cfg.timeout_seconds || 180);
-        if (el.proxyFlashModel) el.proxyFlashModel.value = String(cfg.flash_model || 'gemini-3.1-flash-image');
-        if (el.proxyProModel) el.proxyProModel.value = String(cfg.pro_model || 'gemini-3-pro-image');
-    }
-
-    function fillAiStudioConfigForm(config) {
-        const cfg = config || {};
-        const defaults = getAiStudioModelDefaults();
-        const flashModel = String(cfg.flash_model || '').trim();
-        const proModel = String(cfg.pro_model || '').trim();
-        const resolvedFlashModel = (!flashModel || flashModel === 'gemini-2.5-flash-image') ? defaults.flash.id : flashModel;
-        const resolvedProModel = proModel || defaults.pro.id;
-        if (el.aistudioApiKey) el.aistudioApiKey.value = String(cfg.api_key || '');
-        if (el.aistudioFlashModel) {
-            el.aistudioFlashModel.value = resolvedFlashModel;
-            el.aistudioFlashModel.placeholder = `例如 ${defaults.flash.id}`;
-        }
-        if (el.aistudioProModel) {
-            el.aistudioProModel.value = resolvedProModel;
-            el.aistudioProModel.placeholder = `例如 ${defaults.pro.id}`;
-        }
-    }
-
-    function effectiveProviderMode() {
-        const selected = String(state.providerMode || 'direct').trim().toLowerCase();
-        if (selected && selected !== 'auto') return selected;
-        const proxyEnabled = Boolean(state.proxyConfig?.enabled);
-        const nanoConfigured = Boolean((el.nanoKey?.value || localStorage.getItem('nanobanana_api_key') || '').trim());
-        if (proxyEnabled) return 'proxy';
-        if (nanoConfigured) return 'nanobanana';
-        return 'direct';
-    }
-
-    function updateApiKeyPlaceholders() {
-        const mode = effectiveProviderMode();
-        let primary = 'API 密钥 #1（主用）';
-        let restPrefix = 'API Key';
-        if (mode === 'proxy') {
-            primary = '反代 Token #1（可选覆盖）';
-            restPrefix = '反代 Token';
-        } else if (mode === 'aistudio') {
-            primary = 'AI Studio API 密钥 #1（可覆盖侧边栏默认值）';
-            restPrefix = 'AI Studio API 密钥';
-        }
-        if (el.apiKey) el.apiKey.placeholder = primary;
-        getExtraInputs().forEach((input, idx) => {
-            input.placeholder = `${restPrefix} #${idx + 2}`;
-        });
-    }
-
-    function renderProviderCards() {
-        const selected = String(state.providerMode || 'direct').trim().toLowerCase();
-        const effective = effectiveProviderMode();
-        [...document.querySelectorAll('#provider-selector .provider-card')].forEach(card => {
-            const mode = card.dataset.provider || '';
-            card.classList.toggle('active', mode === selected);
-            card.classList.toggle('provider-effective', mode === effective);
-        });
-        if (el.providerHint) {
-            const proxyEnabled = Boolean(state.proxyConfig?.enabled);
-            const baseUrl = String(state.proxyConfig?.base_url || '').trim();
-            const tokenMasked = maskApiKey(state.proxyConfig?.api_key || '');
-            const hints = {
-                auto: proxyEnabled
-                    ? `自动模式当前会优先使用本地反代：${baseUrl || '未配置'}。如果你在主面板填写了密钥，本次请求会优先使用主面板中的反代 Token。`
-                    : `自动模式当前会回退到 ${effective === 'nanobanana' ? 'Nano Banana' : 'Vertex AI API'}。`,
-                direct: 'Vertex AI API 通道使用服务端 Vertex 凭据。主面板中的普通 API 密钥不会作为 Vertex 认证；如果你的密钥来自 Google AI Studio，请切换到 Google AI Studio 接口。',
-                aistudio: `Google AI Studio 接口会优先使用主面板中的 API 密钥；如果主面板为空，则回退到左侧侧边栏保存的默认密钥：${state.aiStudioConfig?.api_key ? maskApiKey(state.aiStudioConfig.api_key) : '未设置'}。`,
-                proxy: `本地反代通道将调用 ${baseUrl || '未配置接口地址'}，默认 Token：${state.proxyConfig?.api_key ? tokenMasked : '未设置'}。`,
-                nanobanana: 'Nano Banana 通道会使用左侧保存的第三方密钥，不会读取本地反代设置。',
-            };
-            el.providerHint.textContent = hints[selected] || hints.auto;
-        }
-        updateApiKeyPlaceholders();
-    }
-
-    function setProviderMode(mode, skipPersist = false) {
-        const next = ['auto', 'direct', 'aistudio', 'proxy', 'nanobanana'].includes(mode) ? mode : 'auto';
-        state.providerMode = next;
-        if (!skipPersist) localStorage.setItem(PROVIDER_MODE_STORAGE, next);
-        renderProviderCards();
-        refreshRateStatus(true);
-    }
-
-    async function fetchProxyConfig() {
-        try {
-            const r = await fetch('/api/local-proxy-config', { cache: 'no-store' });
-            const d = await r.json();
-            if (!r.ok || !d?.ok) throw new Error(d?.error || `本地反代配置读取失败 (${r.status})`);
-            state.proxyConfig = d.config || null;
-            fillProxyConfigForm(state.proxyConfig || {});
-            renderProviderCards();
-        } catch (e) {
-            notify(e.message || '本地反代配置读取失败', 'warning');
-            state.proxyConfig = null;
-            fillProxyConfigForm({});
-            renderProviderCards();
-        }
-    }
-
-    async function fetchAiStudioConfig() {
-        try {
-            const r = await fetch('/api/ai-studio-config', { cache: 'no-store' });
-            const d = await r.json();
-            if (!r.ok || !d?.ok) throw new Error(d?.error || `Google AI Studio 配置读取失败（${r.status}）`);
-            state.aiStudioConfig = d.config || null;
-            fillAiStudioConfigForm(state.aiStudioConfig || {});
-            renderProviderCards();
-        } catch (e) {
-            notify(e.message || 'Google AI Studio 配置读取失败', 'warning');
-            state.aiStudioConfig = null;
-            fillAiStudioConfigForm({});
-            renderProviderCards();
-        }
-    }
-
-    function renderProxyTestResult(payload, ok) {
-        if (!el.proxyTestResult) return;
-        const health = payload?.health || {};
-        const models = payload?.models || {};
-        const tryon = payload?.tryon || {};
-        const localAg = payload?.local_antigravity || {};
-        const items = Array.isArray(models.items) ? models.items : [];
-        const flashCandidates = Array.isArray(models.candidate_flash_models) ? models.candidate_flash_models : [];
-        const proCandidates = Array.isArray(models.candidate_pro_models) ? models.candidate_pro_models : [];
-        const enabledAccounts = Array.isArray(localAg.enabled_accounts) ? localAg.enabled_accounts : [];
-        const enabledImageModels = Array.isArray(localAg.enabled_image_models) ? localAg.enabled_image_models : [];
-        const localAgBaseDir = String(localAg.base_dir || '').trim();
-        const flashFallback = Boolean(models.flash_fallback_to_pro);
-        const effectiveFlash = String(models.effective_flash_model || '').trim();
-        const effectivePro = String(models.effective_pro_model || '').trim();
-        el.proxyTestResult.classList.remove('hidden');
-        el.proxyTestResult.innerHTML = `
-            <div class="usage-query-summary">
-                <div class="usage-query-key-label">${ok ? '连接成功' : '连接异常'}</div>
-                <div style="margin-top:8px;font-size:12px;color:rgba(255,255,255,0.78);line-height:1.6;">
-                    <div>健康检查：${health.ok ? '正常' : '失败'}${health.status_code ? ` · HTTP ${health.status_code}` : ''}</div>
-                    <div>模型列表：${models.ok ? '正常' : '失败'}${models.status_code ? ` · HTTP ${models.status_code}` : ''}</div>
-                    <div>Flash 模型是否存在：${models.contains_flash_model ? '是' : '否'} · Pro 模型是否存在：${models.contains_pro_model ? '是' : '否'}</div>
-                    ${(effectiveFlash || effectivePro) ? `<div>试衣实际模型：Flash 路径 -> ${effectiveFlash || '未找到'} · Pro 路径 -> ${effectivePro || '未找到'}</div>` : ''}
-                    ${flashCandidates.length ? `<div>Flash 尝试顺序：${flashCandidates.join(' -> ')}</div>` : ''}
-                    ${proCandidates.length ? `<div>Pro 尝试顺序：${proCandidates.join(' -> ')}</div>` : ''}
-                    ${flashFallback ? `<div style="margin-top:6px;color:#fde68a;">当前反代未暴露 Flash 图片模型，试衣任务会自动回退到 Pro 模型。</div>` : ''}
-                    ${tryon.strategy ? `<div style="margin-top:6px;">试衣调用链路: ${tryon.strategy}</div>` : ''}
-                    ${tryon.warning ? `<div style="margin-top:6px;color:#fde68a;">${tryon.warning}</div>` : ''}
-                    ${tryon.note ? `<div style="margin-top:6px;color:rgba(255,255,255,0.66);">${tryon.note}</div>` : ''}
-                    ${localAg.found ? `<div style="margin-top:6px;word-break:break-all;">账号池来源目录: ${localAgBaseDir || '未知'}</div>` : ''}
-                    ${localAg.found ? `<div style="margin-top:6px;">本机 Antigravity 反代池已启用账号: ${enabledAccounts.length} 个</div>` : ''}
-                    ${enabledAccounts.length ? `<div style="margin-top:6px;word-break:break-all;">已启用账号: ${enabledAccounts.map(item => item.email || item.id || '未知账号').join(', ')}</div>` : ''}
-                    ${enabledImageModels.length ? `<div style="margin-top:6px;word-break:break-all;">已启用账号的图片模型: ${enabledImageModels.join(', ')}</div>` : ''}
-                    <div>已发现模型数: ${Number(models.count || 0)}</div>
-                    ${items.length ? `<div style="margin-top:6px;word-break:break-all;">样例: ${items.slice(0, 8).join(', ')}</div>` : ''}
-                    ${health.error ? `<div style="margin-top:6px;color:#fda4af;">Health 错误: ${health.error}</div>` : ''}
-                    ${models.error ? `<div style="margin-top:6px;color:#fda4af;">Models 错误: ${models.error}</div>` : ''}
-                </div>
-            </div>`;
-    }
-
-    async function saveProxyConfig() {
-        const payload = readProxyConfigFromUi();
-        try {
-            const r = await fetch('/api/local-proxy-config', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            const d = await r.json();
-            if (!r.ok || !d?.ok) throw new Error(d?.error || '保存失败');
-            state.proxyConfig = d.config || payload;
-            fillProxyConfigForm(state.proxyConfig);
-            renderProviderCards();
-            notify('本地反代配置已保存。', 'success');
-        } catch (e) {
-            notify(e.message || '本地反代配置保存失败', 'error');
-            reportError(e.message || '本地反代配置保存失败', '本地反代配置');
-        }
-    }
-
-    async function testProxyConfig() {
-        const payload = readProxyConfigFromUi();
-        try {
-            const r = await fetch('/api/local-proxy-config/test', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            const d = await r.json();
-            renderProxyTestResult(d, r.ok && Boolean(d?.ok));
-            if (!r.ok || !d?.ok) throw new Error(d?.error || '测试失败');
-            notify('本地反代连接测试通过。', 'success');
-        } catch (e) {
-            notify(e.message || '本地反代连接测试失败', 'error');
-            reportError(e.message || '本地反代连接测试失败', '本地反代测试');
-        }
-    }
-
-    async function saveAiStudioConfig() {
-        const payload = readAiStudioConfigFromUi();
-        try {
-            const r = await fetch('/api/ai-studio-config', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            const d = await r.json();
-            if (!r.ok || !d?.ok) throw new Error(d?.error || '保存失败');
-            state.aiStudioConfig = d.config || payload;
-            fillAiStudioConfigForm(state.aiStudioConfig);
-            renderProviderCards();
-            notify('Google AI Studio 配置已保存。', 'success');
-        } catch (e) {
-            notify(e.message || 'Google AI Studio 配置保存失败', 'error');
-            reportError(e.message || 'Google AI Studio 配置保存失败', 'Google AI Studio 配置');
-        }
     }
 
     function getParallelSettings(totalTasks) {
@@ -1499,25 +803,14 @@
         if (el.genText) el.genText.textContent = '一键生成试穿结果';
         if (el.resultImg) el.resultImg.alt = '羽绒服试穿结果';
         if (el.downOne) el.downOne.innerHTML = '<i class="fas fa-download"></i> 下载主结果';
-        if (el.historyToggle) el.historyToggle.title = '历史记录';
-        if (el.usageToggle) el.usageToggle.title = 'API 用量追踪';
         if (el.errorToggle) el.errorToggle.title = '系统错误日志';
-        if (el.nanobananaToggle) el.nanobananaToggle.title = 'Nano Banana 配置';
-        if (el.vertexToggle) el.vertexToggle.title = 'Vertex AI 凭证';
         if (el.modelInput) el.modelInput.multiple = false;
-        if (el.apiKey) el.apiKey.placeholder = '接口密钥 #1（主）';
-        if (el.extraKey2) el.extraKey2.placeholder = '接口密钥 #2';
-        if (el.extraKey3) el.extraKey3.placeholder = '接口密钥 #3';
-        if (el.extraKey4) el.extraKey4.placeholder = '接口密钥 #4';
-        if (el.extraKey5) el.extraKey5.placeholder = '接口密钥 #5';
-        updateExtraKeysToggleLabel();
     }
 
     function ready() {
-        const canGenerate = !state.running && Boolean(state.model) && state.garments.length > 0;
+        const canGenerate = state.runtimeAvailable && !state.running && Boolean(state.model) && state.garments.length > 0;
         if (el.genBtn) el.genBtn.disabled = !canGenerate;
         if (el.resultRetryBtn) el.resultRetryBtn.disabled = !canGenerate;
-        if (el.saveHistoryBtn) el.saveHistoryBtn.disabled = state.results.length === 0;
         if (el.downOne) el.downOne.disabled = !(getResultPreviewUrl(0) || el.resultImg?.src);
         updateCompareStage();
     }
@@ -1711,17 +1004,6 @@
         try {
             const params = new URLSearchParams();
             params.set('model', state.modelType);
-            const keyPool = getApiKeyPool();
-            const key = keyPool[0] || '';
-            const mode = effectiveProviderMode();
-            params.set('provider_mode', state.providerMode || 'direct');
-            if (mode === 'proxy') {
-                if (key) params.set('proxy_api_key', key);
-            } else if (key) {
-                params.set('api_key', key);
-            }
-            const nk = (el.nanoKey?.value || localStorage.getItem('nanobanana_api_key') || '').trim();
-            if (nk) params.set('nanobanana_api_key', nk);
 
             const r = await fetch(`/api/rate-status?${params.toString()}`, { cache: 'no-store' });
             if (!r.ok) throw new Error(`限额状态请求失败 (${r.status})`);
@@ -1742,178 +1024,21 @@
         }
     }
 
-    function historyStorageKey() {
-        const user = normalizeUsername(state.authUser || 'guest');
-        return `tryon_history_${user}_v1`;
-    }
-
-    function loadHistory() {
-        try {
-            const raw = localStorage.getItem(historyStorageKey());
-            if (!raw) {
-                state.history = [];
-                return;
-            }
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) {
-                state.history = parsed;
-                return;
-            }
-            const savedAt = Number(parsed?.savedAt || 0);
-            const items = Array.isArray(parsed?.items) ? parsed.items : [];
-            const expired = Boolean(state.authUser) && savedAt > 0 && (Date.now() - savedAt > HISTORY_TTL_MS);
-            if (expired) {
-                state.history = [];
-                saveHistory();
-                return;
-            }
-            state.history = items;
-        } catch (_) {
-            state.history = [];
-        }
-    }
-
-    function saveHistory() {
-        const payload = {
-            savedAt: Date.now(),
-            items: state.history.slice(0, 80),
-        };
-        localStorage.setItem(historyStorageKey(), JSON.stringify(payload));
-    }
-
-    function setHistoryView(detailMode) {
-        if (el.historyListView) el.historyListView.classList.toggle('hidden', detailMode);
-        if (el.historyDetailView) el.historyDetailView.classList.toggle('hidden', !detailMode);
-    }
-
-    function updateHistorySelectionUi() {
-        const sel = state.historySelected.size;
-        if (el.historySelCount) el.historySelCount.textContent = String(sel);
-        if (el.historyDownloadSelected) el.historyDownloadSelected.style.display = sel > 0 ? '' : 'none';
-    }
-
-    function renderHistoryList() {
-        if (!el.historyList || !el.historyBadge) return;
-        if (state.history.length === 0) {
-            const tip = state.authUser ? '生成完成后会自动保存（24h）' : '请先登录，生成后可保存 24h';
-            el.historyList.innerHTML = `
-                <div class="history-empty">
-                    <i class="fas fa-inbox"></i>
-                    <p>暂无历史记录</p>
-                    <span>${tip}</span>
-                </div>`;
-            el.historyBadge.style.display = 'none';
-            return;
-        }
-        el.historyList.innerHTML = state.history.map(item => {
-            const thumb = item.resultDisplayUrls?.[0] || item.results?.[0] || (item.garmentCloudUrls?.[0] || (item.garments?.[0] ? `/uploads/${item.garments[0]}` : '')) || (item.modelCloudUrl || (item.model ? `/uploads/${item.model}` : ''));
-            const time = new Date(item.createdAt || Date.now()).toLocaleString('zh-CN', { hour12: false });
-            return `
-                <div class="history-item" data-id="${item.id}">
-                    <img class="history-item-thumb" src="${thumb}" alt="历史">
-                    <div class="history-item-info">
-                        <div class="history-item-time">${time}</div>
-                        <div class="history-item-summary">${item.modelType === 'pro' ? 'Nano Banana Pro' : 'Nano Banana 2'}</div>
-                        <div class="history-item-count">结果 ${item.results?.length || 0} 张</div>
-                    </div>
-                    <div class="history-item-arrow"><i class="fas fa-chevron-right"></i></div>
-                </div>`;
-        }).join('');
-        el.historyBadge.style.display = '';
-        el.historyBadge.textContent = String(state.history.length);
-        [...el.historyList.querySelectorAll('.history-item')].forEach(n => n.addEventListener('click', () => showHistoryDetail(n.dataset.id)));
-    }
-
-    function showHistoryDetail(id) {
-        const item = state.history.find(x => x.id === id);
-        if (!item) return;
-        state.activeHistoryId = id;
-        state.historySelected.clear();
-        setHistoryView(true);
-        if (el.historyTime) el.historyTime.textContent = new Date(item.createdAt || Date.now()).toLocaleString('zh-CN', { hour12: false });
-        if (el.historyGenCount) el.historyGenCount.textContent = String(item.results?.length || 0);
-        if (el.historyRef) {
-            const modelSrc = item.modelCloudUrl || (item.model ? `/uploads/${item.model}` : '');
-            el.historyRef.innerHTML = modelSrc ? `<img src="${modelSrc}" alt="模特" loading="lazy">` : '<div class="usage-empty">无模特图</div>';
-        }
-        if (el.historyTgt) {
-            el.historyTgt.innerHTML = (item.garments || []).map((name, idx) => {
-                const src = (item.garmentCloudUrls && item.garmentCloudUrls[idx]) || `/uploads/${name}`;
-                return `<img src="${src}" alt="服装" loading="lazy">`;
-            }).join('') || '<div class="usage-empty">无服装图</div>';
-        }
-        if (el.historyGen) {
-            el.historyGen.innerHTML = '';
-            const historyResults = Array.isArray(item.resultDisplayUrls) && item.resultDisplayUrls.length ? item.resultDisplayUrls : (item.results || []);
-            historyResults.forEach((url, idx) => {
-                const wrap = document.createElement('div');
-                wrap.className = 'history-gen-item';
-                wrap.innerHTML = `<img src="${url}" alt="结果 ${idx + 1}" data-i="${idx}" loading="lazy">`;
-                const img = wrap.querySelector('img');
-                img?.addEventListener('click', () => {
-                    if (state.historySelected.has(idx)) {
-                        state.historySelected.delete(idx);
-                        img.classList.remove('selected');
-                    } else {
-                        state.historySelected.add(idx);
-                        img.classList.add('selected');
-                    }
-                    updateHistorySelectionUi();
-                });
-                img?.addEventListener('dblclick', () => window.open(url, '_blank'));
-                el.historyGen.appendChild(wrap);
-            });
-        }
-        updateHistorySelectionUi();
-    }
-
-    function storeCurrentToHistory() {
-        if (!state.model || state.results.length === 0) return;
-        if (!state.authUser) {
-            notify('未登录，历史记录不会持久保存。登录后可保存 24 小时。', 'warning');
-            return;
-        }
-        state.history.unshift({
-            id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-            createdAt: Date.now(),
-            modelType: state.modelType,
-            model: state.model,
-            modelCloudUrl: state.modelCloudUrl,
-            garments: [...state.garments],
-            garmentCloudUrls: [...state.garmentCloudUrls],
-            results: [...state.results],
-            resultDisplayUrls: getSessionResultUrls(),
-        });
-        saveHistory();
-        renderHistoryList();
-    }
-
     function closeAllSidebars() {
-        [el.historySidebar, el.usageSidebar, el.errorSidebar, el.nanobananaSidebar, el.vertexSidebar, el.aistudioSidebar, el.proxySidebar]
-            .forEach(n => n?.classList.remove('open'));
-        [el.historyOverlay, el.usageOverlay, el.errorOverlay, el.nanobananaOverlay, el.vertexOverlay, el.aistudioOverlay, el.proxyOverlay]
-            .forEach(n => n?.classList.add('hidden'));
+        el.errorSidebar?.classList.remove('open');
+        el.errorOverlay?.classList.add('hidden');
     }
 
     function openSidebar(which) {
         closeAllSidebars();
         const map = {
-            history: [el.historySidebar, el.historyOverlay],
-            usage: [el.usageSidebar, el.usageOverlay],
             error: [el.errorSidebar, el.errorOverlay],
-            nanobanana: [el.nanobananaSidebar, el.nanobananaOverlay],
-            vertex: [el.vertexSidebar, el.vertexOverlay],
-            aistudio: [el.aistudioSidebar, el.aistudioOverlay],
-            proxy: [el.proxySidebar, el.proxyOverlay],
         };
         const pair = map[which];
         if (!pair) return;
         pair[0]?.classList.add('open');
         pair[1]?.classList.remove('hidden');
-        if (which === 'history') renderHistoryList();
         if (which === 'error') refreshErrors();
-        if (which === 'proxy') fetchProxyConfig();
-        if (which === 'aistudio') fetchAiStudioConfig();
     }
 
     async function reportError(message, context = '前端') {
@@ -1936,10 +1061,6 @@
             const fd = new FormData();
             fd.append('error_message', String(item.message || ''));
             fd.append('error_detail', String(item.detail || ''));
-            const key = (el.apiKey?.value || '').trim()
-                || normalizeKeyList(state.savedKeys.map(row => row.key))[0]
-                || '';
-            if (key) fd.append('api_key', key);
 
             const r = await fetch('/analyze-error', { method: 'POST', body: fd });
             const d = await r.json();
@@ -2012,55 +1133,7 @@
         renderErrors();
     }
 
-    async function queryUsage(inputEl, resultEl) {
-        const key = (inputEl?.value || '').trim();
-        if (!key) {
-            notify('请先输入 API Key。', 'warning');
-            return;
-        }
-        try {
-            const r = await fetch(`/api/key-usage?api_key=${encodeURIComponent(key)}`);
-            const d = await r.json();
-            resultEl?.classList.remove('hidden');
-            if (!d.found) {
-                if (resultEl) resultEl.innerHTML = '<div class="usage-empty">未找到该 Key 的用量记录</div>';
-                return;
-            }
-            if (resultEl) {
-                resultEl.innerHTML = `
-                    <div class="usage-query-summary">
-                        <div class="usage-query-key-label">${d.key_masked || 'Key'}</div>
-                        <div class="usage-query-stats">
-                            <div class="usage-stat-item"><span class="usage-stat-value">${d.calls || 0}</span><span class="usage-stat-label">调用</span></div>
-                            <div class="usage-stat-item"><span class="usage-stat-value">${d.success || 0}</span><span class="usage-stat-label">成功</span></div>
-                            <div class="usage-stat-item"><span class="usage-stat-value">${d.failed || 0}</span><span class="usage-stat-label">失败</span></div>
-                        </div>
-                        <div style="margin-top:8px;font-size:12px;color:rgba(255,255,255,0.65)">估算费用: $${Number(d.cost || 0).toFixed(4)}</div>
-                    </div>`;
-            }
-        } catch (e) {
-            notify(e.message || '查询用量失败', 'error');
-        }
-    }
 
-    async function uploadVertexCredentials() {
-        const file = el.vertexFile?.files?.[0];
-        if (!file) {
-            notify('请先选择 JSON 凭证文件。', 'warning');
-            return;
-        }
-        try {
-            const fd = new FormData();
-            fd.append('file', file);
-            const r = await fetch('/api/vertex-credentials', { method: 'POST', body: fd });
-            const d = await r.json();
-            if (!r.ok) throw new Error(d.error || '上传失败');
-            notify(d.message || 'Vertex 凭证已更新', 'success');
-        } catch (e) {
-            notify(e.message || 'Vertex 凭证上传失败', 'error');
-            reportError(e.message || 'Vertex 凭证上传失败', 'Vertex 凭证上传');
-        }
-    }
 
     function resetResult() {
         if (el.resultImg) {
@@ -2192,18 +1265,15 @@
     }
 
     function promptPayload() {
-        const stylePrompt = (STYLE_PRESETS[state.stylePreset] || STYLE_PRESETS.default).prompt || '';
         if (!el.promptToggle) {
-            return { mode: 'append', text: stylePrompt };
+            return { mode: 'append', text: '' };
         }
         if (el.promptToggle.checked) {
             const base = (el.promptOverride?.value || '').trim();
-            const merged = [base, stylePrompt].filter(Boolean).join('\n\n');
-            return { mode: 'override', text: merged };
+            return { mode: 'override', text: base };
         }
         const extra = (el.promptAppend?.value || '').trim();
-        const merged = [extra, stylePrompt].filter(Boolean).join('\n');
-        return { mode: 'append', text: merged };
+        return { mode: 'append', text: extra };
     }
 
     function syncSelUi() {
@@ -2425,27 +1495,18 @@
         notify(`已完成逐张下载，共 ${urls.length} 张。`, 'success');
     }
 
-    async function submitTask(garment, freedom, selectedApiKey) {
+    async function submitTask(garment, freedom) {
         const fd = new FormData();
         fd.append('target_image', state.model);
         fd.append('reference_image', garment);
         fd.append('model', state.modelType);
         fd.append('freedom', String(freedom));
-        fd.append('provider_mode', state.providerMode || 'direct');
         if (state.modelCloudUrl) fd.append('target_image_cloud_url', state.modelCloudUrl);
         const garmentIdx = state.garments.indexOf(garment);
         const garmentCloudUrl = garmentIdx >= 0 ? state.garmentCloudUrls[garmentIdx] : '';
         if (garmentCloudUrl) fd.append('reference_image_cloud_url', garmentCloudUrl);
         const garmentType = getGarmentType();
         if (garmentType) fd.append('garment_type', garmentType);
-        const chosenKey = String(selectedApiKey || '').trim();
-        if (effectiveProviderMode() === 'proxy') {
-            if (chosenKey) fd.append('proxy_api_key', chosenKey);
-        } else if (chosenKey) {
-            fd.append('api_key', chosenKey);
-        }
-        const nk = (el.nanoKey?.value.trim()) || (localStorage.getItem('nanobanana_api_key') || '').trim();
-        if (nk) fd.append('nanobanana_api_key', nk);
         const p = promptPayload();
         if (p.text) {
             fd.append('custom_prompt', p.text);
@@ -2525,34 +1586,9 @@
         primeCompletionAudio();
         let ok = 0;
         let fail = 0;
-        const keyPool = getApiKeyPool();
         const parallel = getParallelSettings(list.length);
-        const effectiveMode = effectiveProviderMode();
-        const modeLabelMap = {
-            direct: 'Vertex AI API',
-            aistudio: 'Google AI Studio 接口',
-            proxy: '本地反代接口',
-            nanobanana: 'Nano Banana',
-        };
 
         writeLog(`开始生成，共 ${list.length} 个任务。`);
-        writeLog(`当前风格: ${(STYLE_PRESETS[state.stylePreset] || STYLE_PRESETS.default).name}`);
-        writeLog(`当前通道: ${modeLabelMap[effectiveMode] || effectiveMode}`);
-        if (effectiveMode === 'proxy') {
-            writeLog('本地反代试衣现已禁用会忽略参考图的文生图回退；只有真正支持两张输入图的编辑接口才会放行。');
-        }
-        if (keyPool.length > 0) {
-            const keyKind = effectiveMode === 'proxy' ? '反代 Token' : (effectiveMode === 'aistudio' ? 'AI Studio API 密钥' : 'API 密钥');
-            writeLog(`已载入 ${keyPool.length} 个${keyKind}：${keyPool.map(maskApiKey).join(' | ')}`);
-        } else {
-            if (effectiveMode === 'proxy') {
-                writeLog(`主面板未填写反代 Token，将回退到左侧默认反代 Token${state.proxyConfig?.api_key ? `（${maskApiKey(state.proxyConfig.api_key)}）` : '（如已配置）'}。`);
-            } else if (effectiveMode === 'aistudio') {
-                writeLog(`主面板未填写 AI Studio 密钥，将回退到左侧默认 AI Studio 密钥${state.aiStudioConfig?.api_key ? `（${maskApiKey(state.aiStudioConfig.api_key)}）` : '（如已配置）'}。`);
-            } else {
-                writeLog('当前将使用服务端 Vertex AI 凭据。');
-            }
-        }
         if (parallel.enabled) {
             writeLog(`并行生成已开启，并发=${parallel.concurrency}`);
         }
@@ -2562,15 +1598,11 @@
             if (state.abort) return;
             const g = list[i];
             const f = getFreedom();
-            const selectedApiKey = keyPool.length > 0 ? keyPool[i % keyPool.length] : '';
-            const keyLabel = selectedApiKey
-                ? `, ${effectiveMode === 'proxy' ? 'Token' : 'Key'}=${maskApiKey(selectedApiKey)} (${(i % keyPool.length) + 1}/${keyPool.length})`
-                : '';
             const garmentType = getGarmentType();
             const garmentTypeLabel = garmentType ? `, 衣物类型=${garmentType}` : '';
-            writeLog(`任务 ${i + 1}/${list.length}: 服装=${g}, 自由度=${f}${garmentTypeLabel}${keyLabel}`);
+            writeLog(`任务 ${i + 1}/${list.length}: 服装=${g}, 自由度=${f}${garmentTypeLabel}`);
             try {
-                const id = await submitTask(g, f, selectedApiKey);
+                const id = await submitTask(g, f);
                 const t = await pollTask(id, i, list.length);
                 const stableUrl = String(t.result_display_url || t.result_cloud_url || t.result_url || '').trim();
                 const previewUrl = String(t.result_data_url || stableUrl || '').trim();
@@ -2630,9 +1662,8 @@
                 fail > 0 ? '生成完成，但部分任务失败' : '试穿结果已生成',
                 fail > 0
                     ? `已成功生成 ${ok} 张，另有 ${fail} 张失败。可直接下载结果或调整通道后重试。`
-                    : `共生成 ${ok} 张试穿结果。可直接下载、切换风格重试，或保存到历史记录。`
+                    : `共生成 ${ok} 张试穿结果。可直接下载，或切换风格后重新生成。`
             );
-            storeCurrentToHistory();
         } else {
             notify('生成失败，未获得任何试穿结果。', 'error');
             playCompletionSound('warning');
@@ -2762,66 +1793,8 @@
             catch (e) { notify(e.message || '下载失败。', 'error'); }
         });
         el.resultRetryBtn?.addEventListener('click', generate);
-        el.cycleStyleBtn?.addEventListener('click', cycleStylePreset);
-        el.saveHistoryBtn?.addEventListener('click', () => {
-            if (state.results.length === 0) return notify('暂无可保存的试穿结果。', 'warning');
-            const before = state.history.length;
-            storeCurrentToHistory();
-            if (state.authUser && state.history.length > before) {
-                notify('当前结果已保存到历史记录。', 'success');
-            }
-        });
         el.returnToRecommendBtn?.addEventListener('click', () => navigateToRecommendation('return'));
         el.switchProductBtn?.addEventListener('click', () => navigateToRecommendation('switch'));
-
-        el.nanoSave?.addEventListener('click', () => {
-            localStorage.setItem('nanobanana_api_key', (el.nanoKey?.value || '').trim());
-            notify('Nano Banana API Key 已保存。', 'success');
-            refreshRateStatus(true);
-            renderProviderCards();
-        });
-        el.nanoKey?.addEventListener('input', renderProviderCards);
-        el.proxySave?.addEventListener('click', saveProxyConfig);
-        el.proxyTest?.addEventListener('click', testProxyConfig);
-        el.authLoginBtn?.addEventListener('click', loginUser);
-        el.authRegisterBtn?.addEventListener('click', registerUser);
-        el.authLogoutBtn?.addEventListener('click', logoutUser);
-        [el.authUsername, el.authPassword].forEach(input => {
-            input?.addEventListener('keydown', ev => {
-                if (ev.key !== 'Enter') return;
-                ev.preventDefault();
-                loginUser();
-            });
-        });
-
-        el.manageKeysBtn?.addEventListener('click', openKeysModal);
-        el.fillSavedKeysBtn?.addEventListener('click', () => fillSavedKeysToInputs(true));
-        el.keysModalClose?.addEventListener('click', closeKeysModal);
-        el.keysModalOverlay?.addEventListener('click', ev => {
-            if (ev.target === el.keysModalOverlay) closeKeysModal();
-        });
-        el.addKeyBtn?.addEventListener('click', addSavedKey);
-        el.newKeyValue?.addEventListener('keydown', ev => {
-            if (ev.key !== 'Enter') return;
-            ev.preventDefault();
-            addSavedKey();
-        });
-        el.keysFillSelected?.addEventListener('click', () => fillSavedKeysToInputs(false));
-        el.keysFillAll?.addEventListener('click', () => fillSavedKeysToInputs(true));
-
-        el.toggleExtraKeys?.addEventListener('click', () => {
-            setExtraKeysExpanded(!state.extraKeysExpanded);
-        });
-        el.apiKey?.addEventListener('change', () => {
-            onAnyApiKeyChanged();
-        });
-        el.apiKey?.addEventListener('input', updateExtraKeysToggleLabel);
-        getExtraInputs().forEach(input => {
-            input.addEventListener('change', onAnyApiKeyChanged);
-            input.addEventListener('input', updateExtraKeysToggleLabel);
-        });
-        el.vertexSave?.addEventListener('click', uploadVertexCredentials);
-        el.aistudioSave?.addEventListener('click', saveAiStudioConfig);
 
         el.promptOpen?.addEventListener('click', () => el.promptModal?.classList.remove('hidden'));
         el.promptClose?.addEventListener('click', () => el.promptModal?.classList.add('hidden'));
@@ -2834,11 +1807,6 @@
         };
         el.promptToggle?.addEventListener('change', syncPromptMode);
         syncPromptMode();
-
-        const styleCards = [...document.querySelectorAll('#style-presets .style-card')];
-        styleCards.forEach(card => {
-            card.addEventListener('click', () => setStylePreset(card.dataset.style || 'default'));
-        });
 
         el.parallelToggle?.addEventListener('change', () => {
             localStorage.setItem(PARALLEL_ENABLED_STORAGE, el.parallelToggle?.checked ? '1' : '0');
@@ -2863,10 +1831,6 @@
             c.classList.add('active');
             setModel(c.dataset.model || 'flash');
         }));
-        const providerCards = [...document.querySelectorAll('#provider-selector .provider-card')];
-        providerCards.forEach(card => {
-            card.addEventListener('click', () => setProviderMode(card.dataset.provider || 'auto'));
-        });
         const active = cards.find(c => c.classList.contains('active'));
         setModel(active ? (active.dataset.model || 'flash') : 'flash');
 
@@ -2877,20 +1841,10 @@
             closeBtn?.addEventListener('click', closeAllSidebars);
             overlay?.addEventListener('click', closeAllSidebars);
         };
-        bindSidebar(el.historyToggle, el.openHistory, el.historyClose, el.historyOverlay, 'history');
-        bindSidebar(el.usageToggle, null, el.usageClose, el.usageOverlay, 'usage');
         bindSidebar(el.errorToggle, null, el.errorClose, el.errorOverlay, 'error');
-        bindSidebar(el.nanobananaToggle, null, el.nanobananaClose, el.nanobananaOverlay, 'nanobanana');
-        bindSidebar(el.vertexToggle, null, el.vertexClose, el.vertexOverlay, 'vertex');
-        bindSidebar(el.aistudioToggle, null, el.aistudioClose, el.aistudioOverlay, 'aistudio');
-        bindSidebar(el.proxyToggle, null, el.proxyClose, el.proxyOverlay, 'proxy');
         document.querySelectorAll('[data-open-sidebar]').forEach(btn => {
-            btn.addEventListener('click', () => openSidebar(btn.dataset.openSidebar || 'history'));
+            btn.addEventListener('click', () => openSidebar(btn.dataset.openSidebar || 'error'));
         });
-
-        // Usage query
-        el.usageBtnA?.addEventListener('click', () => queryUsage(el.usageKeyA, el.usageResA));
-        el.usageBtnB?.addEventListener('click', () => queryUsage(el.usageKeyB, el.usageResB));
 
         // Error log actions
         el.errorRefresh?.addEventListener('click', refreshErrors);
@@ -2902,49 +1856,6 @@
         el.errorPanelToggle?.addEventListener('click', () => {
             const currentlyExpanded = !(el.errorPanelBody?.classList.contains('hidden'));
             setErrorPanelExpanded(!currentlyExpanded);
-        });
-
-        // History actions
-        el.historyBack?.addEventListener('click', () => {
-            state.activeHistoryId = '';
-            state.historySelected.clear();
-            setHistoryView(false);
-            updateHistorySelectionUi();
-        });
-        el.historyClearAll?.addEventListener('click', () => {
-            if (state.history.length === 0) return notify('暂无历史可清空。', 'info');
-            if (!confirm('确认清空所有历史记录吗？')) return;
-            state.history = [];
-            saveHistory();
-            renderHistoryList();
-            setHistoryView(false);
-            notify('历史记录已清空。', 'success');
-        });
-        el.historyDelete?.addEventListener('click', () => {
-            const item = state.history.find(x => x.id === state.activeHistoryId);
-            if (!item) return;
-            if (!confirm('确认删除该历史会话吗？')) return;
-            state.history = state.history.filter(x => x.id !== item.id);
-            saveHistory();
-            renderHistoryList();
-            setHistoryView(false);
-            notify('该历史会话已删除。', 'success');
-        });
-        el.historyDownloadAll?.addEventListener('click', async () => {
-            const item = state.history.find(x => x.id === state.activeHistoryId);
-            const urls = Array.isArray(item?.resultDisplayUrls) && item.resultDisplayUrls.length ? item.resultDisplayUrls : (item?.results || []);
-            if (!item || !urls.length) return notify('当前会话无可下载图片。', 'warning');
-            try { await downloadZip(urls, `历史结果_${urls.length}张`); }
-            catch (e) { notify(e.message || '历史下载失败。', 'error'); }
-        });
-        el.historyDownloadSelected?.addEventListener('click', async () => {
-            const item = state.history.find(x => x.id === state.activeHistoryId);
-            if (!item) return;
-            const historyResults = Array.isArray(item.resultDisplayUrls) && item.resultDisplayUrls.length ? item.resultDisplayUrls : (item.results || []);
-            const urls = [...state.historySelected].sort((a, b) => a - b).map(i => historyResults[i]).filter(Boolean);
-            if (urls.length === 0) return notify('请先选择历史结果图片。', 'warning');
-            try { await downloadZip(urls, `历史选中_${urls.length}张`); }
-            catch (e) { notify(e.message || '历史选中下载失败。', 'error'); }
         });
 
         // ESC closes sidebars and dialogs
@@ -3263,24 +2174,33 @@
         };
     })();
 
+    async function fetchRuntimeStatus() {
+        try {
+            const r = await fetch('/api/runtime-status', { cache: 'no-store' });
+            const d = await r.json();
+            state.runtimeAvailable = Boolean(
+                r.ok && d.tryon_enabled === true && d.configured === true
+            );
+            if (d.tryon_enabled === false) {
+                notify('试衣服务暂时停用', 'warning');
+            } else if (d.configured === false) {
+                notify('试衣服务配置未完成，请联系管理员', 'warning');
+            }
+        } catch (_) {
+            state.runtimeAvailable = false;
+            notify('暂时无法确认试衣服务状态，请稍后刷新重试', 'warning');
+        }
+        ready();
+    }
+
     async function init() {
         applyCopy();
         state.frontendConfig = normalizeFrontendConfig(FRONTEND_CONFIG_DEFAULT);
-        if (el.apiKey) el.apiKey.value = localStorage.getItem('tryon_api_key') || '';
-        loadExtraApiKeys();
-        state.providerMode = localStorage.getItem(PROVIDER_MODE_STORAGE) || 'direct';
-        state.aiStudioConfig = null;
-        initAuthState();
         initErrorPanelState();
-        if (el.nanoKey) el.nanoKey.value = localStorage.getItem('nanobanana_api_key') || '';
         if (el.parallelToggle) {
             el.parallelToggle.checked = localStorage.getItem(PARALLEL_ENABLED_STORAGE) === '1';
         }
         syncParallelConcurrencyControls(localStorage.getItem(PARALLEL_CONCURRENCY_STORAGE) || PARALLEL_CONCURRENCY_DEFAULT, false);
-        setStylePreset(localStorage.getItem(STYLE_STORAGE) || 'default', true);
-        loadHistory();
-        renderHistoryList();
-        setHistoryView(false);
         if (el.promptSystem) {
             fetch('/prompt').then(r => r.json()).then(d => { el.promptSystem.value = d.prompt || ''; }).catch(() => {
                 el.promptSystem.value = '系统提示词读取失败';
@@ -3298,14 +2218,12 @@
         resetResult();
         renderGallery();
         refreshModelRateUi();
-        renderProviderCards();
         refreshCountdowns();
         setInterval(refreshCountdowns, 1000);
         refreshRateStatus(true);
         setInterval(() => refreshRateStatus(true), 8000);
         refreshErrors();
-        fetchProxyConfig();
-        fetchAiStudioConfig();
+        await fetchRuntimeStatus();
         const urlPayload = parseBridgePayloadFromUrl();
         if (urlPayload) {
             await applyRecommendationPayload(urlPayload, { channel: 'query' });

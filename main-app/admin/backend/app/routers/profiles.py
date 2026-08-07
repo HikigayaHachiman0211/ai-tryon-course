@@ -90,6 +90,16 @@ def get_profile(profile_id: int, admin=Depends(get_current_admin), db=Depends(ge
     return _serialize(p)
 
 
+@router.delete("/{profile_id}")
+def delete_profile(profile_id: int, admin=Depends(get_current_admin), db=Depends(get_db)):
+    p = db.get(UserProfile, profile_id)
+    if not p:
+        raise HTTPException(404, "画像不存在")
+    db.delete(p)
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/{profile_id}/tryon-results")
 def tryon_results(profile_id: int, admin=Depends(get_current_admin), db=Depends(get_db)):
     p = db.get(UserProfile, profile_id)

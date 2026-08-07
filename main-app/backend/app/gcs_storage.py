@@ -84,7 +84,7 @@ def get_result_json(result_id: str) -> dict[str, Any] | None:
 # ---------------------------------------------------------------------------
 
 def save_user_photo(result_id: str, image_bytes: bytes, content_type: str = "image/jpeg") -> str | None:
-    """Upload user photo to GCS and return its public URL, or *None* on failure."""
+    """Upload user photo to GCS and return its URL, or *None* on failure."""
     bucket = _ensure_bucket()
     if bucket is None:
         return None
@@ -93,7 +93,6 @@ def save_user_photo(result_id: str, image_bytes: bytes, content_type: str = "ima
     try:
         blob = bucket.blob(blob_name)
         blob.upload_from_string(image_bytes, content_type=content_type)
-        blob.make_public()
         logger.info("Saved user photo to gs://%s/%s", GCS_BUCKET_NAME, blob_name)
         return blob.public_url
     except Exception as exc:
@@ -106,7 +105,7 @@ def save_user_photo(result_id: str, image_bytes: bytes, content_type: str = "ima
 # ---------------------------------------------------------------------------
 
 def save_thumbnail(result_id: str, image_bytes: bytes, content_type: str = "image/png") -> str | None:
-    """Upload a thumbnail and return its public URL, or *None* on failure."""
+    """Upload a thumbnail and return its URL, or *None* on failure."""
     bucket = _ensure_bucket()
     if bucket is None:
         return None
@@ -114,7 +113,6 @@ def save_thumbnail(result_id: str, image_bytes: bytes, content_type: str = "imag
     try:
         blob = bucket.blob(blob_name)
         blob.upload_from_string(image_bytes, content_type=content_type)
-        blob.make_public()
         logger.info("Saved thumbnail to gs://%s/%s", GCS_BUCKET_NAME, blob_name)
         return blob.public_url
     except Exception as exc:

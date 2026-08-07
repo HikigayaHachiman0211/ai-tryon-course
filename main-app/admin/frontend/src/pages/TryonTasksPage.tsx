@@ -1,23 +1,29 @@
 import { useState, useEffect } from 'react'
-import { Card, Table, Tag, Row, Col, Statistic, Space, Button, Select, Typography, Modal, Descriptions, Spin } from 'antd'
-import { ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { Card, Table, Tag, Row, Col, Statistic, Space, Button, Select, Typography, Modal, Descriptions, Tooltip } from 'antd'
+import { ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import type { ColumnsType } from 'antd/es/table'
 import { listTasks, getTaskStats, getTask, retryTask } from '../api/tryon'
 import { message } from 'antd'
 
-const { Title } = Typography
+const { Title, Text } = Typography
 const { Option } = Select
 
+const AUTO_REFRESH_MS = 15000
+const LATENCY_HINT = '数据为试穿台异步上报，可能有数秒延迟；本页每 15 秒自动刷新'
+
 interface TryonTask {
-  id: number
+  id: string
   status: string
   product_id: number
   user_photo_url: string
+  result_image_url: string | null
   created_at: string
-  completed_at: string | null
+  updated_at: string | null
   duration_ms: number | null
-  error_message: string | null
+  error_type: string | null
+  error_detail: string | null
+  model_used: string
 }
 
 export default function TryonTasksPage() {
@@ -37,18 +43,28 @@ export default function TryonTasksPage() {
       .finally(() => setLoading(false))
   }
 
+  const refresh = () => {
+    fetchData(page)
+    getTaskStats().then((res) => setStats(res.data))
+  }
+
   useEffect(() => {
     fetchData(1); setPage(1)
     getTaskStats().then((res) => setStats(res.data))
   }, [statusFilter])
 
-  const handleRetry = async (id: number) => {
+  useEffect(() => {
+    const timer = setInterval(refresh, AUTO_REFRESH_MS)
+    return () => clearInterval(timer)
+  }, [page, statusFilter])
+
+  const handleRetry = async (id: string) => {
     await retryTask(id)
     message.success('已重试')
     fetchData()
   }
 
-  const showDetail = async (id: number) => {
+  const showDetail = async (id: string) => {
     const res = await getTask(id)
     setDetail(res.data)
     setDetailOpen(true)
@@ -62,7 +78,7 @@ export default function TryonTasksPage() {
       width: 100,
       render: (s: string) => {
         const colorMap: Record<string, string> = {
-          completed: 'green', failed: 'red', queued: 'blue', processing: 'orange',
+          completed: 'green', failed: 'red', queued: 'blue', processing: 'orange', pending: 'default',
         }
         return <Tag color={colorMap[s] || 'default'}>{s}</Tag>
       },
@@ -91,7 +107,40 @@ export default function TryonTasksPage() {
 
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 16 }}>AI 试穿任务</Title>
+      <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
+        <Space>
+          <Title level={4} style={{ margin: 0 }}>AI 试穿任务</Title>
+          <Tooltip title={LATENCY_HINT}><Text type="secondary" style={{ fontSize: 12 }}>数据可能有数秒延迟 ⓘ</Text></Tooltip>
+        </Space>
+        <Button icon={<ReloadOutlined />} onClick={refresh} loading={loading}>刷新</Button>
+      </Space>
+
+      {stats && (
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col xs={12} sm={6}>
+            <Card className="stat-card">
+              <Statistic title="总任务" value={(stats.total as number) || 0} prefix={<ThunderboltOutlined />} />
+            </Card>
+          </Col>
+          <Col xs={12} sm={6}>
+            <Card className="stat-card">
+              <Statistic title="已完成" value={(stats.completed as number) || 0} valueStyle={{ color: '#52c41a' }} prefix={<CheckCircleOutlined />} />
+            </Card>
+          </Col>
+          <Col xs={12} sm={6}>
+            <Card className="stat-card">
+              <Statistic title="失败" value={(stats.failed as number) || 0} valueStyle={{ color: '#ff4d4f' }} prefix={<CloseCircleOutlined />} />
+            </Card>
+          </Col>
+          <Col xs={12} sm={6}>
+            <Card className="stat-card">
+              <Tooltip title="已完成任务平均耗时">
+                <Statistic title="平均耗时" value={stats.avg_duration_ms ? ((stats.avg_duration_ms as number) / 1000).toFixed(1) : '0'} suffix="s" prefix={<ClockCircleOutlined />} />
+              </Tooltip>
+            </Card>
+          </Col>
+        </Row>
+      )}
 
       {stats && (
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
@@ -148,7 +197,7 @@ export default function TryonTasksPage() {
             allowClear
             style={{ width: 150 }}
           >
-            {['queued', 'processing', 'completed', 'failed'].map((s) => (
+            {['pending', 'queued', 'processing', 'completed', 'failed'].map((s) => (
               <Option key={s} value={s}>{s}</Option>
             ))}
           </Select>

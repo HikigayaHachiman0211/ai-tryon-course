@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react'
-import { Card, Table, Button, Space, Modal, Typography, Descriptions, Spin, message, Popconfirm, Image, Tag } from 'antd'
-import { EyeOutlined, DeleteOutlined, LinkOutlined } from '@ant-design/icons'
+import { Card, Table, Button, Space, Modal, Typography, Descriptions, Spin, message, Popconfirm, Image, Tag, Tooltip } from 'antd'
+import { EyeOutlined, DeleteOutlined, LinkOutlined, ReloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { listHistory, getHistory, deleteHistory } from '../api/history'
 
 const { Title, Text } = Typography
 
+const AUTO_REFRESH_MS = 15000
+const LATENCY_HINT = '数据为主站/试穿台异步上报，可能有数秒延迟；本页每 15 秒自动刷新'
+
 interface HistoryItem {
   id: string
-  session_id: string
+  summary?: string
   created_at: string
   user_photo_url?: string
   result_count?: number
@@ -33,6 +36,10 @@ interface DetailInference {
   reasoning?: string
   gemini_model?: string
   gemini_used?: boolean
+  mimo_model?: string
+  mimo_used?: boolean
+  ai_provider?: string
+  rule_fallback_used?: boolean
 }
 
 interface DetailItem {
@@ -74,6 +81,11 @@ export default function HistoryPage() {
 
   useEffect(() => { fetchData() }, [])
 
+  useEffect(() => {
+    const timer = setInterval(() => fetchData(page), AUTO_REFRESH_MS)
+    return () => clearInterval(timer)
+  }, [page])
+
   const showDetail = async (id: string) => {
     setDetailLoading(true)
     setDetailOpen(true)
@@ -92,8 +104,11 @@ export default function HistoryPage() {
   }
 
   const columns: ColumnsType<HistoryItem> = [
-    { title: 'ID', dataIndex: 'id', width: 80, ellipsis: true },
-    { title: '会话 ID', dataIndex: 'session_id', ellipsis: true },
+    {
+      title: 'ID', dataIndex: 'id', width: 220, ellipsis: true,
+      render: (v: string) => <Tooltip title={v}><span>{v}</span></Tooltip>,
+    },
+    { title: '摘要', dataIndex: 'summary', ellipsis: true },
     { title: '时间', dataIndex: 'created_at', width: 180 },
     { title: '结果数', dataIndex: 'result_count', width: 80 },
     {
@@ -124,7 +139,13 @@ export default function HistoryPage() {
 
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 16 }}>推荐历史</Title>
+      <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
+        <Space>
+          <Title level={4} style={{ margin: 0 }}>推荐历史</Title>
+          <Tooltip title={LATENCY_HINT}><Text type="secondary" style={{ fontSize: 12 }}>数据可能有数秒延迟 ⓘ</Text></Tooltip>
+        </Space>
+        <Button icon={<ReloadOutlined />} onClick={() => fetchData(page)} loading={loading}>刷新</Button>
+      </Space>
       <Card>
         <Table
           rowKey="id"
@@ -170,10 +191,20 @@ export default function HistoryPage() {
                 <Descriptions.Item label="推荐尺码">{inf.resolved_size ?? '-'}</Descriptions.Item>
                 <Descriptions.Item label="推荐款式">{inf.resolved_style ?? '-'}</Descriptions.Item>
                 <Descriptions.Item label="体型判断">{inf.body_shape ?? '-'}</Descriptions.Item>
-                <Descriptions.Item label="Gemini 模型">{inf.gemini_model ?? '-'}</Descriptions.Item>
+                <Descriptions.Item label="AI 模型">
+                  {inf.ai_provider === 'mimo'
+                    ? (inf.mimo_model ?? '-')
+                    : inf.ai_provider === 'gemini'
+                      ? (inf.gemini_model ?? '-')
+                      : (inf.gemini_model ?? inf.mimo_model ?? inf.ai_provider ?? '-')}
+                </Descriptions.Item>
                 <Descriptions.Item label="尺码来源">{inf.size_source ?? '-'}</Descriptions.Item>
                 <Descriptions.Item label="款式来源">{inf.style_source ?? '-'}</Descriptions.Item>
-                <Descriptions.Item label="AI 使用">{inf.gemini_used ? <Tag color="green">是</Tag> : <Tag color="orange">否 (Fallback)</Tag>}</Descriptions.Item>
+                <Descriptions.Item label="AI 使用">
+                  {(inf.rule_fallback_used === false || inf.gemini_used || inf.mimo_used)
+                    ? <Tag color="green">是</Tag>
+                    : <Tag color="orange">否 (Fallback)</Tag>}
+                </Descriptions.Item>
                 {inf.reasoning && (
                   <Descriptions.Item label="推理说明" span={2}>{inf.reasoning}</Descriptions.Item>
                 )}

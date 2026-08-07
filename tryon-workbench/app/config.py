@@ -6,11 +6,11 @@ from zoneinfo import ZoneInfo
 from typing import Dict, Any, List
 
 # ===== GCP / Vertex / Project Config =====
-GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "")
+GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "").strip()
 GCP_LOCATION = os.environ.get("GCP_LOCATION", "asia-east1")
 VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "global")
 VERTEX_AI_API_KEY = os.environ.get("VERTEX_AI_API_KEY", "")
-DEFAULT_API_KEY = os.environ.get("GEMINI_API_KEY", "vertex-ai")
+DEFAULT_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 RECOMMEND_APP_URL = str(os.environ.get("VITE_RECOMMEND_APP_URL", "") or "").strip()
 TRYON_EMBED_MODE = str(os.environ.get("VITE_TRYON_EMBED_MODE", "standalone") or "standalone").strip().lower()
 if TRYON_EMBED_MODE not in ("standalone", "embed"):
@@ -54,7 +54,6 @@ WORKSPACE_DIR = os.path.dirname(BASE_DIR)
 CREDENTIALS_PATH = os.path.join(BASE_DIR, "gcp-credentials.json")
 PROMPT_PATH = os.path.join(BASE_DIR, "prompt.txt")
 LOCAL_PROXY_CONFIG_PATH = os.path.join(BASE_DIR, "local_proxy_config.json")
-AI_STUDIO_CONFIG_PATH = os.path.join(BASE_DIR, "ai_studio_config.json")
 LOCAL_ANTIGRAVITY_DIRS = [
     os.path.join(os.path.expanduser("~"), ".antigravity_tools"),
     os.path.join(WORKSPACE_DIR, ".antigravity_tools"),
@@ -76,12 +75,6 @@ DEFAULT_LOCAL_PROXY_CONFIG: Dict[str, Any] = {
     "timeout_seconds": 180,
     "flash_model": "gemini-3.1-flash-image",
     "pro_model": "gemini-3-pro-image",
-}
-
-DEFAULT_AI_STUDIO_CONFIG: Dict[str, Any] = {
-    "api_key": "",
-    "flash_model": "gemini-3.1-flash-image-preview",
-    "pro_model": "gemini-3-pro-image-preview",
 }
 
 # ===== Timezone =====

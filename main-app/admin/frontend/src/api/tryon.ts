@@ -8,10 +8,10 @@ export function getTaskStats() {
   return request.get('/api/admin/tryon-tasks/stats')
 }
 
-export function getTask(id: number) {
+export function getTask(id: string) {
   return request.get(`/api/admin/tryon-tasks/${id}`)
 }
 
-export function retryTask(id: number) {
+export function retryTask(id: string) {
   return request.post(`/api/admin/tryon-tasks/${id}/retry`)
 }

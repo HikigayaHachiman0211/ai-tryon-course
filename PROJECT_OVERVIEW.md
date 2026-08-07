@@ -43,7 +43,7 @@
 - **AI 引擎**：Google Gemini（flash/pro 模型），支持 Vertex AI、API Key、AI Studio 三种接入方式
 - **核心能力**：接收用户全身照 + 服装参考图，利用精心设计的 Prompt 生成逼真的虚拟试穿效果图
 - **Prompt 设计**（`prompt.txt`）：约 60 行精细指令，涵盖身份保持、服装保真、自然穿着质量、严格负面约束等
-- **部署**：Google Cloud Run（`ai-tryon-workbench-20260417`）
+- **部署**：Google Cloud Run（服务名由部署者自行配置）
 - **存储**：Firestore（任务状态）+ GCS（结果图片）
 - **前端**：内置简单的静态 HTML 页面（`static/index.html`），支持通过 `window.postMessage` 接收外部传入的用户照片和服装图片
 
@@ -64,7 +64,7 @@
 | **数据库** | PostgreSQL (Cloud SQL) / 本地 SQLite | 通过 `DATABASE_URL` 环境变量切换 |
 | **对象存储** | Google Cloud Storage (GCS) | 桶名: `<your-gcs-bucket>` |
 | **AI 模型** | Google Gemini (`gemini-2.5-flash-lite`) + Deepseek (`deepseek-v4-flash`) | 双引擎：Gemini 支持图片+文本分析，Deepseek 纯文本推断 |
-| **虚拟试穿** | Gemini Imagen (独立 Cloud Run 服务) | `ai-tryon-workbench-20260417` |
+| **虚拟试穿** | Gemini Imagen (独立 Cloud Run 服务) | `<your-tryon-service-name>` |
 | **部署** | Google Cloud Run (asia-east1) | Docker 多阶段构建 (Node 22 Alpine + Python 3.11 Slim) |
 | **CI/CD** | Cloud Build | `cloudbuild.app.yaml` (主站) / `cloudbuild.admin.yaml` (管理后台) |
 | **管理后台** | React 19 + Ant Design + FastAPI | 独立 Cloud Run 服务 `ai-tryon-admin` |
@@ -799,6 +799,6 @@ npm run dev  # → http://localhost:5174
 | 服务 | 服务名 | URL | 说明 |
 |------|--------|-----|------|
 | 主站（推荐平台） | `ai-tryon-app` | `<your-main-app-url>` | 前后端一体部署 |
-| 试穿工作台 | `ai-tryon-workbench-20260417` | `<your-tryon-workbench-url>` | 独立 Cloud Run 服务 |
+| 试穿工作台 | `<your-tryon-service-name>` | `<your-tryon-workbench-url>` | 独立 Cloud Run 服务 |
 | 站长管理后台 | `ai-tryon-admin` | `<your-admin-url>` | 独立 Cloud Run 服务，JWT 认证 |
 | GCS 图片桶 | — | `https://storage.googleapis.com/<your-gcs-bucket>/<your-image-prefix>

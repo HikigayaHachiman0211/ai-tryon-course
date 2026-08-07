@@ -1,5 +1,11 @@
 .git
 .vs
+**/.env
+**/.env.*
+**/*credentials*.json
+**/*service-account*.json
+**/*.pem
+**/*.key
 backend/__pycache__/
 backend/app/__pycache__/
 backend/local.db
@@ -12,6 +18,8 @@ admin/frontend/dist/
 admin/frontend/.vite/
 admin/backend/__pycache__/
 admin/backend/app/__pycache__/
+**/.pytest_cache/
+**/.venv*/
 downloaded_jd_images/
 awesome-design-md-main/
 *.log

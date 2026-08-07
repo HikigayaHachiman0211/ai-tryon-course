@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.database import (
     Product, AdminUser, RequestLog, TryonTask, PromptConfig,
     UserProfile, AnnotationTask, AnnotationRecord, SampleModel,
+    AIAPIProvider, AIFeatureConfig, AIAPITestLog,
     get_db,
 )
 
@@ -82,6 +83,9 @@ def db_stats(admin=Depends(get_current_admin), db=Depends(get_db)):
         "annotation_tasks": db.query(func.count(AnnotationTask.id)).scalar() or 0,
         "annotation_records": db.query(func.count(AnnotationRecord.id)).scalar() or 0,
         "sample_models": db.query(func.count(SampleModel.id)).scalar() or 0,
+        "ai_api_providers": db.query(func.count(AIAPIProvider.id)).scalar() or 0,
+        "ai_feature_configs": db.query(func.count(AIFeatureConfig.id)).scalar() or 0,
+        "ai_api_test_logs": db.query(func.count(AIAPITestLog.id)).scalar() or 0,
     }
     return tables
 

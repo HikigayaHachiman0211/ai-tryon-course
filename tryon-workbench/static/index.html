@@ -5,91 +5,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Model Try-On | 模特试衣</title>
+    <link rel="icon" href="data:,">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="/static/css/custom.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260606-errors-only">
+    <link rel="stylesheet" href="/static/css/custom.css?v=20260606-errors-only">
 </head>
 
 <body>
-    <!-- 汉堡菜单按钮 -->
-    <button id="history-toggle-btn" class="history-toggle-btn" title="历史记录">
-        <i class="fas fa-bars"></i>
-    </button>
-    <!-- API 用量按钮 -->
-    <button id="usage-toggle-btn" class="sidebar-icon-btn sidebar-icon-usage" title="API 用量追踪">
-        <i class="fas fa-chart-bar"></i>
-    </button>
     <!-- 错误日志按钮 -->
     <button id="errorlog-toggle-btn" class="sidebar-icon-btn sidebar-icon-errorlog" title="错误日志">
         <i class="fas fa-bug"></i>
         <span class="sidebar-icon-badge hidden" id="errorlog-badge">0</span>
     </button>
-    <!-- 第三方 API 配置按钮 -->
-    <button id="nanobanana-toggle-btn" class="sidebar-icon-btn sidebar-icon-nanobanana" title="第三方 API 配置">
-        <i class="fas fa-plug"></i>
-    </button>
-    <!-- Vertex AI 认证配置按钮 -->
-    <button id="vertex-toggle-btn" class="sidebar-icon-btn sidebar-icon-vertex" title="Vertex AI 认证">
-        <i class="fas fa-key"></i>
-    </button>
-    <button id="aistudio-toggle-btn" class="sidebar-icon-btn sidebar-icon-aistudio" title="Google AI Studio 接口">
-        <i class="fas fa-bolt"></i>
-    </button>
-    <button id="proxy-toggle-btn" class="sidebar-icon-btn sidebar-icon-proxy" title="本地反代 API">
-        <i class="fas fa-server"></i>
-    </button>
 
     <!-- 侧边栏覆盖层 -->
-    <div id="history-overlay" class="history-overlay hidden"></div>
-    <div id="usage-overlay" class="history-overlay hidden"></div>
     <div id="errorlog-overlay" class="history-overlay hidden"></div>
-    <div id="nanobanana-overlay" class="history-overlay hidden"></div>
-    <div id="vertex-overlay" class="history-overlay hidden"></div>
-    <div id="aistudio-overlay" class="history-overlay hidden"></div>
-    <div id="proxy-overlay" class="history-overlay hidden"></div>
-
-    <!-- API 用量侧边栏 -->
-    <aside id="usage-sidebar" class="history-sidebar usage-sidebar">
-        <div class="history-sidebar-header">
-            <h3><i class="fas fa-chart-pie"></i> API 用量追踪</h3>
-            <button id="usage-sidebar-close" class="history-sidebar-close" title="关闭">
-                <i class="fas fa-xmark"></i>
-            </button>
-        </div>
-        <div class="sidebar-content-scroll">
-            <div class="sidebar-usage-section" style="border-top:none; padding-top:0;">
-                <div class="sidebar-usage-title" style="margin-bottom:12px;">
-                    <i class="fas fa-search"></i> 查询 API Key 用量
-                </div>
-                <div class="sidebar-usage-form">
-                    <input type="password" id="usage-sidebar-key" class="usage-query-input"
-                        placeholder="粘贴 API Key 查询用量">
-                    <button id="usage-sidebar-query-btn" class="usage-query-btn">
-                        <i class="fas fa-search"></i> 查询
-                    </button>
-                </div>
-                <div id="usage-sidebar-result" class="usage-query-result hidden"></div>
-            </div>
-            <div class="sidebar-usage-info">
-                <div class="sidebar-usage-title"><i class="fas fa-info-circle"></i> 计费标准</div>
-                <div class="pricing-table">
-                    <div class="pricing-row">
-                        <span class="pricing-model">Nano Banana Pro</span>
-                        <span class="pricing-cost">$0.134 / 张</span>
-                    </div>
-                    <div class="pricing-row">
-                        <span class="pricing-model">Nano Banana 2</span>
-                        <span class="pricing-cost">$0.067 / 张</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </aside>
 
     <!-- 错误日志侧边栏 -->
     <aside id="errorlog-sidebar" class="history-sidebar errorlog-sidebar">
@@ -117,284 +52,6 @@
         </div>
     </aside>
 
-    <!-- 第三方 API 配置侧边栏 -->
-    <aside id="nanobanana-sidebar" class="history-sidebar nanobanana-sidebar">
-        <div class="history-sidebar-header">
-            <h3><i class="fas fa-plug"></i> 第三方 API 配置</h3>
-            <button id="nanobanana-sidebar-close" class="history-sidebar-close" title="关闭">
-                <i class="fas fa-xmark"></i>
-            </button>
-        </div>
-        <div class="sidebar-content-scroll">
-            <div class="sidebar-usage-section">
-                <div class="sidebar-usage-title" style="margin-bottom:12px;">
-                    <i class="fas fa-key"></i> Nano Banana API Key
-                </div>
-                <div class="sidebar-usage-form" style="flex-direction: column; gap: 10px;">
-                    <input type="password" id="nanobanana-api-key" class="usage-query-input"
-                        placeholder="输入您的 Nano Banana API Key" style="width: 100%;">
-                    <button id="nanobanana-save-btn" class="usage-query-btn" style="width: 100%; border-radius: 4px;">
-                        <i class="fas fa-save"></i> 保存配置
-                    </button>
-                </div>
-                <div class="api-help-text"
-                    style="font-size: 12px; color: var(--text-secondary); margin-top: 15px; line-height: 1.6;">
-                    <p>配置第三方 Nano Banana API Key 以解锁更低开销的生成服务。配置并选中模型后，所有的生成请求将绕过原生服务器直接使用该第三方 API 执行。</p>
-                    <p style="margin-top: 8px;"><b>获取方式：</b><br>请访问 <a href="https://nanobananaapi.ai/api-key"
-                            target="_blank"
-                            style="color: var(--accent-primary); text-decoration: none;">nanobananaapi.ai</a> 注册并获取 API
-                        Key。</p>
-                </div>
-            </div>
-        </div>
-    </aside>
-
-    <!-- Vertex AI 配置侧边栏 -->
-    <aside id="vertex-sidebar" class="history-sidebar vertex-sidebar">
-        <div class="history-sidebar-header">
-            <h3><i class="fas fa-key"></i> Vertex AI 认证 (云端)</h3>
-            <button id="vertex-sidebar-close" class="history-sidebar-close" title="关闭">
-                <i class="fas fa-xmark"></i>
-            </button>
-        </div>
-        <div class="sidebar-content-scroll">
-            <div class="sidebar-usage-section">
-                <div class="sidebar-usage-title" style="margin-bottom:12px;">
-                    <i class="fas fa-file-code"></i> 服务账号 JSON
-                </div>
-                <div class="sidebar-usage-form" style="flex-direction: column; gap: 10px;">
-                    <input type="file" id="vertex-key-file" class="usage-query-input" accept=".json" style="padding: 6px; width: 100%;">
-                    <button id="vertex-save-btn" class="usage-query-btn" style="width: 100%; border-radius: 4px;">
-                        <i class="fas fa-cloud-upload-alt"></i> 上传并应用
-                    </button>
-                </div>
-                <div class="api-help-text" style="font-size: 12px; color: var(--text-secondary); margin-top: 15px; line-height: 1.6;">
-                    <p>在此处上传您的 GCP `gcp-credentials.json`，配置生效后后台所有对于 Vertex AI 的请求都会使用此服务账号认证。仅限管理员在此操作，且该更改在下一次服务器崩溃前保留。</p>
-                    <p style="margin-top: 8px;"><b>安全提示：</b><br>请不要在公共网络中上传拥有最高权限的服务账号文件，此文件应只含有 `Vertex AI User` 角色。</p>
-                </div>
-            </div>
-        </div>
-    </aside>
-
-        <aside id="aistudio-sidebar" class="history-sidebar aistudio-sidebar">
-        <div class="history-sidebar-header">
-            <h3><i class="fas fa-bolt"></i> Google AI Studio 接口</h3>
-            <button id="aistudio-sidebar-close" class="history-sidebar-close" title="关闭">
-                <i class="fas fa-xmark"></i>
-            </button>
-        </div>
-        <div class="sidebar-content-scroll">
-            <div class="sidebar-usage-section" style="border-top:none; padding-top:0;">
-                <div class="sidebar-usage-title" style="margin-bottom:12px;">
-                    <i class="fas fa-key"></i> Gemini API 密钥
-                </div>
-                <div class="sidebar-usage-form proxy-form-grid">
-                    <input type="password" id="aistudio-api-key" class="usage-query-input proxy-config-input" placeholder="填入 Google AI Studio 创建的 Gemini API 密钥">
-                    <div class="proxy-inline-field">
-                        <label for="aistudio-flash-model">Nano Banana 2 对应模型 ID</label>
-                        <input type="text" id="aistudio-flash-model" class="usage-query-input proxy-config-input" placeholder="例如 gemini-3.1-flash-image-preview">
-                    </div>
-                    <div class="proxy-inline-field">
-                        <label for="aistudio-pro-model">Nano Banana Pro 对应模型 ID</label>
-                        <input type="text" id="aistudio-pro-model" class="usage-query-input proxy-config-input" placeholder="例如 gemini-3-pro-image-preview">
-                    </div>
-                </div>
-                <div class="proxy-sidebar-actions">
-                    <button id="aistudio-save-btn" class="usage-query-btn">
-                        <i class="fas fa-save"></i> 保存配置
-                    </button>
-                </div>
-                <div class="api-help-text" style="font-size: 12px; color: var(--text-secondary); margin-top: 15px; line-height: 1.6;">
-                    <p>这里可以保存一个默认的 <b>Google AI Studio</b> Gemini API 密钥。只有当你把生成通道切换到 <b>Google AI Studio 接口</b> 时，系统才会使用这里保存的密钥。</p>
-                    <p style="margin-top: 8px;"><b>默认行为：</b><br>系统默认仍使用 <b>Vertex AI API</b>。这里保存的 AI Studio 密钥不会影响 Vertex 模式。</p>
-                    <p style="margin-top: 8px;"><b>覆盖规则：</b><br>如果你在主面板填写了 API 密钥，本次请求会优先使用主面板中的密钥，覆盖这里保存的默认值。</p>
-                </div>
-                <div class="aistudio-note-card">
-                    <div class="aistudio-note-title"><i class="fas fa-triangle-exclamation"></i> 费用提醒</div>
-                    <div class="aistudio-note-body">
-                        Gemini API 与 Vertex AI 是两条不同的接入路径。不要默认认为你当前的 Vertex 或常规 GCP 额度会自动覆盖这部分调用。Google 官方明确说明：<b>Google Cloud welcome credits 不能用于抵扣 Gemini API usage</b>。请务必到生成该 AI Studio / Gemini API 密钥的项目里单独核对账单与配额。
-                    </div>
-                    <div class="aistudio-note-links">
-                        <a href="https://ai.google.dev/gemini-api/docs/quickstart?hl=zh-cn" target="_blank">快速开始</a>
-                        <a href="https://ai.google.dev/gemini-api/docs/pricing?hl=zh-cn" target="_blank">定价说明</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </aside>
-
-    <aside id="proxy-sidebar" class="history-sidebar proxy-sidebar">
-        <div class="history-sidebar-header">
-            <h3><i class="fas fa-server"></i> 本地反代 API</h3>
-            <button id="proxy-sidebar-close" class="history-sidebar-close" title="关闭">
-                <i class="fas fa-xmark"></i>
-            </button>
-        </div>
-        <div class="sidebar-content-scroll">
-            <div class="sidebar-usage-section" style="border-top:none; padding-top:0;">
-                <div class="sidebar-usage-title" style="margin-bottom:12px;">
-                    <i class="fas fa-sliders"></i> 反代设置
-                </div>
-                <label class="proxy-config-switch">
-                    <input type="checkbox" id="proxy-enabled">
-                    <span>自动模式优先走本地反代</span>
-                </label>
-                <div class="sidebar-usage-form proxy-form-grid">
-                    <input type="text" id="proxy-base-url" class="usage-query-input proxy-config-input" placeholder="接口地址，例如 http://127.0.0.1:8045">
-                    <input type="password" id="proxy-api-key" class="usage-query-input proxy-config-input" placeholder="反代 Token / API Key（可留空）">
-                    <div class="proxy-inline-field">
-                        <label for="proxy-timeout">超时（秒）</label>
-                        <input type="number" id="proxy-timeout" class="usage-query-input proxy-config-input" min="30" max="600" step="5" placeholder="180">
-                    </div>
-                    <input type="text" id="proxy-flash-model" class="usage-query-input proxy-config-input" placeholder="Flash 模型名，例如 gemini-3.1-flash-image">
-                    <input type="text" id="proxy-pro-model" class="usage-query-input proxy-config-input" placeholder="Pro 模型名，例如 gemini-3-pro-image">
-                </div>
-                <div class="proxy-sidebar-actions">
-                    <button id="proxy-save-btn" class="usage-query-btn">
-                        <i class="fas fa-save"></i> 保存配置
-                    </button>
-                    <button id="proxy-test-btn" class="usage-query-btn secondary">
-                        <i class="fas fa-vial"></i> 测试连接
-                    </button>
-                </div>
-                <div id="proxy-test-result" class="usage-query-result hidden"></div>
-                <div class="api-help-text" style="font-size: 12px; color: var(--text-secondary); margin-top: 15px; line-height: 1.6;">
-                    <p>用于接入本机 Antigravity / Gemini 兼容反代。启用后，自动模式会优先走这里配置的本地反代通道。</p>
-                    <p style="margin-top: 8px;"><b>推荐默认值：</b><br>接口地址使用 <code>http://127.0.0.1:8045</code>，Flash 模型填 <code>gemini-3.1-flash-image</code>，Pro 模型填 <code>gemini-3-pro-image</code>。</p>
-                    <p style="margin-top: 8px;"><b>认证说明：</b><br>后端会同时尝试发送 <code>x-goog-api-key</code> 和 <code>Authorization: Bearer ...</code>，兼容常见 Gemini 反代配置。</p>
-                </div>
-                <div class="proxy-guide-card">
-                    <div class="proxy-guide-title">
-                        <i class="fas fa-circle-play"></i> 启动 API 反代教程
-                    </div>
-                    <ol class="proxy-guide-steps">
-                        <li>先打开 Antigravity Tools，在 <b>API 反代</b> 页面把端口设为 <code>8045</code>，然后点击 <b>启动服务</b>。</li>
-                        <li>建议开启 <b>访问授权</b>，不要保持“开放”模式；复制里面的 API 密钥，填到上面的 <b>反代 Token / API Key</b>。</li>
-                        <li>在 Antigravity 的 <b>账号管理</b> 页面确认账号不是“反代已禁用”，否则即使服务启动也不会参与调度。</li>
-                        <li>在 Antigravity 的模型列表中确认实际可用模型名。优先填写 <code>gemini-3.1-flash-image</code> 和 <code>gemini-3-pro-image</code>；如果你的反代暴露的是别名，就按实际名称填写。</li>
-                        <li>回到这里，填好 <b>接口地址</b>、Token、模型名后，先点 <b>保存配置</b>，再点 <b>测试连接</b>。测试成功后即可在主界面切换到 <b>本地反代</b> 或保留 <b>自动</b> 模式。</li>
-                    </ol>
-                    <div class="proxy-guide-note">
-                        <b>排错提示：</b> 如果测试里 `contains_flash_model` 为否，但 `contains_pro_model` 为是，说明当前反代只暴露了 `gemini-3-pro-image`，这时请先把 Flash 模型名改成实际暴露的名字，或者先只使用 Pro。
-                    </div>
-                </div>
-            </div>
-        </div>
-    </aside>
-
-    <aside id="history-sidebar" class="history-sidebar">
-        <div class="history-sidebar-header">
-            <h3><i class="fas fa-clock-rotate-left"></i> 历史记录</h3>
-            <button id="history-sidebar-close" class="history-sidebar-close" title="关闭">
-                <i class="fas fa-xmark"></i>
-            </button>
-        </div>
-
-        <!-- 用户认证区域 -->
-        <div id="auth-section" class="auth-section">
-            <!-- 未登录：显示登录/注册表单 -->
-            <div id="auth-form" class="auth-form">
-                <div class="auth-prompt">
-                    <i class="fas fa-user-lock"></i>
-                    <span>登录后可保存历史记录(24h)</span>
-                </div>
-                <div class="auth-inputs">
-                    <input type="text" id="auth-username" placeholder="用户名" autocomplete="username">
-                    <input type="password" id="auth-password" placeholder="密码" autocomplete="current-password">
-                </div>
-                <div class="auth-buttons">
-                    <button id="auth-login-btn" class="auth-btn auth-login">登录</button>
-                    <button id="auth-register-btn" class="auth-btn auth-register">注册</button>
-                </div>
-                <div id="auth-error" class="auth-error hidden"></div>
-            </div>
-            <!-- 已登录：显示用户信息 -->
-            <div id="auth-status" class="auth-status hidden">
-                <div class="auth-user-info">
-                    <i class="fas fa-user-check"></i>
-                    <span id="auth-username-display"></span>
-                </div>
-                <div class="auth-actions">
-                    <button id="manage-keys-btn" class="auth-btn auth-keys" title="管理 API Key">
-                        <i class="fas fa-key"></i> Key管理
-                    </button>
-                    <button id="auth-logout-btn" class="auth-btn auth-logout">退出</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- 会话列表视图 -->
-        <div id="history-list-view" class="history-list-view">
-            <div id="history-list" class="history-list">
-                <div class="history-empty">
-                    <i class="fas fa-inbox"></i>
-                    <p>暂无历史记录</p>
-                    <span>生成完成后会自动保存</span>
-                </div>
-            </div>
-            <div class="history-list-footer">
-                <button id="history-clear-all" class="history-clear-btn">
-                    <i class="fas fa-trash-alt"></i> 清空全部
-                </button>
-            </div>
-        </div>
-
-        <!-- 会话详情视图 -->
-        <div id="history-detail-view" class="history-detail-view hidden">
-            <div class="history-detail-header">
-                <button id="history-back-btn" class="history-back-btn">
-                    <i class="fas fa-arrow-left"></i> 返回列表
-                </button>
-                <span id="history-detail-time" class="history-detail-time"></span>
-            </div>
-            <div class="history-detail-content">
-                <!-- 参考图区域 -->
-                <div class="history-section">
-                    <h4><i class="fas fa-user"></i> 人物参考图</h4>
-                    <div id="history-ref-images" class="history-image-grid"></div>
-                </div>
-                <!-- 漫画参考图区域 -->
-                <div class="history-section">
-                    <h4><i class="fas fa-image"></i> 漫画参考图</h4>
-                    <div id="history-tgt-images" class="history-image-grid"></div>
-                </div>
-                <!-- 生成图区域 -->
-                <div class="history-section">
-                    <h4><i class="fas fa-wand-magic-sparkles"></i> 生成结果 <span id="history-gen-count"
-                            class="history-gen-count"></span></h4>
-                    <div id="history-gen-images" class="history-image-grid history-gen-grid"></div>
-                </div>
-            </div>
-            <div class="history-detail-footer">
-                <button id="history-download-all" class="history-action-btn accent">
-                    <i class="fas fa-file-zipper"></i> 打包全部
-                </button>
-                <button id="history-download-selected" class="history-action-btn" style="display:none">
-                    <i class="fas fa-download"></i> 下载选中 (<em id="history-sel-count">0</em>)
-                </button>
-                <button id="history-delete-session" class="history-action-btn danger">
-                    <i class="fas fa-trash"></i> 删除
-                </button>
-            </div>
-        </div>
-
-        <!-- API 用量查询 (公开功能) -->
-        <div class="sidebar-usage-section">
-            <div class="sidebar-usage-title">
-                <i class="fas fa-chart-pie"></i> API 用量查询
-            </div>
-            <div class="sidebar-usage-form">
-                <input type="password" id="usage-query-key" class="usage-query-input" placeholder="粘贴 API Key 查询用量">
-                <button id="usage-query-btn" class="usage-query-btn">
-                    <i class="fas fa-search"></i> 查询
-                </button>
-            </div>
-            <div id="usage-query-result" class="usage-query-result hidden">
-                <!-- JS 动态填充 -->
-            </div>
-        </div>
-    </aside>
-
     <!-- 通知容器 -->
     <div id="notification-container"></div>
     <!-- Background globes removed for Apple Design System -->
@@ -409,11 +66,6 @@
                         <span>已从羽绒服推荐结果进入试穿</span>
                     </div>
                 </div>
-                <button id="open-history-btn" class="history-btn" title="查看试穿记录">
-                    <i class="fas fa-clock-rotate-left"></i>
-                    <span>试穿记录</span>
-                    <span id="history-badge" class="history-badge" style="display: none;">0</span>
-                </button>
             </div>
 
             <div class="hero-grid">
@@ -658,98 +310,22 @@
                         </div>
                     </div>
 
-                    <div class="style-presets-section">
-                        <div class="section-label">
-                            <i class="fas fa-snowflake"></i> 羽绒服场景风格
-                        </div>
-                        <div class="style-presets-grid style-presets-rich" id="style-presets">
-                            <div class="style-group-title">冬季推荐风格</div>
-                            <button class="style-card active" data-style="default" type="button">
-                                <div class="style-icon"><i class="fas fa-shirt"></i></div>
-                                <div class="style-name">推荐同款还原</div>
-                                <div class="style-desc">优先保留推荐商品版型与质感</div>
-                            </button>
-                            <button class="style-card" data-style="urban" type="button">
-                                <div class="style-icon"><i class="fas fa-city"></i></div>
-                                <div class="style-name">都市通勤</div>
-                                <div class="style-desc">利落、实穿、适合日常通勤</div>
-                            </button>
-                            <button class="style-card" data-style="minimal" type="button">
-                                <div class="style-icon"><i class="fas fa-gem"></i></div>
-                                <div class="style-name">高级极简</div>
-                                <div class="style-desc">静奢冷调，强调高级面料观感</div>
-                            </button>
-                            <button class="style-card" data-style="outdoor" type="button">
-                                <div class="style-icon"><i class="fas fa-mountain"></i></div>
-                                <div class="style-name">轻户外</div>
-                                <div class="style-desc">清透冬日光线，保留功能外套气质</div>
-                            </button>
-                            <button class="style-card" data-style="street" type="button">
-                                <div class="style-icon"><i class="fas fa-road"></i></div>
-                                <div class="style-name">冬季街头</div>
-                                <div class="style-desc">更有造型感的城市冬日氛围</div>
-                            </button>
-                            <button class="style-card" data-style="layered" type="button">
-                                <div class="style-icon"><i class="fas fa-layer-group"></i></div>
-                                <div class="style-name">轻薄内搭</div>
-                                <div class="style-desc">强调层次与修身保暖关系</div>
-                            </button>
-                            <button class="style-card" data-style="puffer" type="button">
-                                <div class="style-icon"><i class="fas fa-cloud"></i></div>
-                                <div class="style-name">面包服氛围</div>
-                                <div class="style-desc">突出蓬松体量与软糯面料质感</div>
-                            </button>
-                            <button class="style-card" data-style="editorial" type="button">
-                                <div class="style-icon"><i class="fas fa-camera-retro"></i></div>
-                                <div class="style-name">杂志大片</div>
-                                <div class="style-desc">高端时尚拍摄感，更适合展示成片</div>
-                            </button>
-
-                            <div class="style-group-title style-group-title-secondary">扩展风格</div>
-                            <button class="style-card" data-style="cinematic" type="button">
-                                <div class="style-icon"><i class="fas fa-film"></i></div>
-                                <div class="style-name">电影质感</div>
-                                <div class="style-desc">影视级光影氛围</div>
-                            </button>
-                            <button class="style-card" data-style="elegant" type="button">
-                                <div class="style-icon"><i class="fas fa-star"></i></div>
-                                <div class="style-name">优雅写真</div>
-                                <div class="style-desc">偏时尚人像与精致妆造</div>
-                            </button>
-                            <button class="style-card" data-style="cyberpunk" type="button">
-                                <div class="style-icon"><i class="fas fa-bolt"></i></div>
-                                <div class="style-name">赛博朋克</div>
-                                <div class="style-desc">保留通用扩展风格能力</div>
-                            </button>
-                            <button class="style-card" data-style="anime" type="button">
-                                <div class="style-icon"><i class="fas fa-wand-magic-sparkles"></i></div>
-                                <div class="style-name">二次元融合</div>
-                                <div class="style-desc">保留原有泛风格试衣通道</div>
-                            </button>
-                            <button class="style-card" data-style="fantasy" type="button">
-                                <div class="style-icon"><i class="fas fa-crown"></i></div>
-                                <div class="style-name">奇幻史诗</div>
-                                <div class="style-desc">适合作为创意扩展模式</div>
-                            </button>
-                        </div>
-                    </div>
-
                     <div class="model-selector-section">
                         <div class="section-label">
                             <i class="fas fa-microchip"></i> 生成模型
                         </div>
                         <div class="model-selector-grid" id="model-selector">
-                            <div class="model-card active" data-model="flash" data-aistudio-model="gemini-3.1-flash-image-preview" data-model-alias="Nano Banana 2">
+                            <div class="model-card active" data-model="flash" data-model-alias="Gemini Flash Image">
                                 <div class="model-card-icon">快</div>
                                 <div class="model-card-body">
-                                    <div class="model-card-name">Nano Banana 2</div>
+                                    <div class="model-card-name">Gemini Flash Image</div>
                                     <div class="model-card-desc">更快出图，适合先看羽绒服上身感觉</div>
                                 </div>
                             </div>
-                            <div class="model-card" data-model="pro" data-aistudio-model="gemini-3-pro-image-preview" data-model-alias="Nano Banana Pro">
+                            <div class="model-card" data-model="pro" data-model-alias="Gemini Pro Image">
                                 <div class="model-card-icon">精</div>
                                 <div class="model-card-body">
-                                    <div class="model-card-name">Nano Banana Pro</div>
+                                    <div class="model-card-name">Gemini Pro Image</div>
                                     <div class="model-card-desc">细节更强，更适合最终定稿与下载</div>
                                 </div>
                             </div>
@@ -794,7 +370,7 @@
                     <div class="step-badge">4</div>
                     <div class="header-text">
                         <h2>试穿结果展示台</h2>
-                        <p>同时对比用户原图、商品图和试穿结果，并支持下载、重试与切换风格</p>
+                        <p>同时对比用户原图、商品图和试穿结果，并支持下载与重试</p>
                     </div>
                 </div>
 
@@ -839,12 +415,6 @@
                     </button>
                     <button id="result-retry-btn" class="glass-btn small-btn" type="button">
                         <i class="fas fa-rotate-right"></i> 重新生成
-                    </button>
-                    <button id="cycle-style-btn" class="glass-btn small-btn" type="button">
-                        <i class="fas fa-swatchbook"></i> 切换风格
-                    </button>
-                    <button id="save-history-btn" class="glass-btn small-btn" type="button">
-                        <i class="fas fa-bookmark"></i> 保存记录
                     </button>
                 </div>
 
@@ -897,17 +467,11 @@
             <details id="advanced-workbench" class="advanced-workbench">
                 <summary>
                     <span>高级设置 / 开发者设置 / 管理员设置</span>
-                    <span class="advanced-summary-text">保留原有 API 配置、生成通道、批量生成、日志与历史能力，但默认不打断试穿主流程。</span>
+                    <span class="advanced-summary-text">保留生成通道、批量生成与错误日志能力，但默认不打断试穿主流程。</span>
                 </summary>
                 <div class="advanced-content">
                     <div class="advanced-sidebar-grid">
-                        <button class="advanced-tool-btn" data-open-sidebar="history" type="button"><i class="fas fa-clock-rotate-left"></i> 历史记录</button>
-                        <button class="advanced-tool-btn" data-open-sidebar="usage" type="button"><i class="fas fa-chart-pie"></i> API 用量追踪</button>
                         <button class="advanced-tool-btn" data-open-sidebar="error" type="button"><i class="fas fa-bug"></i> 错误日志</button>
-                        <button class="advanced-tool-btn" data-open-sidebar="nanobanana" type="button"><i class="fas fa-plug"></i> Nano Banana</button>
-                        <button class="advanced-tool-btn" data-open-sidebar="vertex" type="button"><i class="fas fa-key"></i> Vertex 凭证</button>
-                        <button class="advanced-tool-btn" data-open-sidebar="aistudio" type="button"><i class="fas fa-bolt"></i> AI Studio</button>
-                        <button class="advanced-tool-btn" data-open-sidebar="proxy" type="button"><i class="fas fa-server"></i> 本地反代</button>
                     </div>
 
                     <div class="prompt-trigger-container">
@@ -953,94 +517,6 @@
                             </div>
 
                             <div class="controls">
-                                <div class="api-keys-section">
-                                    <div class="section-label"><i class="fas fa-key"></i> API Key 管理</div>
-                                    <div class="api-input-group">
-                                        <input type="password" id="api-key" class="api-key-input" placeholder="API Key #1 (主)">
-                                        <i class="fa-solid fa-key input-icon"></i>
-                                    </div>
-                                    <div id="extra-api-keys" class="extra-api-keys hidden">
-                                        <div class="api-input-group">
-                                            <input type="password" id="api-key-2" class="api-key-input" placeholder="API Key #2">
-                                            <span class="api-key-num">2</span>
-                                        </div>
-                                        <div class="api-input-group">
-                                            <input type="password" id="api-key-3" class="api-key-input" placeholder="API Key #3">
-                                            <span class="api-key-num">3</span>
-                                        </div>
-                                        <div class="api-input-group">
-                                            <input type="password" id="api-key-4" class="api-key-input" placeholder="API Key #4">
-                                            <span class="api-key-num">4</span>
-                                        </div>
-                                        <div class="api-input-group">
-                                            <input type="password" id="api-key-5" class="api-key-input" placeholder="API Key #5">
-                                            <span class="api-key-num">5</span>
-                                        </div>
-                                    </div>
-                                    <button type="button" id="toggle-extra-keys" class="toggle-keys-btn">
-                                        <i class="fas fa-plus"></i> 添加更多 API Key（分散限额）
-                                    </button>
-                                    <button type="button" id="fill-saved-keys-btn" class="fill-keys-btn hidden">
-                                        <i class="fas fa-cloud-arrow-down"></i> 一键填充已保存的 Key
-                                    </button>
-                                </div>
-
-                                <div class="provider-selector-section">
-                                    <div class="section-label">
-                                        <i class="fas fa-route"></i> 生成通道
-                                    </div>
-                                    <div class="provider-selector-grid" id="provider-selector">
-                                        <div class="provider-card" data-provider="auto">
-                                            <div class="provider-card-icon"><i class="fas fa-wand-magic-sparkles"></i></div>
-                                            <div class="provider-card-body">
-                                                <div class="provider-card-name">自动</div>
-                                                <div class="provider-card-desc">优先本地反代，其次 Nano Banana，最后官方直连</div>
-                                            </div>
-                                        </div>
-                                        <div class="provider-card active" data-provider="direct">
-                                            <div class="provider-card-icon"><i class="fas fa-cloud"></i></div>
-                                            <div class="provider-card-body">
-                                                <div class="provider-card-name">Vertex AI API（默认）</div>
-                                                <div class="provider-card-desc">使用服务端 Vertex AI 凭据直接生成</div>
-                                            </div>
-                                        </div>
-                                        <div class="provider-card" data-provider="aistudio">
-                                            <div class="provider-card-icon"><i class="fas fa-bolt"></i></div>
-                                            <div class="provider-card-body">
-                                                <div class="provider-card-name">Google AI Studio 接口</div>
-                                                <div class="provider-card-desc">使用 Google AI Studio / Gemini API 密钥直接生成</div>
-                                            </div>
-                                        </div>
-                                        <div class="provider-card" data-provider="proxy">
-                                            <div class="provider-card-icon"><i class="fas fa-server"></i></div>
-                                            <div class="provider-card-body">
-                                                <div class="provider-card-name">本地反代</div>
-                                                <div class="provider-card-desc">调用本机 127.0.0.1:8045 等本地反代服务</div>
-                                            </div>
-                                        </div>
-                                        <div class="provider-card" data-provider="nanobanana">
-                                            <div class="provider-card-icon"><i class="fas fa-plug"></i></div>
-                                            <div class="provider-card-body">
-                                                <div class="provider-card-name">Nano Banana</div>
-                                                <div class="provider-card-desc">使用第三方 Nano Banana API 执行生成</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div id="provider-mode-hint" class="provider-mode-hint">当前默认通道为 Vertex AI API。</div>
-                                </div>
-
-                                <div class="api-usage-section hidden" id="api-usage-section">
-                                    <div class="api-usage-header" id="api-usage-toggle">
-                                        <i class="fas fa-chart-bar"></i>
-                                        <span>API 用量统计</span>
-                                        <span class="api-usage-total" id="api-usage-total-cost"></span>
-                                        <i class="fas fa-chevron-down api-usage-chevron"></i>
-                                    </div>
-                                    <div class="api-usage-body hidden" id="api-usage-body">
-                                        <div id="api-usage-list"></div>
-                                    </div>
-                                </div>
-
                                 <div class="batch-controls">
                                     <div class="batch-input-group">
                                         <label for="batch-count">
@@ -1078,7 +554,7 @@
                                     <div class="api-rate-limit-notice" id="rate-limit-notice">
                                         <i class="fas fa-exclamation-triangle"></i>
                                         <div class="rate-limit-text">
-                                            <strong>API 速率限制 <span id="rate-model-label" class="rate-model-tag">Nano Banana 2</span></strong>
+                                            <strong>API 速率限制 <span id="rate-model-label" class="rate-model-tag">Gemini Flash Image</span></strong>
                                             <span>RPM <b id="rate-rpm-used">0</b>/<b id="rate-rpm">100</b> · TPM <b id="rate-tpm-used">0</b>/<b id="rate-tpm">200K</b> · RPD <b id="rate-rpd-used">0</b>/<b id="rate-rpd">1000</b> · 分钟重置 <b id="rate-minute-countdown">--:--</b> · 每日重置(PT) <b id="reset-countdown">--:--:--</b></span>
                                         </div>
                                     </div>
@@ -1119,7 +595,7 @@
         </section>
 
         <footer>
-            <p>Powered by Antigravity Engine | 当前模型：<span id="footer-model-name">Nano Banana 2</span></p>
+            <p>Powered by Google AI Studio | 当前模型：<span id="footer-model-name">Gemini Flash Image</span></p>
         </footer>
     </div>
 
@@ -1212,21 +688,6 @@
         </div>
     </div>
 
-    <!-- History Modal -->
-    <div id="history-modal" class="modal-overlay hidden">
-        <div class="modal-content glass-panel gallery-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-clock-rotate-left"></i> 生成历史</h3>
-            </div>
-            <div class="modal-body">
-                <div class="gallery-grid" id="history-grid-container"></div>
-            </div>
-            <div class="modal-footer">
-                <button id="close-history-btn" class="glow-button small">关闭</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Image Lightbox Modal -->
     <div id="lightbox-modal" class="lightbox-overlay hidden">
         <button class="lightbox-close" id="lightbox-close" title="关闭">
@@ -1258,39 +719,7 @@
         </div>
     </div>
 
-    <!-- API Key 管理模态弹窗 -->
-    <div id="keys-modal-overlay" class="keys-modal-overlay hidden">
-        <div class="keys-modal">
-            <div class="keys-modal-header">
-                <h3><i class="fas fa-key"></i> API Key 管理</h3>
-                <button id="keys-modal-close" class="keys-modal-close"><i class="fas fa-xmark"></i></button>
-            </div>
-            <div class="keys-modal-body">
-                <!-- 已保存的 Key 列表 -->
-                <div id="saved-keys-list" class="saved-keys-list">
-                    <p class="keys-loading"><i class="fas fa-spinner fa-spin"></i> 加载中...</p>
-                </div>
-                <!-- 添加新 Key -->
-                <div class="add-key-form">
-                    <div class="add-key-row">
-                        <input type="text" id="new-key-name" class="add-key-input" placeholder="备注名（可选）" maxlength="50">
-                        <input type="password" id="new-key-value" class="add-key-input add-key-value"
-                            placeholder="粘贴 API Key">
-                        <button id="add-key-btn" class="add-key-btn"><i class="fas fa-plus"></i> 保存</button>
-                    </div>
-                    <div id="add-key-error" class="add-key-error hidden"></div>
-                </div>
-            </div>
-            <div class="keys-modal-footer">
-                <button id="keys-fill-selected" class="keys-fill-btn"><i class="fas fa-arrow-down"></i> 填充选中的 Key
-                    到输入框</button>
-                <button id="keys-fill-all" class="keys-fill-btn keys-fill-all"><i
-                        class="fas fa-arrows-down-to-line"></i> 全部填充</button>
-            </div>
-        </div>
-    </div>
-
-    <script src="/static/js/script.js"></script>
+    <script src="/static/js/script.js?v=20260606-errors-only"></script>
     <script>
     /* Global image error handler — Apple-style fallback */
     document.addEventListener('error', function(e) {

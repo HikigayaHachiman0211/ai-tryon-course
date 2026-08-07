@@ -30,6 +30,13 @@ def _check_magic(data: bytes) -> str | None:
     return None
 
 
+def _resolve_image_url(model: SampleModel) -> str:
+    object_name = f"sample_models/{model.gender}/{model.image_filename}"
+    if not model.gcs_url or model.gcs_url.startswith("https://storage.googleapis.com/"):
+        return gcs.get_blob_url(object_name)
+    return model.gcs_url
+
+
 # ---- Public API (no auth) ----
 
 @router.get("/api/sample-models")
@@ -43,7 +50,7 @@ def public_list(gender: str = "", db=Depends(get_db)):
             "id": m.id,
             "name": m.name,
             "gender": m.gender,
-            "image_url": m.gcs_url,
+            "image_url": _resolve_image_url(m),
         }
         for m in models
     ]
@@ -268,7 +275,7 @@ def _serialize(m: SampleModel) -> dict:
         "name": m.name,
         "gender": m.gender,
         "image_filename": m.image_filename,
-        "gcs_url": m.gcs_url,
+        "gcs_url": _resolve_image_url(m),
         "thumbnail_url": m.thumbnail_url,
         "display_order": m.display_order,
         "is_active": m.is_active,
