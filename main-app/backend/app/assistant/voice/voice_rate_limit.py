@@ -16,16 +16,30 @@ _WINDOW_SECONDS = 60
 
 # {key: [timestamp, ...]}
 _buckets: dict[str, list[float]] = defaultdict(list)
+_last_full_cleanup = 0.0
 
 
 def _cleanup_old_entries(key: str, now: float) -> None:
     """Remove entries older than the window; delete empty buckets to bound memory."""
-    bucket = _buckets[key]
+    bucket = _buckets.get(key)
+    if bucket is None:
+        return
     cutoff = now - _WINDOW_SECONDS
     while bucket and bucket[0] < cutoff:
         bucket.pop(0)
     if not bucket:
         del _buckets[key]
+
+
+def _cleanup_expired_buckets(now: float) -> None:
+    global _last_full_cleanup
+    if now >= _last_full_cleanup and now - _last_full_cleanup < _WINDOW_SECONDS:
+        return
+    _last_full_cleanup = now
+    cutoff = now - _WINDOW_SECONDS
+    for key, bucket in list(_buckets.items()):
+        if not bucket or bucket[-1] < cutoff:
+            del _buckets[key]
 
 
 def check_rate_limit(session_id: str, endpoint: Literal["asr", "tts"]) -> tuple[bool, str]:
@@ -37,11 +51,12 @@ def check_rate_limit(session_id: str, endpoint: Literal["asr", "tts"]) -> tuple[
         return True, ""
 
     now = time.time()
+    _cleanup_expired_buckets(now)
     key = f"{endpoint}:{session_id}"
     _cleanup_old_entries(key, now)
 
     limit = _ASR_LIMIT if endpoint == "asr" else _TTS_LIMIT
-    count = len(_buckets[key])
+    count = len(_buckets.get(key, []))
 
     if count >= limit:
         remaining = int(_WINDOW_SECONDS - (now - _buckets[key][0]))
@@ -54,11 +69,12 @@ def check_rate_limit(session_id: str, endpoint: Literal["asr", "tts"]) -> tuple[
 def get_rate_limit_info(session_id: str, endpoint: Literal["asr", "tts"]) -> dict:
     """Get current rate limit status for a session."""
     now = time.time()
+    _cleanup_expired_buckets(now)
     key = f"{endpoint}:{session_id}"
     _cleanup_old_entries(key, now)
 
     limit = _ASR_LIMIT if endpoint == "asr" else _TTS_LIMIT
-    count = len(_buckets[key])
+    count = len(_buckets.get(key, []))
 
     return {
         "limit": limit,

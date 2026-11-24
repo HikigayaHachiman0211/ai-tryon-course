@@ -6,9 +6,7 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings
 
-# Local development gets a process-local JWT key so no reusable secret is
-# committed to source control. Production validation rejects this ephemeral
-# value and requires an injected JWT_SECRET_KEY.
+# Require explicit credentials for admin setup and use a process-local signing key for development.
 _EPHEMERAL_DEV_JWT_SECRET = secrets.token_urlsafe(48)
 _DEFAULT_ADMIN_PASSWORD = ""
 _DEFAULT_INGEST_KEY = ""
@@ -16,15 +14,28 @@ _DEFAULT_INGEST_KEY = ""
 
 class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./admin_local.db"
+    OBJECT_STORAGE_PROVIDER: str = "local"
+    AZURE_STORAGE_ACCOUNT_NAME: str = ""
+    AZURE_STORAGE_CONNECTION_STRING: str = ""
+    AZURE_PRODUCT_CONTAINER: str = "product-assets"
+    AZURE_MEDIA_CONTAINER: str = "course-media"
+    AZURE_BACKUP_CONTAINER: str = "backups"
+    OSS_REGION: str = ""
+    OSS_ENDPOINT: str = ""
+    OSS_PRODUCT_BUCKET: str = ""
+    OSS_MEDIA_BUCKET: str = ""
+    OSS_BACKUP_BUCKET: str = ""
     GCS_BUCKET_NAME: str = ""
     JWT_SECRET_KEY: str = _EPHEMERAL_DEV_JWT_SECRET
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_HOURS: int = 24
     ADMIN_INIT_USERNAME: str = "admin"
     ADMIN_INIT_PASSWORD: str = _DEFAULT_ADMIN_PASSWORD
+    ADMIN_RECOVERY_KEY: str = ""
     MAIN_SITE_URL: str = "http://localhost:8000"
     TRYON_WORKBENCH_URL: str = ""
     PUBLIC_IMAGE_BASE_URL: str = ""
+    PUBLIC_MEDIA_BASE_URL: str = ""
     CORS_ALLOW_ORIGINS: str = "*"
     GEMINI_API_KEY: str = ""
     INGEST_SECRET_KEY: str = _DEFAULT_INGEST_KEY
@@ -32,6 +43,14 @@ class Settings(BaseSettings):
     FERNET_SECRET_KEY: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
+
+    def model_post_init(self, __context) -> None:
+        if (
+            self.OBJECT_STORAGE_PROVIDER.strip().lower() == "oss"
+            and (not self.PUBLIC_IMAGE_BASE_URL or "PUBLIC_IMAGE_BASE_URL" not in self.model_fields_set)
+            and self.OSS_REGION and self.OSS_PRODUCT_BUCKET
+        ):
+            self.PUBLIC_IMAGE_BASE_URL = f"https://{self.OSS_PRODUCT_BUCKET}.oss-{self.OSS_REGION}.aliyuncs.com"
 
 
 @lru_cache()
@@ -70,27 +89,22 @@ def validate_production_settings(settings: Settings) -> list[str]:
     issues: list[str] = []
     if settings.JWT_SECRET_KEY == _EPHEMERAL_DEV_JWT_SECRET or len(settings.JWT_SECRET_KEY) < 32:
         issues.append(
-            "JWT_SECRET_KEY is missing, ephemeral, or too short (<32 chars) — "
+            "JWT_SECRET_KEY is the default or too short (<32 chars) — "
             "admin tokens can be forged. Set a strong secret in JWT_SECRET_KEY."
         )
-    if not settings.ADMIN_INIT_PASSWORD or len(settings.ADMIN_INIT_PASSWORD) < 12:
+    if len(settings.ADMIN_INIT_PASSWORD) < 12:
         issues.append(
             "ADMIN_INIT_PASSWORD is missing or too short (<12 chars) — "
-            "set a strong initial administrator password."
+            "admin user will not be auto-created. Set ADMIN_INIT_PASSWORD to a strong password."
         )
     if settings.CORS_ALLOW_ORIGINS.strip() == "*":
         issues.append(
             "CORS_ALLOW_ORIGINS='*' in production — restricting to same-origin. "
             "Set CORS_ALLOW_ORIGINS to the real admin frontend URL."
         )
-    if not settings.INGEST_SECRET_KEY or len(settings.INGEST_SECRET_KEY) < 32:
+    if len(settings.INGEST_SECRET_KEY) < 32:
         issues.append(
             "INGEST_SECRET_KEY is missing or too short (<32 chars) — anyone can write fake analytics. "
             "Set a strong secret in INGEST_SECRET_KEY."
-        )
-    if not settings.FERNET_SECRET_KEY:
-        issues.append(
-            "FERNET_SECRET_KEY is missing — stored provider API keys cannot be encrypted safely. "
-            "Set FERNET_SECRET_KEY before enabling provider configuration."
         )
     return issues

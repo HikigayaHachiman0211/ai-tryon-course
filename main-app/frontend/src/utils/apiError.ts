@@ -1,9 +1,14 @@
 import { isAxiosError } from 'axios';
 import type { ErrorResponse } from '../types';
 
-export const toApiError = (err: unknown, fallbackMessage = '网络请求失败，请检查后端服务是否已启动'): ErrorResponse['error'] => {
+export const toApiError = (err: unknown, fallbackMessage = 'Request failed'): ErrorResponse['error'] => {
   if (isAxiosError<ErrorResponse>(err) && err.response?.data?.error) {
-    return err.response.data.error;
+    const backendError = err.response.data.error;
+    return {
+      ...backendError,
+      message: 'Request failed',
+      request_id: backendError.request_id || 'unknown',
+    };
   }
   if (err instanceof Error) {
     return {

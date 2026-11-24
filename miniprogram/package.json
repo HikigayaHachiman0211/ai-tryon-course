@@ -1,0 +1,16 @@
+{
+  "name": "ai-down-jacket-tryon-mp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Native WeChat Mini Program for AI Down-Jacket Recommendation and Virtual Try-On",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "verify": "npm run typecheck && npm run test"
+  },
+  "devDependencies": {
+    "miniprogram-api-typings": "^4.1.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}

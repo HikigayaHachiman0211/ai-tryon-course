@@ -1,0 +1,13 @@
+{
+  "title": "Recommendation History",
+  "close": "Close",
+  "loading": "Loading…",
+  "empty": "No history yet",
+  "emptyHint": "Your recommendation and styling analyses will appear here automatically.",
+  "type": {"recommend": "Smart recommendation", "styleLab": "Custom styling"},
+  "count": "{{count}} items",
+  "score": "Score {{score}}",
+  "thumbnailAlt": "History thumbnail",
+  "loadFailed": "History could not be loaded",
+  "relative": {"now": "just now", "minutes": "{{count}} minutes ago", "hours": "{{count}} hours ago", "days": "{{count}} days ago"}
+}

@@ -1,0 +1,17 @@
+[Unit]
+Description=AI Try-On course deployment
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/ai-tryon-course/current
+ExecStart=/usr/bin/docker compose --env-file /opt/ai-tryon-course/shared/azure.env -f /opt/ai-tryon-course/current/deploy/azure/compose.yaml up -d --remove-orphans
+ExecStop=/usr/bin/docker compose --env-file /opt/ai-tryon-course/shared/azure.env -f /opt/ai-tryon-course/current/deploy/azure/compose.yaml stop
+TimeoutStartSec=0
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

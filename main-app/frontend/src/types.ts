@@ -1,3 +1,17 @@
+import type { AppLocale } from './i18n/locale';
+
+export type { AppLocale } from './i18n/locale';
+
+export interface LocalizedText {
+  title: string;
+  styleType: string;
+  colorFamily: string;
+  bodyFit: string;
+  styleFeatures: string[];
+  functionFeatures: string[];
+  sizeNotes: string;
+}
+
 export interface RecommendationRequest {
   photo?: File | null;
   color_preference: string;
@@ -14,12 +28,16 @@ export interface RecommendationRequest {
   deepseek_model?: string;
   mimo_api_key?: string;
   mimo_model?: string;
+  opencode_go_api_key?: string;
+  opencode_go_model?: string;
   ai_provider?: string;
-  vision_provider?: 'mimo' | 'gemini' | 'auto';
+  vision_provider?: 'mimo' | 'gemini' | 'deepseek' | 'opencode_go' | 'auto';
 }
 
 export interface RadarData {
   dimension: string;
+  code?: 'style' | 'color' | 'size' | 'brand' | 'gender' | 'price' | 'personality';
+  label?: string;
   score: number;
 }
 
@@ -41,10 +59,27 @@ export interface ProfileInference {
   ai_attempted?: boolean;
   rule_fallback_used?: boolean;
   provider_error_summary?: string | null;
+  display?: {
+    size: string;
+    style: string;
+    bodyShape: string;
+  };
 }
 
 export interface ProductCardBase {
   id: number;
+  product_key?: string;
+  locale?: AppLocale;
+  canonical?: {
+    id: number;
+    product_key: string;
+    price: number;
+    image_url: string;
+    product_url?: string | null;
+    platform?: string;
+    gender?: string;
+  };
+  display?: LocalizedText;
   title: string;
   price: number;
   image_url: string;
@@ -75,6 +110,7 @@ export interface ProductCatalogItem extends ProductCardBase {
 }
 
 export interface RecommendationResponse {
+  locale?: AppLocale;
   filters: {
     price_min: number | null;
     price_max: number | null;
@@ -92,6 +128,7 @@ export interface RecommendationResponse {
 }
 
 export interface ProductCatalogResponse {
+  locale?: AppLocale;
   items: ProductCatalogItem[];
   total: number;
   offset: number;
@@ -102,8 +139,10 @@ export interface ProductCatalogResponse {
 }
 
 export interface StyleLabAnalysisResponse {
+  locale?: AppLocale;
   product: ProductCatalogItem;
   inference: ProfileInference;
+  user_photo_url?: string;
   analysis: {
     total_score: number;
     brand_score?: number | null;

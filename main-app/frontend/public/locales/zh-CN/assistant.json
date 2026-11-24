@@ -1,0 +1,42 @@
+{
+  "header": "AI导购",
+  "welcome": "你好！我是你的羽绒服 AI 导购助手。告诉我你的穿搭需求吧。",
+  "inputPlaceholder": "输入你的需求，例如：黑色显瘦女款羽绒服，500以内...",
+  "thinking": "思考中...",
+  "send": "发送",
+  "clear": "清空对话",
+  "close": "关闭助手",
+  "windowSize": "窗口尺寸",
+  "voiceSettings": "语音设置",
+  "play": "播报这条消息",
+  "playPending": "点击播放",
+  "ttsGenerating": "正在生成语音",
+  "ttsStop": "停止播报",
+  "messageFailed": "消息发送失败，请稍后再试。",
+  "sendFailed": "消息发送失败，请检查网络连接",
+  "action": {
+    "extracted": "已提取推荐条件",
+    "fill": "填入表单",
+    "fillAndSubmit": "填入并生成推荐",
+    "cancel": "取消"
+  },
+  "field": {
+    "gender": "性别",
+    "color_preference": "颜色",
+    "price_min": "最低价格",
+    "price_max": "最高价格",
+    "brand_preference": "品牌",
+    "size": "尺码",
+    "mbti": "MBTI",
+    "style_preference": "风格",
+    "ai_provider": "AI引擎",
+    "vision_provider": "图像分析引擎",
+    "mimo_model": "MiMo模型",
+    "opencode_go_model": "OpenCode Go模型"
+  },
+  "gender": {"male": "男", "female": "女"},
+  "provider": {"mimo": "Xiaomi MiMo", "gemini": "Gemini", "deepseek": "DeepSeek", "opencode_go": "OpenCode Go", "auto": "自动"},
+  "emptyValue": "-",
+  "price": "¥{{value}}",
+  "sizePreset": {"compact": "小", "default": "默认", "large": "大", "wide": "宽屏", "custom": "自定义"}
+}

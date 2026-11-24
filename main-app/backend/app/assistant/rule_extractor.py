@@ -4,6 +4,56 @@ import re
 from typing import Any
 
 from app.assistant.config import DEFAULT_AI_PROVIDER, DEFAULT_MIMO_MODEL
+from app.deepseek_models import DEFAULT_DEEPSEEK_MODEL, DEEPSEEK_TEXT_MODELS
+from app.mimo_models import MIMO_TEXT_MODELS
+from app.opencode_go import DEFAULT_OPENCODE_GO_MODEL, OPENCODE_GO_MODELS
+
+
+def normalize_multilingual_text(text: str) -> str:
+    """Map English/Japanese shopping vocabulary to the canonical rule vocabulary.
+
+    The extractor still returns the same stable values as the original Chinese
+    rules; only the recognition surface is expanded.
+    """
+    normalized = text or ""
+    replacements = [
+        (r"\bwomen(?:'s)?\b|\bfemale\b|\bladies?\b|\blady\b|\b女の子\b|\b女性用\b|レディース|女性", "女款"),
+        (r"\bmen(?:'s)?\b|\bmale\b|\bgentlemen?\b|\b男の子\b|\b男性用\b|メンズ|男性", "男款"),
+        (r"\boff[- ]?white\b|\bivory\b|アイボリー|オフホワイト|米白", "米白"),
+        (r"\bblack\b|\bjet black\b|ブラック|黒", "黑色"),
+        (r"\bwhite\b|ホワイト|白", "白色"),
+        (r"\bnavy\b|ネイビー|紺", "藏青"),
+        (r"\bmist blue\b|\blight blue\b|\bblue\b|ミストブルー|ブルー|青", "蓝色"),
+        (r"\bgray\b|\bgrey\b|グレー|灰", "灰色"),
+        (r"\bgreen\b|グリーン|緑", "绿色"),
+        (r"\bred\b|レッド|赤", "红色"),
+        (r"\bkhaki\b|カーキ", "卡其色"),
+        (r"\bunder armour\b", "安德玛"),
+        (r"\bbosideng\b", "波司登"),
+        (r"\bli[- ]?ning\b", "李宁"),
+        (r"\badidas\b", "阿迪达斯"),
+        (r"\bnike\b", "耐克"),
+        (r"\buniqlo\b", "优衣库"),
+        (r"\bcamel\b", "骆驼"),
+        (r"\bthe north face\b|\bnorth face\b", "北面"),
+        (r"\bshort(?:[- ]length)?\b|\bcropped\b|ショート|短め", "短款"),
+        (r"\blightweight\b|\blight[- ]weight\b|軽量|ライトウェイト", "轻薄款"),
+        (r"\bquilted\b|\bchannel\b|キルティング", "绗缝款"),
+        (r"\bpuffer\b|\bdown coat\b|\bfluffy\b|パファー|ふわふわ", "面包服"),
+        (r"\blong(?:[- ]length)?\b|ロング|長め", "长款"),
+        (r"\bmid[- ]length\b|\bcoat\b|コート|ミドル丈", "中长款"),
+        (r"\bworkwear\b|\bbarn\b|\butility\b|ワークウェア|アウトドア", "工装"),
+        (r"\bparka\b|パーカー", "派克大衣"),
+        (r"\bvest\b|\bsleeveless\b|ベスト", "马甲"),
+        (r"\bminimal(?:ist)?\b|\bcommute\b|\bcommuter\b|\bversatile\b|\bbasic\b|\bclean\b|ミニマル|通勤|シンプル|万能", "简约"),
+        (r"\bbetween\s*(\d+)\s*(?:and|to)\s*(\d+)\b", r"\1到\2"),
+        (r"\b(?:under|below|within|up to)\s*(?:cny|rmb|¥|\$)?\s*(\d+(?:\.\d+)?)", r"\1以内"),
+        (r"\bbudget\s*(?:of\s*)?(\d+(?:\.\d+)?)", r"预算\1"),
+        (r"\b(?:size|wearing|wear)\s*(2?XL|3?XL|XXL|XXXL|XS|S|M|L)\b", r"尺码\1"),
+    ]
+    for pattern, replacement in replacements:
+        normalized = re.sub(pattern, replacement, normalized, flags=re.IGNORECASE)
+    return normalized
 
 
 # Gender patterns — longer/more-specific patterns first
@@ -69,6 +119,7 @@ def _parse_chinese_number(text: str) -> float | None:
 
 
 def extract_gender(text: str) -> str | None:
+    text = normalize_multilingual_text(text)
     for pattern, gender in GENDER_PATTERNS:
         if pattern.search(text):
             return gender
@@ -76,6 +127,7 @@ def extract_gender(text: str) -> str | None:
 
 
 def extract_color(text: str) -> str | None:
+    text = normalize_multilingual_text(text)
     found: list[tuple[int, int, str]] = []
     for keyword, color in COLOR_MAP.items():
         for position in _positive_mentions(text, keyword):
@@ -87,6 +139,7 @@ def extract_color(text: str) -> str | None:
 
 
 def extract_price(text: str) -> tuple[float | None, float | None]:
+    text = normalize_multilingual_text(text)
     price_min: float | None = None
     price_max: float | None = None
 
@@ -122,7 +175,7 @@ def extract_price(text: str) -> tuple[float | None, float | None]:
             return price_min, val
 
     # Pattern: 500以内, 五百以内, 不超过500, 低于500
-    max_match = re.search(r"(\d+)\s*(?:以内|以下|以下的|之内)", text)
+    max_match = re.search(r"(\d+)\s*(?:元|円|CNY|RMB)?\s*(?:以内|以下|以下的|之内)", text, flags=re.IGNORECASE)
     if max_match:
         price_max = float(max_match.group(1))
         return price_min, price_max
@@ -161,9 +214,9 @@ SIZE_ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL", "7XL
 VALUE_BRAND_CANDIDATES = ["罗蒙", "雅鹿", "鸭鸭", "雪中飞", "南极人", "骆驼", "李宁", "安踏"]
 PREMIUM_BRAND_CANDIDATES = ["波司登", "阿迪达斯", "耐克", "FILA", "优衣库", "李宁", "安踏", "骆驼"]
 VALID_GENDERS = {"male", "female"}
-VALID_AI_PROVIDERS = {"auto", "gemini", "deepseek", "mimo"}
-VALID_VISION_PROVIDERS = {"auto", "gemini", "mimo"}
-VALID_MIMO_MODELS = {"mimo-v2.5", "mimo-v2.5-pro", "mimo-v2-omni"}
+VALID_AI_PROVIDERS = {"auto", "gemini", "deepseek", "mimo", "opencode_go"}
+VALID_VISION_PROVIDERS = {"auto", "gemini", "deepseek", "mimo", "opencode_go"}
+VALID_MIMO_MODELS = set(MIMO_TEXT_MODELS)
 VALID_STYLES = (
     "常规短外套",
     "短款",
@@ -242,6 +295,7 @@ _PATCH_FIELDS = {
     "mimo_model",
     "gemini_model",
     "deepseek_model",
+    "opencode_go_model",
 }
 
 
@@ -265,6 +319,7 @@ def _positive_mentions(text: str, keyword: str) -> list[int]:
 
 
 def extract_brands(text: str) -> list[str]:
+    text = normalize_multilingual_text(text)
     found: list[tuple[int, str]] = []
     for brand in BRAND_LIST:
         positions = _positive_mentions(text, brand)
@@ -400,6 +455,7 @@ def infer_size_from_body_metrics(text: str) -> str | None:
 
 
 def extract_size(text: str) -> str | None:
+    text = normalize_multilingual_text(text)
     # Chinese size expressions: 大码, 加大码
     if "加大码" in text or "加加大" in text:
         return "3XL"
@@ -521,7 +577,7 @@ def sanitize_recommend_fields(text: str, form_patch: dict[str, Any]) -> dict[str
     else:
         cleaned.pop("mbti", None)
 
-    ai_provider, mimo_model = extract_ai_provider(text)
+    ai_provider, provider_model = extract_ai_provider(text)
     vision_provider = extract_vision_provider(text)
     if ai_provider in VALID_AI_PROVIDERS:
         cleaned["ai_provider"] = ai_provider
@@ -531,13 +587,14 @@ def sanitize_recommend_fields(text: str, form_patch: dict[str, Any]) -> dict[str
         cleaned["vision_provider"] = vision_provider
     else:
         cleaned.pop("vision_provider", None)
-    if mimo_model in VALID_MIMO_MODELS:
-        cleaned["mimo_model"] = mimo_model
-    else:
-        cleaned.pop("mimo_model", None)
-
-    for model_field in ("gemini_model", "deepseek_model"):
+    for model_field in ("mimo_model", "gemini_model", "deepseek_model", "opencode_go_model"):
         cleaned.pop(model_field, None)
+    if ai_provider == "mimo" and provider_model in VALID_MIMO_MODELS:
+        cleaned["mimo_model"] = provider_model
+    elif ai_provider == "deepseek" and provider_model:
+        cleaned["deepseek_model"] = provider_model
+    elif ai_provider == "opencode_go" and provider_model:
+        cleaned["opencode_go_model"] = provider_model
 
     return cleaned
 
@@ -559,6 +616,7 @@ def extract_mbti(text: str) -> str | None:
 
 
 def extract_style(text: str) -> str | None:
+    text = normalize_multilingual_text(text)
     found: list[tuple[int, str]] = []
     for keyword, style in STYLE_KEYWORDS:
         for position in _positive_mentions(text, keyword):
@@ -570,6 +628,7 @@ def extract_style(text: str) -> str | None:
 
 
 AI_PROVIDER_MAP: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"(OpenCode[\s_-]*Go|opencode)", re.IGNORECASE), "opencode_go"),
     (re.compile(r"(小米|MiMo|mimo|小米大模型)", re.IGNORECASE), "mimo"),
     (re.compile(r"(Gemini|gemini|谷歌)", re.IGNORECASE), "gemini"),
     (re.compile(r"(Deepseek|deepseek|深度求索)", re.IGNORECASE), "deepseek"),
@@ -577,6 +636,10 @@ AI_PROVIDER_MAP: list[tuple[re.Pattern[str], str]] = [
 
 # Vision-specific patterns: detect image analysis engine preference
 VISION_PROVIDER_MAP: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"(OpenCode[\s_-]*Go|opencode).*(图|照|看图|分析照|图像|识别)", re.IGNORECASE), "opencode_go"),
+    (re.compile(r"(图|照|看图|分析照|图像|识别).*(OpenCode[\s_-]*Go|opencode)", re.IGNORECASE), "opencode_go"),
+    (re.compile(r"(Deepseek|deepseek|深度求索).*(图|照|看图|分析照|图像|识别)", re.IGNORECASE), "deepseek"),
+    (re.compile(r"(图|照|看图|分析照|图像|识别).*(Deepseek|deepseek|深度求索)", re.IGNORECASE), "deepseek"),
     (re.compile(r"(Gemini|gemini|谷歌).*(图|照|看图|分析照|图像|识别)", re.IGNORECASE), "gemini"),
     (re.compile(r"(图|照|看图|分析照|图像|识别).*(Gemini|gemini|谷歌)", re.IGNORECASE), "gemini"),
     (re.compile(r"(小米|MiMo|mimo).*(图|照|看图|分析照|图像|识别)", re.IGNORECASE), "mimo"),
@@ -584,17 +647,32 @@ VISION_PROVIDER_MAP: list[tuple[re.Pattern[str], str]] = [
 ]
 
 
+def _match_model_in_text(text: str, candidates: tuple[str, ...]) -> str | None:
+    for model in sorted(candidates, key=len, reverse=True):
+        if re.search(r"(?<![A-Za-z0-9_.-])" + re.escape(model) + r"(?![A-Za-z0-9_.-])", text, re.IGNORECASE):
+            return model
+    return None
+
+
 def extract_ai_provider(text: str) -> tuple[str | None, str | None]:
+    text = normalize_multilingual_text(text)
     for pattern, provider in AI_PROVIDER_MAP:
         if pattern.search(text):
             if provider == "mimo":
-                return provider, "mimo-v2.5"
+                return provider, _match_model_in_text(text, tuple(MIMO_TEXT_MODELS)) or DEFAULT_MIMO_MODEL
+            if provider == "deepseek":
+                matched = _match_model_in_text(text, DEEPSEEK_TEXT_MODELS)
+                return provider, matched or DEFAULT_DEEPSEEK_MODEL
+            if provider == "opencode_go":
+                matched = _match_model_in_text(text, OPENCODE_GO_MODELS)
+                return provider, matched or DEFAULT_OPENCODE_GO_MODEL
             return provider, None
     return None, None
 
 
 def extract_vision_provider(text: str) -> str | None:
     """Extract vision provider preference from user message."""
+    text = normalize_multilingual_text(text)
     for pattern, provider in VISION_PROVIDER_MAP:
         if pattern.search(text):
             return provider
@@ -603,10 +681,12 @@ def extract_vision_provider(text: str) -> str | None:
 
 def is_recommend_intent(text: str) -> bool:
     """Check if the message looks like a recommendation request."""
+    text = normalize_multilingual_text(text)
     recommend_keywords = [
         "推荐", "想要", "想买", "找", "有没有", "适合", "帮我",
         "羽绒服", "外套", "颜色", "尺码", "预算", "价格",
         "黑色", "白色", "男款", "女款", "品牌",
+        "recommend", "jacket", "down", "color", "budget", "size", "おすすめ", "ダウン", "カラー", "予算", "サイズ",
     ]
     for kw in recommend_keywords:
         if kw in text:
@@ -624,7 +704,7 @@ def extract_recommend_fields(text: str) -> dict[str, Any]:
     size = extract_size(text)
     mbti = extract_mbti(text)
     style = extract_style(text)
-    ai_provider, mimo_model = extract_ai_provider(text)
+    ai_provider, provider_model = extract_ai_provider(text)
     vision_provider = extract_vision_provider(text)
 
     form_patch: dict[str, Any] = {}
@@ -662,7 +742,7 @@ def extract_recommend_fields(text: str) -> dict[str, Any]:
         # Sync ai_provider if user explicitly set vision provider but not ai_provider
         if not ai_provider:
             form_patch["ai_provider"] = vision_provider
-    if mimo_model:
-        form_patch["mimo_model"] = mimo_model
+    if provider_model and ai_provider in ("mimo", "deepseek", "opencode_go"):
+        form_patch[f"{ai_provider}_model"] = provider_model
 
     return form_patch

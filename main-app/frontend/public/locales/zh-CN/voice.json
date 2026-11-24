@@ -1,0 +1,10 @@
+{
+  "call": {"title": "AI电话导购", "privacy": "语音仅用于本次 AI 导购识别，不会保存在浏览器本地。"},
+  "status": {"idle": "准备就绪", "requesting_permission": "请求麦克风权限...", "ready": "等待你说话", "listening": "正在录音", "recording": "正在录音", "recognizing": "正在识别", "thinking": "正在思考", "speaking": "正在播报", "paused": "已暂停", "muted": "已静音", "error": "出错", "ended": "通话已结束"},
+  "action": {"retry": "重试", "stop": "停止播报", "settings": "设置", "end": "结束通话", "back": "返回聊天", "mute": "静音", "unmute": "取消静音"},
+  "input": {"recognizing": "正在识别...", "release": "松开结束", "clickStop": "点击结束录音", "hold": "按住说话", "clickStart": "点击开始录音"},
+  "settings": {"title": "语音设置", "tts": "语音播报", "ttsDescription": "AI 回复后自动朗读", "source": "音色来源", "preset": "预置音色", "clone": "克隆音色", "voice": "音色", "tone": "语气预设", "language": "识别语言", "chinese": "中文", "english": "English", "japanese": "日本語", "auto": "自动", "recordMode": "录音模式", "clickMode": "点击开始/结束", "holdMode": "按住说话", "autoSend": "自动发送识别文本", "autoSendDescription": "识别完成后自动发送给 AI", "volume": "音量：{{percent}}%", "privacy": "语音仅用于本次 AI 导购识别，不会保存在浏览器本地。"},
+  "tone": {"natural": "自然导购", "anime": "活泼二次元", "gentle": "温柔客服", "professional": "专业简洁"},
+  "errors": {"asrUnavailable": "语音识别暂不可用，请改用文字输入。", "network": "网络请求失败，请稍后重试。", "micPermission": "无法使用麦克风。请允许麦克风权限，或改用文字聊天。", "unsupported": "当前浏览器不支持语音通话，请使用文字聊天。", "recordFormat": "当前浏览器录音格式暂不支持，请切换浏览器或使用文字输入。"},
+  "duration": "通话已结束，时长 {{duration}}"
+}

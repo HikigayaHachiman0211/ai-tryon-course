@@ -1,0 +1,55 @@
+<view class="card">
+  <view class="card-title-row">
+    <text class="card-title">{{texts.photoTitle}}</text>
+    <text wx:if="{{previewUrl}}" class="remove-link" bindtap="onClearPhoto">{{texts.removePhoto}}</text>
+  </view>
+
+  <view wx:if="{{previewUrl}}" class="preview-box" bindtap="onChoosePhoto">
+    <image src="{{previewUrl}}" mode="aspectFit" class="preview-img" />
+    <view class="preview-badge">
+      <text>{{texts.changePhoto}}</text>
+    </view>
+  </view>
+
+  <view wx:else class="upload-dropzone" bindtap="onChoosePhoto">
+    <view class="upload-icon">+</view>
+    <text class="upload-main">{{texts.uploadPhoto}}</text>
+    <text class="upload-hint">{{texts.photoHint}}</text>
+  </view>
+
+  <view class="sample-section">
+    <view class="sample-head">
+      <text class="muted-text">{{texts.sampleChoose}}</text>
+    </view>
+    <view class="sample-gender-tabs">
+      <view
+        class="chip {{sampleGender === 'male' ? 'chip-active' : ''}}"
+        data-gender="male"
+        bindtap="onSwitchGender"
+      >
+        {{texts.sampleMale}}
+      </view>
+      <view
+        class="chip {{sampleGender === 'female' ? 'chip-active' : ''}}"
+        data-gender="female"
+        bindtap="onSwitchGender"
+      >
+        {{texts.sampleFemale}}
+      </view>
+    </view>
+    <scroll-view scroll-x class="sample-scroll" enable-flex>
+      <view class="sample-list">
+        <view
+          wx:for="{{models}}"
+          wx:key="id"
+          class="sample-card {{sampleModelId === item.id ? 'sample-card-active' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="onPickSample"
+        >
+          <image src="{{item.thumbUrl}}" mode="aspectFill" class="sample-img" lazy-load />
+          <text class="sample-name">{{item.name}}</text>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+</view>

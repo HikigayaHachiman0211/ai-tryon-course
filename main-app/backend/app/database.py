@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
 import os
 import re
 from pathlib import Path
 
-from sqlalchemy import Float, Integer, String, create_engine, delete, func, select
+from sqlalchemy import DateTime, Float, Integer, String, Text, create_engine, delete, func, select, text
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 from sqlalchemy.types import JSON
@@ -60,6 +61,29 @@ class Product(Base):
     size_tags: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     size_notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
     product_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+
+
+class RecommendationHistory(Base):
+    __tablename__ = "recommendation_history"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    created_at: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    result_type: Mapped[str] = mapped_column(String(32), nullable=False, default="recommend", index=True)
+    summary: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    summary_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    translation_version: Mapped[str] = mapped_column(String(32), nullable=False, default="catalog-v1")
+    created_locale: Mapped[str] = mapped_column(String(16), nullable=False, default="zh-CN")
+    thumbnail_blob_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    result_blob_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    user_photo_blob_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    item_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    total_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
 
 def normalize_size(value: str | None) -> str | None:
@@ -241,7 +265,10 @@ def build_product(row: dict) -> Product:
     )
 
 
-def ensure_database(
+_DB_INIT_ADVISORY_LOCK_ID = 2026111301
+
+
+def _ensure_database_unlocked(
     *,
     seed_if_empty: bool,
     replace: bool = False,
@@ -295,6 +322,31 @@ def ensure_database(
         session.add_all(build_product(row) for row in rows)
         session.commit()
         return len(rows)
+
+
+def ensure_database(
+    *,
+    seed_if_empty: bool,
+    replace: bool = False,
+    database_json_path: Path | None = None,
+) -> int:
+    if ENGINE.dialect.name == "postgresql":
+        with ENGINE.connect() as conn:
+            conn.execute(text("SELECT pg_advisory_lock(:lock_id)"), {"lock_id": _DB_INIT_ADVISORY_LOCK_ID})
+            try:
+                return _ensure_database_unlocked(
+                    seed_if_empty=seed_if_empty,
+                    replace=replace,
+                    database_json_path=database_json_path,
+                )
+            finally:
+                conn.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": _DB_INIT_ADVISORY_LOCK_ID})
+                conn.commit()
+    return _ensure_database_unlocked(
+        seed_if_empty=seed_if_empty,
+        replace=replace,
+        database_json_path=database_json_path,
+    )
 
 
 def count_products(session: Session) -> int:

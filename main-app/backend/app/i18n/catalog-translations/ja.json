@@ -1,0 +1,179 @@
+{
+  "kind": "catalog-translations",
+  "version": 1,
+  "locale": "ja",
+  "generator": "build_catalog_translations.py:v1",
+  "source_path": "database.json",
+  "source_record_count": 8,
+  "items": {
+    "856266a36279dca0a550284d": {
+      "title": "メンズ用 ダウンジャケットダウンジャケット — ブルー系・保温・#856266",
+      "styleType": "ダウンジャケット",
+      "colorFamily": "ブルー系",
+      "bodyFit": "標準フィット",
+      "styleFeatures": [
+        "その他の機能",
+        "その他の機能"
+      ],
+      "functionFeatures": [
+        "保温",
+        "防風"
+      ],
+      "sizeNotes": "サイズ目安：M, 3XL。サイズ表をご確認ください。",
+      "source_hash": "ef2a2840dbc9720f14add0d679fe47d295ad6e1ad0a50cab21aa7aadfbe08ea7",
+      "locale": "ja",
+      "translation_source": "deterministic-descriptor",
+      "model": "catalog-domain-dictionary-v1",
+      "generated_at": "2026-11-24T18:19:50.417279+00:00",
+      "status": "validated"
+    },
+    "4643a1b00274974e3018fe59": {
+      "title": "レディース用 ダウンジャケットダウンジャケット — ホワイト系・保温・#4643a1",
+      "styleType": "ダウンジャケット",
+      "colorFamily": "ホワイト系",
+      "bodyFit": "標準フィット",
+      "styleFeatures": [
+        "その他の機能",
+        "その他の機能"
+      ],
+      "functionFeatures": [
+        "保温",
+        "その他の機能"
+      ],
+      "sizeNotes": "サイズ目安：S, 2XL。サイズ表をご確認ください。",
+      "source_hash": "34bad64dae13e8ecfa7159c82445b30180e5026c857d45ee1ebe510565cb9b60",
+      "locale": "ja",
+      "translation_source": "deterministic-descriptor",
+      "model": "catalog-domain-dictionary-v1",
+      "generated_at": "2026-11-24T18:19:50.417279+00:00",
+      "status": "validated"
+    },
+    "cc3659789f72cb4bd584173b": {
+      "title": "ユニセックス用 ダウンジャケットダウンジャケット — ブラック系・防風・#cc3659",
+      "styleType": "ダウンジャケット",
+      "colorFamily": "ブラック系",
+      "bodyFit": "標準フィット",
+      "styleFeatures": [
+        "その他の機能",
+        "その他の機能"
+      ],
+      "functionFeatures": [
+        "防風",
+        "その他の機能"
+      ],
+      "sizeNotes": "サイズ目安：S, 4XL。サイズ表をご確認ください。",
+      "source_hash": "52a577e3347edd86952331b0748afa17d22f31c87d2dd3523e9ea5338f6698c4",
+      "locale": "ja",
+      "translation_source": "deterministic-descriptor",
+      "model": "catalog-domain-dictionary-v1",
+      "generated_at": "2026-11-24T18:19:50.417784+00:00",
+      "status": "validated"
+    },
+    "c6fa154d7a4b3fba2f258e4f": {
+      "title": "レディース用 ダウンジャケットダウンジャケット — レッド系・その他の機能・#c6fa15",
+      "styleType": "ダウンジャケット",
+      "colorFamily": "レッド系",
+      "bodyFit": "標準フィット",
+      "styleFeatures": [
+        "その他の機能",
+        "その他の機能"
+      ],
+      "functionFeatures": [
+        "その他の機能",
+        "その他の機能"
+      ],
+      "sizeNotes": "サイズ目安：XS, 2XL。サイズ表をご確認ください。",
+      "source_hash": "94d9a306a6ad929ac0a2be0369117d5e1b27bc63ab7489a73597adda54a685b1",
+      "locale": "ja",
+      "translation_source": "deterministic-descriptor",
+      "model": "catalog-domain-dictionary-v1",
+      "generated_at": "2026-11-24T18:19:50.417784+00:00",
+      "status": "validated"
+    },
+    "d7fd306c07ca238853f27eab": {
+      "title": "メンズ用 ダウンジャケットダウンジャケット — グリーン系・防風・#d7fd30",
+      "styleType": "ダウンジャケット",
+      "colorFamily": "グリーン系",
+      "bodyFit": "標準フィット",
+      "styleFeatures": [
+        "その他の機能",
+        "その他の機能"
+      ],
+      "functionFeatures": [
+        "防風",
+        "撥水",
+        "その他の機能"
+      ],
+      "sizeNotes": "サイズ目安：M, 4XL。サイズ表をご確認ください。",
+      "source_hash": "b5ce7dc4cb319d259c3eaffa2fa6a080a81e778964b7f97879c9711201a5753c",
+      "locale": "ja",
+      "translation_source": "deterministic-descriptor",
+      "model": "catalog-domain-dictionary-v1",
+      "generated_at": "2026-11-24T18:19:50.417784+00:00",
+      "status": "validated"
+    },
+    "7d12b3a1ad152d49b4d6a659": {
+      "title": "ユニセックス用 ダウンジャケットダウンジャケット — グレー系・その他の機能・#7d12b3",
+      "styleType": "ダウンジャケット",
+      "colorFamily": "グレー系",
+      "bodyFit": "標準フィット",
+      "styleFeatures": [
+        "その他の機能",
+        "その他の機能"
+      ],
+      "functionFeatures": [
+        "その他の機能",
+        "その他の機能"
+      ],
+      "sizeNotes": "サイズ目安：XS, 3XL。サイズ表をご確認ください。",
+      "source_hash": "2b595c1914e47fe646f5dd1ef25f0161bb270bdacab5ab4a6b7f0a1df397092f",
+      "locale": "ja",
+      "translation_source": "deterministic-descriptor",
+      "model": "catalog-domain-dictionary-v1",
+      "generated_at": "2026-11-24T18:19:50.417784+00:00",
+      "status": "validated"
+    },
+    "f738f53483edaa578d940d53": {
+      "title": "レディース用 ダウンジャケットダウンジャケット — カラーファミリー・その他の機能・#f738f5",
+      "styleType": "ダウンジャケット",
+      "colorFamily": "カラーファミリー",
+      "bodyFit": "標準フィット",
+      "styleFeatures": [
+        "その他の機能",
+        "その他の機能"
+      ],
+      "functionFeatures": [
+        "その他の機能",
+        "防風"
+      ],
+      "sizeNotes": "サイズ目安：S, 3XL。サイズ表をご確認ください。",
+      "source_hash": "e3767e7b8630c840874801902ed36973b3fcd5aa1aa63db6be1717e8d073faf6",
+      "locale": "ja",
+      "translation_source": "deterministic-descriptor",
+      "model": "catalog-domain-dictionary-v1",
+      "generated_at": "2026-11-24T18:19:50.417784+00:00",
+      "status": "validated"
+    },
+    "d81bdeeeaf7c46c02bb703dd": {
+      "title": "メンズ用 ダウンジャケットダウンジャケット — グレー系・保温・#d81bde",
+      "styleType": "ダウンジャケット",
+      "colorFamily": "グレー系",
+      "bodyFit": "標準フィット",
+      "styleFeatures": [
+        "その他の機能",
+        "その他の機能"
+      ],
+      "functionFeatures": [
+        "保温",
+        "静電気防止"
+      ],
+      "sizeNotes": "サイズ目安：M, 3XL。サイズ表をご確認ください。",
+      "source_hash": "4c0741b6dc325d93e68ff884528f9131cc7bfd750719d5edcb4f34f6222f0aca",
+      "locale": "ja",
+      "translation_source": "deterministic-descriptor",
+      "model": "catalog-domain-dictionary-v1",
+      "generated_at": "2026-11-24T18:19:50.417784+00:00",
+      "status": "validated"
+    }
+  }
+}

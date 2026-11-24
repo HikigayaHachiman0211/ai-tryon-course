@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Send } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   onSend: (message: string) => void;
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export const MessageInput: React.FC<Props> = ({ onSend, loading, bare }) => {
+  const { t } = useTranslation('assistant');
   const [text, setText] = useState('');
 
   const handleSubmit = () => {
@@ -29,10 +31,12 @@ export const MessageInput: React.FC<Props> = ({ onSend, loading, bare }) => {
     <>
       <input
         type="text"
+        enterKeyHint="send"
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="输入你的需求，例如：黑色显瘦女款羽绒服，500以内..."
+        placeholder={t('inputPlaceholder')}
+        aria-label={t('inputPlaceholder')}
         disabled={loading}
         style={{
           flex: '1 1 auto',
@@ -43,18 +47,22 @@ export const MessageInput: React.FC<Props> = ({ onSend, loading, bare }) => {
           border: '1px solid rgba(255,255,255,0.1)',
           borderRadius: 12,
           padding: '10px 14px',
+          minHeight: 44,
           color: '#F8FAFC',
-          fontSize: 14,
+          fontSize: 16,
           outline: 'none',
         }}
       />
       <button
+        type="button"
         onClick={handleSubmit}
         disabled={!text.trim() || loading}
+        aria-label={t('send')}
+        title={t('send')}
         style={{
           flex: '0 0 auto',
-          width: 40,
-          height: 40,
+          width: 44,
+          height: 44,
           borderRadius: 12,
           background: text.trim() && !loading ? '#0071e3' : 'rgba(255,255,255,0.06)',
           border: 'none',

@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import cast, Date, func, or_
 
@@ -13,6 +13,8 @@ from app.database import (
     AdminUser, AnnotationRecord, AnnotationTask, Product, get_db,
 )
 from app.routers import SHANGHAI, to_beijing_str
+from app.routers.products import _serialize as serialize_product
+from app.i18n.locale import request_locale
 from app.services.annotation_engine import compute_annotation_confidence, derive_priority
 
 router = APIRouter(prefix="/api/admin/annotations", tags=["annotations"])
@@ -45,6 +47,7 @@ class BatchBrandFixRequest(BaseModel):
 
 @router.get("")
 def list_annotations(
+    request: Request,
     page: int = 1,
     size: int = 20,
     status: str = "",
@@ -75,7 +78,7 @@ def list_annotations(
     result = []
     for p in items:
         task = db.query(AnnotationTask).filter_by(product_id=p.id).first()
-        result.append(_serialize_product_with_task(p, task))
+        result.append(_serialize_product_with_task(p, task, request_locale(request)))
 
     return {"total": total, "page": page, "items": result}
 
@@ -132,7 +135,7 @@ def quality_report(admin=Depends(get_current_admin), db=Depends(get_db)):
 
 
 @router.get("/{product_id}")
-def get_annotation(product_id: int, admin=Depends(get_current_admin), db=Depends(get_db)):
+def get_annotation(product_id: int, request: Request, admin=Depends(get_current_admin), db=Depends(get_db)):
     p = db.get(Product, product_id)
     if not p:
         raise HTTPException(404, "商品不存在")
@@ -146,7 +149,7 @@ def get_annotation(product_id: int, admin=Depends(get_current_admin), db=Depends
     )
 
     return {
-        "product": _serialize_product_with_task(p, task),
+        "product": _serialize_product_with_task(p, task, request_locale(request)),
         "history": [
             {
                 "id": r.id,
@@ -386,25 +389,9 @@ def sync_database_json(admin=Depends(get_current_admin), db=Depends(get_db)):
     return {"total": len(data), "data": data}
 
 
-def _serialize_product_with_task(p: Product, task: AnnotationTask | None) -> dict:
-    from app.config import get_settings
-    settings = get_settings()
+def _serialize_product_with_task(p: Product, task: AnnotationTask | None, locale: str = "zh-CN") -> dict:
     return {
-        "id": p.id,
-        "title": p.title,
-        "price": p.price,
-        "image_path": p.image_path,
-        "image_url": f"{settings.PUBLIC_IMAGE_BASE_URL}/{p.image_path.split('/')[-1]}" if p.image_path else None,
-        "style_type": p.style_type,
-        "color_family": p.color_family,
-        "body_fit": p.body_fit,
-        "style_features": p.style_features,
-        "function_features": p.function_features,
-        "size_tags": p.size_tags,
-        "size_notes": p.size_notes,
-        "product_url": p.product_url,
-        "annotation_status": p.annotation_status,
-        "annotation_confidence": p.annotation_confidence,
+        **serialize_product(p, locale),
         "last_annotated_at": to_beijing_str(p.last_annotated_at),
         "last_annotated_by": p.last_annotated_by,
         "task": {

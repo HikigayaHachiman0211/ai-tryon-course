@@ -28,6 +28,7 @@ export interface RecommendFormPatch {
   mimo_model?: string;
   gemini_model?: string;
   deepseek_model?: string;
+  opencode_go_model?: string;
 }
 
 export interface AssistantAction {

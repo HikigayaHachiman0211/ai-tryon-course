@@ -3,6 +3,7 @@
 import React from 'react';
 import { Mic, Loader2, Square } from 'lucide-react';
 import type { AssistantVoiceState } from './voiceTypes';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   voiceState: AssistantVoiceState;
@@ -30,6 +31,7 @@ export const VoiceInputButton: React.FC<Props> = ({
   durationMs,
   recordMode,
 }) => {
+  const { t } = useTranslation('voice');
   if (!isSupported || !asrEnabled) return null;
 
   const isRecording = voiceState === 'listening';
@@ -37,7 +39,7 @@ export const VoiceInputButton: React.FC<Props> = ({
   const isDisabled = isRecognizing || voiceState === 'thinking';
 
   const handleClick = () => {
-    if (isDisabled) return;
+    if (recordMode === 'hold' || isDisabled) return;
     if (isRecording) {
       onStopRecording();
     } else {
@@ -45,8 +47,14 @@ export const VoiceInputButton: React.FC<Props> = ({
     }
   };
 
-  const handlePointerDown = () => {
+  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     if (recordMode !== 'hold' || isDisabled) return;
+    e.preventDefault();
+    try {
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    } catch {
+      // ignore if unsupported
+    }
     onStartRecording();
   };
 
@@ -67,9 +75,9 @@ export const VoiceInputButton: React.FC<Props> = ({
   };
 
   const getTitle = () => {
-    if (isRecognizing) return '正在识别...';
-    if (isRecording) return recordMode === 'hold' ? '松开结束' : '点击结束录音';
-    return recordMode === 'hold' ? '按住说话' : '点击开始录音';
+    if (isRecognizing) return t('input.recognizing');
+    if (isRecording) return recordMode === 'hold' ? t('input.release') : t('input.clickStop');
+    return recordMode === 'hold' ? t('input.hold') : t('input.clickStart');
   };
 
   const getColor = () => {
@@ -81,16 +89,18 @@ export const VoiceInputButton: React.FC<Props> = ({
   return (
     <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
       <button
+        type="button"
         onClick={handleClick}
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         disabled={isDisabled}
         title={getTitle()}
+        aria-label={getTitle()}
         style={{
-          width: 36,
-          height: 36,
-          borderRadius: 10,
+          width: 44,
+          height: 44,
+          borderRadius: 12,
           background: isRecording ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255,255,255,0.04)',
           border: isRecording ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(255,255,255,0.08)',
           display: 'flex',
@@ -99,6 +109,10 @@ export const VoiceInputButton: React.FC<Props> = ({
           cursor: isDisabled ? 'default' : 'pointer',
           color: getColor(),
           transition: 'all 0.2s',
+          touchAction: recordMode === 'hold' ? 'none' : 'manipulation',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none',
         }}
       >
         {getIcon()}

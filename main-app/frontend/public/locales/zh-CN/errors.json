@@ -1,0 +1,14 @@
+{
+  "default": "发生了问题，请稍后重试。",
+  "codeLabel": "错误码：{{code}}",
+  "requestId": "请求编号：{{requestId}}",
+  "troubleshooting": "请稍后重试；如问题持续，请提供请求编号。",
+  "SYS-XXX": "网络请求失败，请稍后重试。",
+  "VALIDATION_ERROR": "提交的数据无效，请检查后重试。",
+  "PRODUCT_NOT_FOUND": "找不到所选商品。",
+  "CATALOG_UNAVAILABLE": "商品目录暂时不可用。",
+  "AI_CONFIG_MISSING": "AI服务尚未配置完成。",
+  "ASR_FAILED": "语音识别失败，请改用文字输入。",
+  "TTS_FAILED": "语音播报失败，文字回复仍可查看。",
+  "RATE_LIMITED": "请求过于频繁，请稍后重试。"
+}

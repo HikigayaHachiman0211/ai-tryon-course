@@ -49,6 +49,10 @@ def _build_catalog_products_from_read_model(items: list[dict[str, Any]]) -> list
             size_notes=item.get("size_notes"),
             product_url=item.get("product_url"),
         )
+        if item.get("product_key"):
+            setattr(product, "_product_key", str(item["product_key"]))
+        if isinstance(item.get("search_text"), dict):
+            setattr(product, "_search_text", dict(item["search_text"]))
         products.append(product)
     return products
 

@@ -1,6 +1,6 @@
 """Generate a combined database.json containing both JD and Taobao product data.
 
-Run from the project root (Project4.15-AI-Try-on-with-frontend):
+Run from the project root (main-app):
     python -m backend.scripts.generate_combined_database
 Or directly:
     cd backend && python scripts/generate_combined_database.py

@@ -1,0 +1,10 @@
+{
+  "call": {"title": "AI phone stylist", "privacy": "Voice is used only for this AI styling session and is not saved in this browser."},
+  "status": {"idle": "Ready", "requesting_permission": "Requesting microphone permission...", "ready": "Waiting for you", "listening": "Listening", "recording": "Recording", "recognizing": "Recognizing", "thinking": "Thinking", "speaking": "Speaking", "paused": "Paused", "muted": "Muted", "error": "Error", "ended": "Call ended"},
+  "action": {"retry": "Retry", "stop": "Stop playback", "settings": "Settings", "end": "End call", "back": "Back to chat", "mute": "Mute", "unmute": "Unmute"},
+  "input": {"recognizing": "Recognizing...", "release": "Release to stop", "clickStop": "Click to stop recording", "hold": "Hold to speak", "clickStart": "Click to start recording"},
+  "settings": {"title": "Voice settings", "tts": "Voice playback", "ttsDescription": "Read AI replies aloud automatically", "source": "Voice source", "preset": "Preset voice", "clone": "Cloned voice", "voice": "Voice", "tone": "Tone preset", "language": "Recognition language", "chinese": "中文", "english": "English", "japanese": "日本語", "auto": "Automatic", "recordMode": "Recording mode", "clickMode": "Click to start/stop", "holdMode": "Hold to speak", "autoSend": "Send recognized text automatically", "autoSendDescription": "Send recognized text to AI when recognition finishes", "volume": "Volume: {{percent}}%", "privacy": "Voice is used only for this AI styling session and is not saved in this browser."},
+  "tone": {"natural": "Natural stylist", "anime": "Playful", "gentle": "Gentle support", "professional": "Professional"},
+  "errors": {"asrUnavailable": "Speech recognition is unavailable. Please use text input.", "network": "Network request failed. Please try again.", "micPermission": "The microphone is unavailable. Allow microphone access or use text chat.", "unsupported": "Voice calls are not supported in this browser. Please use text chat.", "recordFormat": "This browser recording format is unsupported. Switch browsers or use text input."},
+  "duration": "Call ended. Duration: {{duration}}"
+}

@@ -1,6 +1,7 @@
 """Shared pytest fixtures for the backend test suite."""
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -33,6 +34,23 @@ def _make_stub_product(pid: int) -> "Product":  # type: ignore[name-defined]
 _STUB_PRODUCTS = None
 
 
+@pytest.fixture(autouse=True)
+def _ensure_main_event_loop():
+    """Keep legacy synchronous async-test helpers isolated between tests.
+
+    A few characterization tests still call ``get_event_loop().run_until_complete``
+    while other tests use ``asyncio.run``.  ``asyncio.run`` clears the policy's
+    current loop when it returns, so the next legacy helper would otherwise fail
+    before it ever exercises application code.  Recreate the loop at each test
+    boundary without replacing an existing pytest-managed loop.
+    """
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+    yield
+
+
 def _get_stub_products():
     global _STUB_PRODUCTS
     if _STUB_PRODUCTS is None:
@@ -41,21 +59,27 @@ def _get_stub_products():
 
 
 @pytest.fixture()
-def client():
+def client(tmp_path):
     """FastAPI TestClient with all external startup side-effects mocked out.
 
     Mocked:
     - catalog_repository.get_catalog_products  → returns 3 stub Products
       (so lifespan never calls ensure_database or touches SQLite/Cloud SQL)
     - gcs_storage.load_history_index           → returns [] (no GCS call)
-    - history._read_local_index                → returns [] (no filesystem history)
-    - history._ensure_local_dirs               → no-op
+    - history paths                            → isolated temporary directory
+    - history storage and thumbnail downloads  → no external requests
     """
     with (
         patch("app.catalog_repository.get_catalog_products", return_value=_get_stub_products()),
+        patch("app.main.get_catalog_products", return_value=_get_stub_products()),
         patch("app.gcs_storage.load_history_index", return_value=[]),
-        patch("app.history._read_local_index", return_value=[]),
-        patch("app.history._ensure_local_dirs", return_value=None),
+        patch("app.gcs_storage.save_result_json", return_value=None),
+        patch("app.gcs_storage.save_history_index", return_value=None),
+        patch("app.history._download_image_bytes", return_value=None),
+        patch("app.history.LOCAL_HISTORY_DIR", tmp_path),
+        patch("app.history.LOCAL_RESULTS_DIR", tmp_path / "results"),
+        patch("app.history.LOCAL_THUMBS_DIR", tmp_path / "thumbnails"),
+        patch("app.history.LOCAL_INDEX_PATH", tmp_path / "index.json"),
     ):
         from app.main import app
         with TestClient(app) as c:

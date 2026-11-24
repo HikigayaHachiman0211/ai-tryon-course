@@ -23,8 +23,6 @@ router = APIRouter(prefix="/api/ingest", tags=["ingest"])
 
 def _verify_ingest_key(x_ingest_key: str = Header(...)):
     settings = get_settings()
-    if not settings.INGEST_SECRET_KEY:
-        raise HTTPException(503, "Ingest API is not configured")
     if x_ingest_key != settings.INGEST_SECRET_KEY:
         raise HTTPException(403, "Invalid ingest key")
 

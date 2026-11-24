@@ -15,7 +15,7 @@ const FALLBACK_CONFIG: VoicePublicConfig = {
   default_voice: '茉莉',
   available_voices: ['冰糖', '茉莉', '苏打', '白桦', 'Mia', 'Chloe', 'Milo', 'Dean'],
   published_clone_voices: [],
-  asr_languages: ['zh', 'en', 'auto'],
+  asr_languages: ['zh', 'en', 'ja', 'auto'],
   max_record_seconds: 15,
   hard_max_record_seconds: 55,
   max_audio_base64_mb: 10,

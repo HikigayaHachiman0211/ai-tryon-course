@@ -1,0 +1,8 @@
+{
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "light",
+  "usingComponents": {
+    "lang-switcher": "/components/lang-switcher/index",
+    "product-card": "/components/product-card/index"
+  }
+}

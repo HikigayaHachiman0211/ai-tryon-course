@@ -1,0 +1,30 @@
+steps:
+  - name: python:3.11-slim
+    entrypoint: sh
+    args:
+      - -c
+      - >-
+        pip install --no-cache-dir -r backend/requirements.txt
+        && python backend/scripts/build_catalog_read_model.py --output backend/read-model/catalog.json
+        && python backend/scripts/build_catalog_translations.py
+        && python backend/scripts/verify_i18n_coverage.py
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile
+      - --build-arg
+      - VITE_API_BASE_URL=$_VITE_API_BASE_URL
+      - --build-arg
+      - VITE_TRYON_BASE_URL=$_VITE_TRYON_BASE_URL
+      - --build-arg
+      - VITE_ADMIN_BASE_URL=$_VITE_ADMIN_BASE_URL
+      - -t
+      - asia-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/$_IMAGE_NAME:$_TAG
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - asia-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/$_IMAGE_NAME:$_TAG
+images:
+  - asia-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/$_IMAGE_NAME:$_TAG

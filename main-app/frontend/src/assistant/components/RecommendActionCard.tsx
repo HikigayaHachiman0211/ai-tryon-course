@@ -1,5 +1,6 @@
 import React from 'react';
 import type { RecommendFormPatch } from '../assistantTypes';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   patch: RecommendFormPatch;
@@ -9,31 +10,33 @@ interface Props {
 }
 
 const FIELD_LABELS: Record<string, string> = {
-  gender: '性别',
-  color_preference: '颜色',
-  price_min: '最低价格',
-  price_max: '最高价格',
-  brand_preference: '品牌',
-  size: '尺码',
-  mbti: 'MBTI',
-  style_preference: '风格',
-  ai_provider: 'AI 引擎',
-  vision_provider: '图像分析引擎',
-  mimo_model: 'MiMo 模型',
+  gender: 'field.gender',
+  color_preference: 'field.color_preference',
+  price_min: 'field.price_min',
+  price_max: 'field.price_max',
+  brand_preference: 'field.brand_preference',
+  size: 'field.size',
+  mbti: 'field.mbti',
+  style_preference: 'field.style_preference',
+  ai_provider: 'field.ai_provider',
+  vision_provider: 'field.vision_provider',
+  mimo_model: 'field.mimo_model',
+  opencode_go_model: 'field.opencode_go_model',
 };
 
-const GENDER_LABELS: Record<string, string> = { male: '男', female: '女' };
-const PROVIDER_LABELS: Record<string, string> = { mimo: 'Xiaomi MiMo', gemini: 'Gemini', deepseek: 'Deepseek', auto: '自动' };
+const GENDER_LABELS: Record<string, string> = { male: 'gender.male', female: 'gender.female' };
+const PROVIDER_LABELS: Record<string, string> = { mimo: 'provider.mimo', gemini: 'provider.gemini', deepseek: 'provider.deepseek', opencode_go: 'provider.opencode_go', auto: 'provider.auto' };
 
-function formatValue(key: string, value: unknown): string {
-  if (value === null || value === undefined || value === '') return '-';
-  if (key === 'gender') return GENDER_LABELS[value as string] || String(value);
-  if (key === 'ai_provider') return PROVIDER_LABELS[value as string] || String(value);
-  if (key === 'price_min' || key === 'price_max') return `¥${value}`;
+function formatValue(key: string, value: unknown, t: (key: string, options?: Record<string, unknown>) => string): string {
+  if (value === null || value === undefined || value === '') return t('emptyValue');
+  if (key === 'gender') return GENDER_LABELS[value as string] ? t(GENDER_LABELS[value as string]) : String(value);
+  if (key === 'ai_provider' || key === 'vision_provider') return PROVIDER_LABELS[value as string] ? t(PROVIDER_LABELS[value as string]) : String(value);
+  if (key === 'price_min' || key === 'price_max') return t('price', { value });
   return String(value);
 }
 
 export const RecommendActionCard: React.FC<Props> = ({ patch, onFillForm, onFillAndSubmit, onCancel }) => {
+  const { t } = useTranslation('assistant');
   const fields = Object.entries(patch).filter(
     ([, value]) => value !== null && value !== undefined && value !== ''
   );
@@ -47,7 +50,7 @@ export const RecommendActionCard: React.FC<Props> = ({ patch, onFillForm, onFill
       marginTop: 8,
     }}>
       <div style={{ fontSize: 13, fontWeight: 600, color: '#0071e3', marginBottom: 10 }}>
-        已提取推荐条件
+        {t('action.extracted')}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
         {fields.map(([key, value]) => (
@@ -59,15 +62,17 @@ export const RecommendActionCard: React.FC<Props> = ({ patch, onFillForm, onFill
             borderRadius: 999,
             color: 'rgba(255,255,255,0.7)',
           }}>
-            {FIELD_LABELS[key] || key}: {formatValue(key, value)}
+            {FIELD_LABELS[key] ? t(FIELD_LABELS[key]) : key}: {formatValue(key, value, t)}
           </span>
         ))}
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button
+          type="button"
           onClick={onFillForm}
           style={{
-            padding: '6px 14px',
+            padding: '8px 16px',
+            minHeight: 40,
             borderRadius: 980,
             border: '1px solid #0071e3',
             background: '#0071e3',
@@ -76,12 +81,14 @@ export const RecommendActionCard: React.FC<Props> = ({ patch, onFillForm, onFill
             cursor: 'pointer',
           }}
         >
-          填入表单
+          {t('action.fill')}
         </button>
         <button
+          type="button"
           onClick={onFillAndSubmit}
           style={{
-            padding: '6px 14px',
+            padding: '8px 16px',
+            minHeight: 40,
             borderRadius: 980,
             border: '1px solid rgba(16,185,129,0.5)',
             background: 'rgba(16,185,129,0.15)',
@@ -90,21 +97,23 @@ export const RecommendActionCard: React.FC<Props> = ({ patch, onFillForm, onFill
             cursor: 'pointer',
           }}
         >
-          填入并生成推荐
+          {t('action.fillAndSubmit')}
         </button>
         <button
+          type="button"
           onClick={onCancel}
           style={{
-            padding: '6px 14px',
+            padding: '8px 16px',
+            minHeight: 40,
             borderRadius: 980,
             border: '1px solid rgba(255,255,255,0.1)',
             background: 'transparent',
-            color: 'rgba(255,255,255,0.5)',
+            color: 'rgba(255,255,255,0.6)',
             fontSize: 13,
             cursor: 'pointer',
           }}
         >
-          取消
+          {t('action.cancel')}
         </button>
       </div>
     </div>

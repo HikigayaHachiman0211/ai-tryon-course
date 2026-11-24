@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from app.assistant.schemas import AssistantPublicConfig, AssistantFeatureFlags
+from app.i18n.locale import DEFAULT_LOCALE, normalize_locale
+from app.i18n.messages import assistant_message
+from app.mimo_models import DEFAULT_MIMO_MODEL
 
 
 ASSISTANT_ENABLED = True
@@ -17,17 +20,18 @@ FEATURE_FLAGS = AssistantFeatureFlags(
 
 DEFAULT_AI_PROVIDER = "mimo"
 DEFAULT_VISION_PROVIDER = "mimo"
-DEFAULT_MIMO_MODEL = "mimo-v2.5"
 
 
-def get_public_config() -> AssistantPublicConfig:
+def get_public_config(locale: str = DEFAULT_LOCALE) -> AssistantPublicConfig:
+    resolved_locale = normalize_locale(locale) or DEFAULT_LOCALE
     return AssistantPublicConfig(
         enabled=ASSISTANT_ENABLED,
-        welcome_message=WELCOME_MESSAGE,
+        welcome_message=assistant_message("welcome", resolved_locale),
         features=FEATURE_FLAGS,
         defaults={
             "ai_provider": DEFAULT_AI_PROVIDER,
             "vision_provider": DEFAULT_VISION_PROVIDER,
             "mimo_model": DEFAULT_MIMO_MODEL,
         },
+        locale=resolved_locale,
     )

@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Phone, PhoneOff } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   isInCall: boolean;
@@ -11,16 +12,18 @@ interface Props {
 }
 
 export const CallButton: React.FC<Props> = ({ isInCall, isSupported, disabledReason, onClick }) => {
+  const { t } = useTranslation('voice');
   const disabled = !isSupported;
 
   return (
     <button
       onClick={disabled ? undefined : onClick}
-      title={disabled ? (disabledReason || 'AI 电话功能暂不可用') : (isInCall ? '通话中' : 'AI 电话')}
+      title={disabled ? (disabledReason || t('errors.unsupported')) : (isInCall ? t('status.speaking') : t('call.title'))}
+      aria-label={disabled ? (disabledReason || t('errors.unsupported')) : (isInCall ? t('status.speaking') : t('call.title'))}
       disabled={disabled}
       style={{
-        width: 28,
-        height: 28,
+        width: 36,
+        height: 36,
         borderRadius: 8,
         background: disabled
           ? 'rgba(255,255,255,0.03)'

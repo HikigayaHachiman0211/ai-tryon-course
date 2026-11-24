@@ -6,11 +6,16 @@ export const MBTI_OPTIONS = [
 ];
 
 export const GENDER_OPTIONS = [
-  { value: 'female', label: '女' },
-  { value: 'male', label: '男' },
+  { value: 'female', labelKey: 'profile.gender.female' },
+  { value: 'male', labelKey: 'profile.gender.male' },
 ];
 
-export const BRAND_SUGGESTIONS = ['阿迪达斯', '骆驼', '波司登', '李宁'];
+export const BRAND_SUGGESTIONS = [
+  { value: '阿迪达斯', labelKey: 'profile.brand.adidas' },
+  { value: '骆驼', labelKey: 'profile.brand.camel' },
+  { value: '波司登', labelKey: 'profile.brand.bosideng' },
+  { value: '李宁', labelKey: 'profile.brand.liNing' },
+];
 
 export const SAMPLE_MODELS = [
   { id: 'male-mannequin-1', name: '通用男模 1', gender: 'male' as const, filename: 'mannequin-male-1.png' },
@@ -22,8 +27,8 @@ export const SAMPLE_MODELS = [
 export type SampleModel = typeof SAMPLE_MODELS[number];
 
 export const GENDER_LABELS: Record<string, string> = {
-  female: '女性',
-  male: '男性',
+  female: 'profile.gender.femaleLong',
+  male: 'profile.gender.maleLong',
 };
 
 export type ViewMode = 'recommend' | 'style-lab';

@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "title": "AI Down Jacket Recommendation Platform",
+    "description": "AI-powered down jacket recommendations, styling analysis, and virtual try-on."
+  },
+  "navigation": {
+    "brand": "AI Down Jacket Recommendation Platform",
+    "tryOn": "Virtual Try-On",
+    "recommend": "Smart Recommendations",
+    "styleLab": "Style Lab",
+    "history": "History",
+    "admin": "Admin Console"
+  },
+  "common": {
+    "language": "Language",
+    "loading": "Loading...",
+    "retry": "Retry",
+    "close": "Close",
+    "cancel": "Cancel",
+    "localeSwitchFailed": "The language resources could not be loaded. Please try again.",
+    "tryOnReturned": "Returned to the main recommendation page from the try-on workbench.",
+    "tryOnSwitchRequested": "The try-on workbench requested a return to the main site so you can choose another jacket.",
+    "validationColor": "Enter a color preference first.",
+    "validationGender": "Select a gender.",
+    "catalogLoadFailed": "The product catalog could not be loaded.",
+    "selectProduct": "Select a down jacket in the center first.",
+    "completeProfile": "Complete the color preference and gender first.",
+    "analysisFailed": "The styling analysis failed. Please try again later.",
+    "tryOnUnavailable": "The try-on workbench URL is not configured.",
+    "popupBlocked": "The browser blocked the try-on workbench popup. Allow popups and try again.",
+    "tryOnOpenedWithPhoto": "Opened the try-on workbench for “{{title}}” and synchronized your full-body photo and the product image.",
+    "tryOnOpenedWithoutPhoto": "Opened the try-on workbench for “{{title}}”. The product image was synchronized; upload your full-body photo in the try-on site.",
+    "tryOnOpenedRequestPhoto": "Opened the try-on workbench for “{{title}}”. Upload your full-body photo in the try-on site to continue.",
+    "unknownError": "Something went wrong. Please try again later.",
+    "debugTools": "Debug tools",
+    "errorCodes": "Error codes",
+    "recentErrors": "Recent errors"
+    ,"youSaid": "You said:",
+    "conversationHistory": "Conversation history",
+    "editTranscript": "Edit the transcript before sending..."
+  }
+}

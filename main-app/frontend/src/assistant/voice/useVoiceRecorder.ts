@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { convertToWav, isWavBlob } from './audioEncoding';
+import { useTranslation } from 'react-i18next';
 
 export interface UseVoiceRecorderOptions {
   maxRecordSeconds?: number;
@@ -36,6 +37,7 @@ function checkSupport(): boolean {
 }
 
 export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoiceRecorderReturn {
+  const { t } = useTranslation('voice');
   const {
     maxRecordSeconds = 15,
     hardMaxRecordSeconds = 55,
@@ -56,6 +58,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
   const mountedRef = useRef(true);
   const processingRef = useRef(false);
   const startGuardRef = useRef(false);
+  const generationRef = useRef(0);
 
   const cleanup = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -81,11 +84,12 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      generationRef.current += 1;
       cleanup();
     };
   }, [cleanup]);
 
-  const processRecording = useCallback(async (rawBlob: Blob, duration: number) => {
+  const processRecording = useCallback(async (rawBlob: Blob, duration: number, generation: number) => {
     if (processingRef.current) return;
     processingRef.current = true;
 
@@ -100,35 +104,40 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
         wavBlob = await convertToWav(rawBlob);
       }
 
-      if (mountedRef.current) {
+      if (mountedRef.current && generationRef.current === generation) {
         setIsRecording(false);
         setDurationMs(duration);
         onRecordingComplete?.(wavBlob, duration);
       }
     } catch (err: unknown) {
-      if (mountedRef.current) {
+      if (mountedRef.current && generationRef.current === generation) {
         setIsRecording(false);
         setDurationMs(0);
         const msg = err instanceof Error ? err.message : String(err);
         if (msg === 'DECODE_FAILED') {
-          onError?.('当前浏览器录音格式暂不支持，请切换浏览器或使用文字输入。');
+          onError?.(t('errors.recordFormat'));
         } else {
-          onError?.('录音处理失败，请重试或使用文字输入。');
+          onError?.(t('errors.network'));
         }
       }
     } finally {
-      processingRef.current = false;
+      if (generationRef.current === generation) processingRef.current = false;
     }
-  }, [onRecordingComplete, onError]);
+  }, [onRecordingComplete, onError, t]);
 
   const startRecording = useCallback(async () => {
     // Ref-based guard: state updates lag double-clicks, which would open two
     // concurrent getUserMedia flows and leak the first stream's tracks
     if (isRecording || startGuardRef.current) return;
     startGuardRef.current = true;
+    const generation = ++generationRef.current;
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!mountedRef.current || generationRef.current !== generation) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
 
       // Record in whatever format the browser supports
@@ -138,10 +147,11 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       chunksRef.current = [];
 
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
+        if (generationRef.current === generation && e.data.size > 0) chunksRef.current.push(e.data);
       };
 
       recorder.onstop = () => {
+        if (generationRef.current !== generation) return;
         const chunks = [...chunksRef.current];
         const duration = Date.now() - startTimeRef.current;
         cleanup();
@@ -150,21 +160,22 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
           if (mountedRef.current) {
             setIsRecording(false);
             setDurationMs(0);
-            onError?.('录音为空，请重试。');
+            onError?.(t('errors.network'));
           }
           return;
         }
 
         const rawBlob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
-        void processRecording(rawBlob, duration);
+        void processRecording(rawBlob, duration, generation);
       };
 
       recorder.onerror = () => {
+        if (generationRef.current !== generation) return;
         cleanup();
         if (mountedRef.current) {
           setIsRecording(false);
           setDurationMs(0);
-          onError?.('录音出错，请重试。');
+          onError?.(t('errors.network'));
         }
       };
 
@@ -195,6 +206,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       }, hardMaxRecordSeconds * 1000);
 
     } catch (err: unknown) {
+      if (!mountedRef.current || generationRef.current !== generation) return;
       cleanup();
       if (mountedRef.current) {
         setIsRecording(false);
@@ -202,14 +214,14 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       }
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('NotAllowedError') || msg.includes('Permission')) {
-        onError?.('无法使用麦克风。请在浏览器地址栏允许麦克风权限，或改用文字聊天。');
+        onError?.(t('errors.micPermission'));
       } else if (msg.includes('NotFoundError')) {
-        onError?.('未检测到麦克风设备，请检查设备连接。');
+        onError?.(t('errors.micPermission'));
       } else {
-        onError?.('录音启动失败，请重试或使用文字输入。');
+        onError?.(t('errors.network'));
       }
     }
-  }, [isRecording, maxRecordSeconds, hardMaxRecordSeconds, cleanup, processRecording, onError]);
+  }, [isRecording, maxRecordSeconds, hardMaxRecordSeconds, cleanup, processRecording, onError, t]);
 
   const stopRecording = useCallback(() => {
     if (recorderRef.current?.state === 'recording') {
@@ -218,6 +230,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
   }, []);
 
   const cancelRecording = useCallback(() => {
+    generationRef.current += 1;
     cleanup();
     processingRef.current = false;
     if (mountedRef.current) {

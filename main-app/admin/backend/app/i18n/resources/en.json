@@ -1,0 +1,24 @@
+{
+  "errors": {
+    "AUTH_INVALID_CREDENTIALS": "The username or password is incorrect",
+    "AUTH_INVALID_TOKEN": "The login token is invalid or expired",
+    "AUTH_INVALID_RECOVERY_PROOF": "The recovery key or security answer is incorrect",
+    "AUTH_RECOVERY_NOT_CONFIGURED": "This recovery method is not configured yet",
+    "AUTH_TOO_MANY_ATTEMPTS": "Too many attempts. Please try again in 5 minutes.",
+    "AUTH_PASSWORD_TOO_SHORT": "New password must be at least 6 characters",
+    "AUTH_SECURITY_QUESTION_REQUIRED": "Security question and answer are required",
+    "RESOURCE_NOT_FOUND": "The requested resource was not found",
+    "VALIDATION_ERROR": "The request parameters are invalid",
+    "UPLOAD_FAILED": "The upload failed",
+    "DATABASE_ERROR": "The data service is temporarily unavailable",
+    "PROMPT_NOT_FOUND": "The prompt was not found",
+    "PROMPT_VERSION_NOT_FOUND": "The prompt version was not found",
+    "PROMPT_DEFAULT_NOT_FOUND": "This prompt has no default content",
+    "PROMPT_PROVIDER_NOT_CONFIGURED": "The prompt provider is not configured",
+    "PROMPT_PROVIDER_ERROR": "The prompt provider returned an error",
+    "PROMPT_PROVIDER_UNREACHABLE": "The prompt provider could not be reached",
+    "PROMPT_TIMEOUT": "The prompt provider timed out",
+    "PROMPT_UNSUPPORTED_MODEL": "This prompt model is not supported",
+    "UNKNOWN_ERROR": "The operation failed. Please try again."
+  }
+}

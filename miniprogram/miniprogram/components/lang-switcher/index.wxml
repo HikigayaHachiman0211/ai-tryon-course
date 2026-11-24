@@ -1,0 +1,25 @@
+<view class="topbar">
+  <view class="topbar-brand">
+    <view class="brand-dot"></view>
+    <text class="brand-text">{{brandName}}</text>
+  </view>
+  <view class="topbar-actions">
+    <view class="locale-pills">
+      <view
+        wx:for="{{options}}"
+        wx:key="value"
+        class="locale-pill {{locale === item.value ? 'locale-pill-active' : ''}}"
+        data-locale="{{item.value}}"
+        bindtap="onSelectLocale"
+      >
+        {{item.shortLabel}}
+      </view>
+    </view>
+    <view wx:if="{{showShortcuts}}" class="shortcut-btn" bindtap="onOpenHistory">
+      <text>{{historyLabel}}</text>
+    </view>
+    <view wx:if="{{showShortcuts}}" class="shortcut-btn" bindtap="onOpenSettings">
+      <text>{{settingsLabel}}</text>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,6 @@
+<view class="radar-wrap">
+  <view class="radar-header">
+    <text class="radar-title">{{title}}</text>
+  </view>
+  <canvas type="2d" id="radarCanvas" class="radar-canvas"></canvas>
+</view>

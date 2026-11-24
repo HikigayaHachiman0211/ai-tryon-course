@@ -108,6 +108,10 @@ export function testProvider(id: number) {
   return request.post<TestResult>(`/api/ai-config/providers/${id}/test`)
 }
 
+export function syncProviderModels(id: number) {
+  return request.post<{ provider_key: string; synced_count: number; model_options: string[]; source?: 'remote' | 'builtin' }>(`/api/ai-config/providers/${id}/sync-models`)
+}
+
 export function getFeatures() {
   return request.get<AIFeatureConfig[]>('/api/ai-config/features')
 }
@@ -124,10 +128,45 @@ export function getPublicRuntime() {
 // Tryon-specific types and API calls
 // ---------------------------------------------------------------------------
 
+export type TotokensAPIScope = 'gemini' | 'gpt_1k' | 'gpt_2k4k' | 'gpt_all' | 'custom'
+
+export interface TotokensAPIProfile {
+  id: string
+  scope: TotokensAPIScope
+  label: string
+  builtin: boolean
+  enabled: boolean
+  base_url: string
+  has_api_key: boolean
+  key_status: string
+  default_model: string
+  models: string[]
+  timeout_seconds: number
+  last_test_status: string | null
+  last_test_message: string | null
+  last_test_at: string | null
+}
+
+export interface TotokensAPIProfileUpdate {
+  id: string
+  scope?: TotokensAPIScope
+  label?: string
+  enabled?: boolean
+  base_url?: string
+  api_key?: string
+  clear_api_key?: boolean
+  default_model?: string
+  models?: string[]
+  timeout_seconds?: number
+  delete?: boolean
+}
+
 export interface TryonAIConfig {
   feature_key: string
   enabled: boolean
   provider_key: string
+  active_provider_key: string
+  base_url: string
   provider_enabled: boolean
   has_api_key: boolean
   key_status: string
@@ -140,16 +179,26 @@ export interface TryonAIConfig {
   last_test_status: string | null
   last_test_message: string | null
   last_test_at: string | null
+  totokens_enabled?: boolean
+  totokens_has_api_key?: boolean
+  totokens_base_url?: string
+  totokens_chatgpt_model?: string
+  totokens_configured_count?: number
+  totokens_configured_scopes?: string[]
+  totokens_apis?: TotokensAPIProfile[]
 }
 
 export interface TryonAIConfigUpdatePayload {
   enabled?: boolean
+  provider_key?: string
+  base_url?: string
   api_key?: string
   clear_api_key?: boolean
   flash_model?: string
   pro_model?: string
   timeout_seconds?: number
   retry_count?: number
+  totokens_apis?: TotokensAPIProfileUpdate[]
 }
 
 export interface TryonAIConfigTestResult {
@@ -157,20 +206,24 @@ export interface TryonAIConfigTestResult {
   latency_ms: number
   status_code: number
   message: string
+  profile_id?: string
+  models_matched?: string[]
   model_check: {
     flash_found: boolean
     pro_found: boolean
   }
 }
 
-export function getTryonAIConfig() {
-  return request.get<TryonAIConfig>('/api/ai-config/tryon')
+export function getTryonAIConfig(providerKey?: string) {
+  return request.get<TryonAIConfig>('/api/ai-config/tryon', { params: providerKey ? { provider_key: providerKey } : undefined })
 }
 
 export function updateTryonAIConfig(data: TryonAIConfigUpdatePayload) {
   return request.put<TryonAIConfig>('/api/ai-config/tryon', data)
 }
 
-export function testTryonAIConfig() {
-  return request.post<TryonAIConfigTestResult>('/api/ai-config/tryon/test')
+export function testTryonAIConfig(params?: { provider_key?: string; profile_id?: string }) {
+  return request.post<TryonAIConfigTestResult>('/api/ai-config/tryon/test', undefined, {
+    params: params && (params.provider_key || params.profile_id) ? params : undefined,
+  })
 }

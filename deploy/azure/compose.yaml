@@ -1,0 +1,200 @@
+# Release topology for one AMD64 Azure VM. The build contexts are bounded to
+# directories inside the unpacked release archive, never a developer parent.
+name: ${COMPOSE_PROJECT_NAME:-ai-tryon-course}
+
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:7a396fd264a2067788b6551122b50f162bf6136312c7fc9d74381cb92c648382 # postgres:16-alpine, reviewed 2026-08-12
+    restart: unless-stopped
+    init: true
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: &json-logs
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks: [app]
+
+  main:
+    image: ${IMAGE_NAMESPACE:-ai-tryon-course}/main:${RELEASE_ID:?RELEASE_ID is required}
+    build:
+      context: ../../main-app
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${MAIN_PUBLIC_URL:?MAIN_PUBLIC_URL is required}
+        VITE_TRYON_BASE_URL: ${WORKBENCH_PUBLIC_URL:?WORKBENCH_PUBLIC_URL is required}
+        VITE_ADMIN_BASE_URL: ${ADMIN_PUBLIC_URL:?ADMIN_PUBLIC_URL is required}
+    env_file:
+      - ${APPLICATION_ENV_FILE:-../../deploy/azure/.env.azure.test}
+    environment:
+      PORT: "8080"
+      HISTORY_DIR: /var/lib/main/history
+      PUBLIC_IMAGE_BASE_URL: ${PUBLIC_IMAGE_BASE_URL:?PUBLIC_IMAGE_BASE_URL is required}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:?CORS_ALLOW_ORIGINS is required}
+    volumes:
+      - main-history:/var/lib/main/history
+    depends_on:
+      postgres:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.20"
+          memory: 1100M
+        reservations:
+          cpus: "0.20"
+          memory: 256M
+    logging: *json-logs
+    networks: [app]
+
+  admin:
+    image: ${IMAGE_NAMESPACE:-ai-tryon-course}/admin:${RELEASE_ID:?RELEASE_ID is required}
+    build:
+      context: ../../main-app
+      dockerfile: admin/Dockerfile
+      args:
+        VITE_ADMIN_API_BASE_URL: ${ADMIN_PUBLIC_URL:?ADMIN_PUBLIC_URL is required}
+        VITE_ADMIN_API_URL: ${ADMIN_PUBLIC_URL:?ADMIN_PUBLIC_URL is required}
+    env_file:
+      - ${APPLICATION_ENV_FILE:-../../deploy/azure/.env.azure.test}
+    environment:
+      PORT: "8080"
+      MAIN_SITE_URL: ${MAIN_PUBLIC_URL:?MAIN_PUBLIC_URL is required}
+      TRYON_WORKBENCH_URL: ${WORKBENCH_ENTRY_URL:?WORKBENCH_ENTRY_URL is required}
+      PUBLIC_IMAGE_BASE_URL: ${PUBLIC_IMAGE_BASE_URL:?PUBLIC_IMAGE_BASE_URL is required}
+      VOICE_CLONE_UPLOAD_DIR: /var/lib/admin/voice-clones
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:?CORS_ALLOW_ORIGINS is required}
+    volumes:
+      - admin-data:/var/lib/admin
+      - admin-voice-clones:/var/lib/admin/voice-clones
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.80"
+          memory: 850M
+        reservations:
+          cpus: "0.15"
+          memory: 192M
+    logging: *json-logs
+    networks: [app]
+
+  workbench:
+    image: ${IMAGE_NAMESPACE:-ai-tryon-course}/workbench:${RELEASE_ID:?RELEASE_ID is required}
+    build:
+      context: ../../tryon-workbench
+      dockerfile: Dockerfile
+    env_file:
+      - ${APPLICATION_ENV_FILE:-../../deploy/azure/.env.azure.test}
+    environment:
+      PORT: "8080"
+      VITE_RECOMMEND_APP_URL: ${MAIN_PUBLIC_URL:?MAIN_PUBLIC_URL is required}
+      VITE_TRYON_EMBED_MODE: ${VITE_TRYON_EMBED_MODE:-standalone}
+      UPLOAD_DIR: /var/lib/workbench/uploads
+      ASSET_DIR: /var/lib/workbench/assets
+      HISTORY_DIR: /var/lib/workbench/history
+    volumes:
+      - workbench-uploads:/var/lib/workbench/uploads
+      - workbench-assets:/var/lib/workbench/assets
+      - workbench-history:/var/lib/workbench/history
+    depends_on:
+      postgres:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.90"
+          memory: 1000M
+        reservations:
+          cpus: "0.15"
+          memory: 192M
+    logging: *json-logs
+    networks: [app]
+
+  proxy:
+    image: caddy:2-alpine@sha256:98eb57d882ccd5213d1688764db10c1ca2c58a1ca3a6717a3411ad798f7a423a # caddy:2-alpine, reviewed 2026-08-12
+    restart: unless-stopped
+    init: true
+    environment:
+      AZURE_FQDN: ${AZURE_FQDN:?AZURE_FQDN is required}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8443:8443"
+      - "9443:9443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      main:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+      workbench:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:2019/config/" ]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    logging: *json-logs
+    networks: [app]
+
+volumes:
+  postgres-data:
+  main-history:
+  admin-data:
+  admin-voice-clones:
+  workbench-uploads:
+  workbench-assets:
+  workbench-history:
+  caddy-data:
+  caddy-config:
+
+networks:
+  app:
+    driver: bridge

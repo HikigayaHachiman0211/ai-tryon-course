@@ -4,13 +4,12 @@ import { UserOutlined, ManOutlined, WomanOutlined, QuestionCircleOutlined, Delet
 import ReactECharts from 'echarts-for-react'
 import type { ColumnsType } from 'antd/es/table'
 import { listProfiles, getProfile, getProfileStats, getProfileTryonResults, deleteProfile } from '../api/profiles'
+import { useTranslation } from 'react-i18next'
 
 const { Title, Text } = Typography
 const { Option } = Select
 
 const AUTO_REFRESH_MS = 15000
-const LATENCY_HINT = '数据为主站异步上报，可能有数秒延迟；本页每 15 秒自动刷新'
-
 interface ProfileItem {
   id: number
   session_id: string
@@ -23,6 +22,7 @@ interface ProfileItem {
 }
 
 export default function ProfilesPage() {
+  const { t } = useTranslation('common')
   const [data, setData] = useState<ProfileItem[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -57,7 +57,7 @@ export default function ProfilesPage() {
 
   const handleDelete = async (id: number) => {
     await deleteProfile(id)
-    message.success('已删除')
+    message.success(t('products.deleted'))
     fetchData(1); setPage(1)
     getProfileStats().then((res) => setStats(res.data))
   }
@@ -73,34 +73,34 @@ export default function ProfilesPage() {
   const sizeDist = (stats?.size_distribution as { size: string; count: number }[]) || []
 
   const columns: ColumnsType<ProfileItem> = [
-    { title: '会话', dataIndex: 'session_id', width: 120, ellipsis: true },
+    { title: t('profiles.session'), dataIndex: 'session_id', width: 120, ellipsis: true },
     {
-      title: '性别', dataIndex: 'gender', width: 80,
+      title: t('profiles.gender'), dataIndex: 'gender', width: 80,
       render: (v: string) => {
         const isMale = v === '男' || v?.toLowerCase() === 'male'
-        return isMale ? <Tag icon={<ManOutlined />} color="blue">{v}</Tag> : <Tag icon={<WomanOutlined />} color="pink">{v}</Tag>
+        return isMale ? <Tag icon={<ManOutlined />} color="blue">{t('samples.male')}</Tag> : <Tag icon={<WomanOutlined />} color="pink">{t('samples.female')}</Tag>
       },
     },
     { title: 'MBTI', dataIndex: 'mbti', width: 80 },
-    { title: 'AI 体型', dataIndex: 'ai_body_shape', width: 120 },
-    { title: '推荐尺码', dataIndex: 'ai_recommended_size', width: 100 },
+    { title: t('profiles.bodyShape'), dataIndex: 'ai_body_shape', width: 120 },
+    { title: t('profiles.size'), dataIndex: 'ai_recommended_size', width: 100 },
     {
       title: (
-        <Tooltip title="Fallback 表示 AI (Gemini) 体型分析失败或不可用，系统自动回退到基于规则的启发式推断（如通过身高推尺码、关键词推款式）">
-          Fallback <QuestionCircleOutlined style={{ color: '#999', fontSize: 12 }} />
+        <Tooltip title={t('profiles.fallbackHint')}>
+          {t('profiles.fallbackRate')} <QuestionCircleOutlined style={{ color: '#999', fontSize: 12 }} />
         </Tooltip>
       ),
       dataIndex: 'used_fallback',
       width: 100,
-      render: (v: boolean) => v ? <Tag color="orange">是</Tag> : <Tag color="green">否</Tag>,
+      render: (v: boolean) => v ? <Tag color="orange">{t('status.yes')}</Tag> : <Tag color="green">{t('status.no')}</Tag>,
     },
-    { title: '创建时间', dataIndex: 'created_at', width: 180 },
+    { title: t('profiles.createdAt'), dataIndex: 'created_at', width: 180 },
     {
-      title: '操作', width: 120,
+      title: t('actions.submit'), width: 120,
       render: (_, record) => (
         <Space>
-          <a onClick={() => showDetail(record.id)}>详情</a>
-          <Popconfirm title="确认删除该用户画像？" onConfirm={() => handleDelete(record.id)}>
+          <a onClick={() => showDetail(record.id)}>{t('actions.detail')}</a>
+          <Popconfirm title={t('profiles.confirmDelete')} onConfirm={() => handleDelete(record.id)}>
             <a style={{ color: '#ff4d4f' }}><DeleteOutlined /></a>
           </Popconfirm>
         </Space>
@@ -112,25 +112,25 @@ export default function ProfilesPage() {
     <div>
       <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
         <Space>
-          <Title level={4} style={{ margin: 0 }}>用户画像</Title>
-          <Tooltip title={LATENCY_HINT}><Text type="secondary" style={{ fontSize: 12 }}>数据可能有数秒延迟 ⓘ</Text></Tooltip>
+          <Title level={4} style={{ margin: 0 }}>{t('profiles.title')}</Title>
+          <Tooltip title={t('profiles.latencyHint')}><Text type="secondary" style={{ fontSize: 12 }}>{t('profiles.latencyHint')}</Text></Tooltip>
         </Space>
-        <Button icon={<ReloadOutlined />} onClick={refresh} loading={loading}>刷新</Button>
+        <Button icon={<ReloadOutlined />} onClick={refresh} loading={loading}>{t('actions.refresh')}</Button>
       </Space>
 
       {stats && (
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
           <Col xs={12} sm={6}>
             <Card className="stat-card">
-              <Statistic title="总画像数" value={(stats.total as number) || 0} prefix={<UserOutlined />} />
+              <Statistic title={t('profiles.total')} value={(stats.total as number) || 0} prefix={<UserOutlined />} />
             </Card>
           </Col>
           <Col xs={12} sm={6}>
             <Card className="stat-card">
               <Statistic
                 title={
-                  <Tooltip title="Fallback 率 = 使用规则回退的画像数 / 总画像数 × 100%。反映 AI 分析的可用性和成功率，比率越低表示 AI 服务越稳定">
-                    <span>Fallback 率 <QuestionCircleOutlined style={{ color: '#999', fontSize: 12 }} /></span>
+                  <Tooltip title={t('profiles.fallbackHint')}>
+                    <span>{t('profiles.fallbackRate')} <QuestionCircleOutlined style={{ color: '#999', fontSize: 12 }} /></span>
                   </Tooltip>
                 }
                 value={(stats.fallback_rate as number) || 0}
@@ -140,14 +140,15 @@ export default function ProfilesPage() {
             </Card>
           </Col>
           <Col xs={24} sm={12}>
-            <Card title="体型分布">
+            <Card title={t('profiles.distribution')}>
               <ReactECharts
                 option={{
-                  tooltip: { trigger: 'item' as const },
+                  tooltip: { trigger: 'item' as const, confine: true },
                   series: [{
-                    type: 'pie', radius: ['30%', '65%'],
+                    type: 'pie', radius: ['32%', '62%'],
                     data: bodyDist.map((b) => ({ value: b.count, name: b.shape })),
                     itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
+                    label: { overflow: 'truncate' as const },
                   }],
                 }}
                 style={{ height: 200 }}
@@ -158,16 +159,17 @@ export default function ProfilesPage() {
       )}
 
       <Card>
-        <Space style={{ marginBottom: 16 }}>
+        <Space wrap style={{ marginBottom: 16, width: '100%' }}>
           <Select
-            placeholder="性别筛选"
+            className="admin-toolbar-input"
+            placeholder={t('profiles.genderFilter')}
             value={genderFilter || undefined}
             onChange={(v) => setGenderFilter(v || '')}
             allowClear
             style={{ width: 120 }}
           >
-            <Option value="male">男</Option>
-            <Option value="female">女</Option>
+            <Option value="male">{t('samples.male')}</Option>
+            <Option value="female">{t('samples.female')}</Option>
           </Select>
         </Space>
         <Table
@@ -175,32 +177,34 @@ export default function ProfilesPage() {
           columns={columns}
           dataSource={data}
           loading={loading}
+          scroll={{ x: 'max-content' }}
           pagination={{
             current: page, pageSize: 20, total,
             onChange: (p) => { setPage(p); fetchData(p) },
-            showTotal: (t) => `共 ${t} 条`,
+            showTotal: (count) => t('pagination.total', { count }),
           }}
           size="middle"
         />
       </Card>
 
-      <Modal title="用户画像详情" open={detailOpen} onCancel={() => setDetailOpen(false)} footer={null} width={700}>
+      <Modal title={t('actions.detail')} open={detailOpen} onCancel={() => setDetailOpen(false)} footer={null} width={700}>
         {detail && (
           <>
-            <Descriptions column={2} bordered size="small">
+            <Descriptions column={{ xs: 1, sm: 2 }} bordered size="small">
               {Object.entries(detail).map(([k, v]) => (
                 <Descriptions.Item key={k} label={k}>{String(v ?? '-')}</Descriptions.Item>
               ))}
             </Descriptions>
             {tryonResults.length > 0 && (
-              <Card title="试穿记录" size="small" style={{ marginTop: 12 }}>
+              <Card title={t('profiles.tryonRecords')} size="small" style={{ marginTop: 12 }}>
                 <Table
                   rowKey="id"
                   dataSource={tryonResults}
+                  scroll={{ x: 'max-content' }}
                   columns={[
-                    { title: '商品 ID', dataIndex: 'product_id' },
-                    { title: '状态', dataIndex: 'status' },
-                    { title: '时间', dataIndex: 'created_at' },
+                    { title: 'product_id', dataIndex: 'product_id' },
+                    { title: t('profiles.status'), dataIndex: 'status' },
+                    { title: t('profiles.time'), dataIndex: 'created_at' },
                   ]}
                   size="small"
                   pagination={false}

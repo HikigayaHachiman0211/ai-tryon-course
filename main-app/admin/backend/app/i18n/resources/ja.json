@@ -1,0 +1,24 @@
+{
+  "errors": {
+    "AUTH_INVALID_CREDENTIALS": "ユーザー名またはパスワードが正しくありません",
+    "AUTH_INVALID_TOKEN": "ログイントークンが無効または期限切れです",
+    "AUTH_INVALID_RECOVERY_PROOF": "リカバリーキーまたは秘密の質問の回答が正しくありません",
+    "AUTH_RECOVERY_NOT_CONFIGURED": "この回復方法はまだ設定されていません",
+    "AUTH_TOO_MANY_ATTEMPTS": "試行回数が多すぎます。5分後に再度お試しください。",
+    "AUTH_PASSWORD_TOO_SHORT": "新しいパスワードは6文字以上である必要があります",
+    "AUTH_SECURITY_QUESTION_REQUIRED": "秘密の質問と回答を入力してください",
+    "RESOURCE_NOT_FOUND": "指定されたリソースが見つかりません",
+    "VALIDATION_ERROR": "リクエストパラメータが無効です",
+    "UPLOAD_FAILED": "アップロードに失敗しました",
+    "DATABASE_ERROR": "データサービスは一時的に利用できません",
+    "PROMPT_NOT_FOUND": "プロンプトが見つかりません",
+    "PROMPT_VERSION_NOT_FOUND": "プロンプトのバージョンが見つかりません",
+    "PROMPT_DEFAULT_NOT_FOUND": "このプロンプトには初期内容がありません",
+    "PROMPT_PROVIDER_NOT_CONFIGURED": "プロンプトプロバイダーが設定されていません",
+    "PROMPT_PROVIDER_ERROR": "プロンプトプロバイダーでエラーが発生しました",
+    "PROMPT_PROVIDER_UNREACHABLE": "プロンプトプロバイダーに接続できません",
+    "PROMPT_TIMEOUT": "プロンプトプロバイダーがタイムアウトしました",
+    "PROMPT_UNSUPPORTED_MODEL": "このプロンプトモデルはサポートされていません",
+    "UNKNOWN_ERROR": "操作に失敗しました。もう一度お試しください。"
+  }
+}

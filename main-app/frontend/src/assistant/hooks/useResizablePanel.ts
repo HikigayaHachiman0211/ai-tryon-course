@@ -131,6 +131,7 @@ export function useResizablePanel(): UseResizablePanelReturn {
       const onPointerUp = () => {
         document.removeEventListener('pointermove', onPointerMove);
         document.removeEventListener('pointerup', onPointerUp);
+        document.removeEventListener('pointercancel', onPointerUp);
         document.body.classList.remove('assistant-resizing');
         document.body.style.userSelect = '';
         saveSize(sizeRef.current);
@@ -138,6 +139,7 @@ export function useResizablePanel(): UseResizablePanelReturn {
 
       document.addEventListener('pointermove', onPointerMove);
       document.addEventListener('pointerup', onPointerUp);
+      document.addEventListener('pointercancel', onPointerUp);
     };
 
     const cursorMap: Record<ResizeDirection, string> = {

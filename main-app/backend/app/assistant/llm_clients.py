@@ -14,6 +14,7 @@ import httpx
 
 from app.ai_runtime_config import build_auth_headers, resolve_effective_provider, resolve_provider_config
 from app.assistant.schemas import RecommendFormPatch
+from app.opencode_go import DEFAULT_OPENCODE_GO_BASE_URL, call_opencode_go_sync
 from app.prompt_loader import load_active_prompt
 from app.llm_parsing import (
     extract_json_object as _extract_json_object,
@@ -155,17 +156,36 @@ def _call_gemini_chat(cfg: dict[str, Any], messages: list[dict], model: str) -> 
     return "\n".join(texts) if texts else None
 
 
+def _call_opencode_go_chat(cfg: dict[str, Any], messages: list[dict], model: str) -> str | None:
+    """Call OpenCode Go across its native protocol for the selected model."""
+    system_parts = [m.get("content", "") for m in messages if m.get("role") == "system" and m.get("content")]
+    non_system = [m for m in messages if m.get("role") != "system"]
+    text = call_opencode_go_sync(
+        api_key=cfg.get("api_key", ""),
+        model=model,
+        messages=non_system or messages,
+        base_url=cfg.get("base_url") or DEFAULT_OPENCODE_GO_BASE_URL,
+        system_prompt="\n\n".join(system_parts) if system_parts else None,
+        temperature=0.2,
+        max_tokens=1500,
+        timeout=30.0,
+    )
+    return text or None
+
+
 # Provider dispatch table
 _PROVIDER_CALLERS = {
     "mimo": _call_mimo_chat,
     "deepseek": _call_deepseek_chat,
     "gemini": _call_gemini_chat,
+    "opencode_go": _call_opencode_go_chat,
 }
 
 
 async def try_llm_enhance(
     message: str,
     current_fields: dict[str, Any],
+    locale: str = "zh-CN",
 ) -> dict[str, Any] | None:
     """Attempt LLM-based intent classification and field extraction.
 
@@ -222,13 +242,13 @@ async def try_llm_enhance(
     )
 
     page_context = json.dumps(current_fields or {}, ensure_ascii=False, default=str)
-    prompt_template = load_active_prompt("assistant_param_extractor", _DEFAULT_EXTRACT_PROMPT)
+    prompt_template = load_active_prompt("assistant_param_extractor", _DEFAULT_EXTRACT_PROMPT, locale=locale)
     prompt = prompt_template.replace("{message}", message)
     prompt += (
         "\n\n当前页面上下文 JSON：\n"
         f"{page_context}\n\n"
         "请结合当前页面上下文理解用户意图：\n"
-        "- 如果 photo_uploaded=true，说明用户已经上传了照片，但你不能直接看见图片内容；需要图像身型分析时，应设置 vision_provider=mimo、mimo_model=mimo-v2.5，并引导用户填齐必填项后生成推荐。\n"
+        "- 如果 photo_uploaded=true，说明用户已经上传了照片，但你不能直接看见图片内容；需要图像身型分析时，应设置 vision_provider=mimo、mimo_model=mimo-v2.6-flash，并引导用户填齐必填项后生成推荐。\n"
         "- 如果 recommendation_inference 存在，说明推荐接口已经完成图片/偏好分析；回复应引用其中的 body_shape、resolved_size、resolved_style、reasoning。\n"
         "- 如果 current_form 已有字段，不要要求用户重复填写；缺失 color_preference 或 gender 时应主动提取或询问。\n"
         "- 若用户要求根据照片推荐，intent 应为 recommend；能从文字中提取的字段放入 form_patch。\n"
@@ -237,9 +257,16 @@ async def try_llm_enhance(
         "- style_preference 必须使用数据库标准款式，不要输出 品质保障、风衣感、简约、不土 等自由词；先完成否定判断，再做标准映射。\n"
         "- 体型尺码规则：结合身高、体重、微胖/偏胖描述推断。180cm/一米八且约80kg，或用户说微胖，推荐 2XL 起步，不要输出 XL。"
     )
+    language_name = {"zh-CN": "Simplified Chinese", "en": "English", "ja": "Japanese"}.get(locale, "Simplified Chinese")
+    prompt += (
+        "\n\nNON-OVERRIDABLE OUTPUT CONTRACT:\n"
+        f"- Write the user-facing reply in {language_name}.\n"
+        "- Return JSON only. Keep action/form_patch keys and canonical enum values unchanged.\n"
+        "- Never add fields outside the existing action schema."
+    )
 
     messages = [
-        {"role": "system", "content": "你是专业的羽绒服导购 AI 助手。只返回 JSON，不要输出多余解释。"},
+        {"role": "system", "content": f"You are a professional down-jacket stylist. Respond in {language_name}; return JSON only and preserve the existing action schema."},
         {"role": "user", "content": prompt},
     ]
 

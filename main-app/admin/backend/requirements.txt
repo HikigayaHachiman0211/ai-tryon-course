@@ -1,4 +1,8 @@
 fastapi==0.116.1
+alibabacloud-oss-v2==1.4.1
+alibabacloud-credentials==1.0.12
+azure-identity==1.19.0
+azure-storage-blob==12.25.1
 uvicorn[standard]==0.35.0
 sqlalchemy==2.0.43
 psycopg[binary]==3.2.9
@@ -11,3 +15,4 @@ httpx>=0.28
 openpyxl>=3.1
 Pillow>=11.2
 cryptography>=41.0
+tzdata>=2024.1

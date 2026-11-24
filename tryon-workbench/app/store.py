@@ -5,12 +5,14 @@ import uuid
 import asyncio
 from typing import Dict, Any, Optional, List
 
-from app.config import TASK_STORE_MAX_ENTRIES, ERROR_LOG_MAX_ENTRIES, MODEL_PRICING
+from app.config import OBJECT_STORAGE_PROVIDER, TASK_STORE_MAX_ENTRIES, ERROR_LOG_MAX_ENTRIES, MODEL_PRICING
 
-try:
-    from google.cloud import firestore
-except Exception:
-    firestore = None
+firestore = None
+if OBJECT_STORAGE_PROVIDER == "gcs":
+    try:
+        from google.cloud import firestore
+    except Exception:
+        firestore = None
 
 # ===== In-memory stores =====
 TASKS: Dict[str, Dict[str, Any]] = {}
@@ -25,6 +27,9 @@ db = None
 
 def init_firestore():
     global db
+    if OBJECT_STORAGE_PROVIDER != "gcs":
+        db = None
+        return
     if firestore is None:
         print("[DB] Firestore module unavailable, fallback to memory only")
         return
@@ -77,16 +82,21 @@ def task_public_payload(task: Optional[dict]) -> dict:
     if not isinstance(logs, list):
         logs = [str(logs)]
     return {
+        "locale": str(task.get("locale") or "zh-CN"),
         "status": task.get("status", "pending"),
+        "status_code": task.get("status", "pending"),
+        "message_code": task.get("message_code"),
         "progress": int(task.get("progress", 0) or 0),
         "message": str(task.get("message", "")),
         "result_url": task.get("result_url"),
         "result_cloud_url": task.get("result_cloud_url"),
         "result_display_url": task.get("result_display_url"),
         "result_data_url": task.get("result_data_url"),
-        "freedom": int(task.get("freedom", 5) or 5),
+        "freedom": max(0, min(10, int(5 if task.get("freedom") is None else task["freedom"]))),
         "logs": [str(x) for x in logs][-500:],
         "error": task.get("error"),
+        "error_detail": task.get("error_detail"),
+        "error_code": task.get("error_code"),
         "created_at": float(task.get("created_at", 0) or 0),
     }
 

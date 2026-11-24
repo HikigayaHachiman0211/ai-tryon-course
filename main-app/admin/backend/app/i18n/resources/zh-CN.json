@@ -1,0 +1,24 @@
+{
+  "errors": {
+    "AUTH_INVALID_CREDENTIALS": "用户名或密码错误",
+    "AUTH_INVALID_TOKEN": "登录凭证无效或已过期",
+    "AUTH_INVALID_RECOVERY_PROOF": "恢复密钥或密保答案不正确",
+    "AUTH_RECOVERY_NOT_CONFIGURED": "未配置该密码恢复方式，请使用已配置的恢复方式",
+    "AUTH_TOO_MANY_ATTEMPTS": "尝试次数过多，请 5 分钟后再试",
+    "AUTH_PASSWORD_TOO_SHORT": "新密码长度至少为 6 位",
+    "AUTH_SECURITY_QUESTION_REQUIRED": "请输入密保问题和答案",
+    "RESOURCE_NOT_FOUND": "请求的资源不存在",
+    "VALIDATION_ERROR": "请求参数无效",
+    "UPLOAD_FAILED": "上传失败",
+    "DATABASE_ERROR": "数据服务暂时不可用",
+    "PROMPT_NOT_FOUND": "提示词不存在",
+    "PROMPT_VERSION_NOT_FOUND": "提示词版本不存在",
+    "PROMPT_DEFAULT_NOT_FOUND": "该提示词没有默认内容",
+    "PROMPT_PROVIDER_NOT_CONFIGURED": "提示词服务商尚未配置",
+    "PROMPT_PROVIDER_ERROR": "提示词服务商返回错误",
+    "PROMPT_PROVIDER_UNREACHABLE": "无法连接提示词服务商",
+    "PROMPT_TIMEOUT": "提示词服务商请求超时",
+    "PROMPT_UNSUPPORTED_MODEL": "不支持该提示词模型",
+    "UNKNOWN_ERROR": "操作失败，请稍后重试"
+  }
+}

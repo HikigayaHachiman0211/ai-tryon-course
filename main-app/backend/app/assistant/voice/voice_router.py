@@ -12,7 +12,7 @@ import time
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from starlette import status
 
@@ -37,10 +37,13 @@ from app.assistant.voice.voice_catalog import (
     DEFAULT_VOICE,
     get_all_catalog_items,
     get_published_clone_voices,
+    localize_voice_item,
     resolve_voice,
 )
 from app.assistant.voice.voice_rate_limit import check_rate_limit
 from app.prompt_loader import load_active_prompt
+from app.i18n.locale import DEFAULT_LOCALE, resolve_locale
+from app.i18n.messages import error_message
 
 logger = logging.getLogger(__name__)
 
@@ -162,12 +165,13 @@ def _check_tts_enabled() -> tuple[bool, str]:
 # GET /api/assistant/voice/config/public
 # ---------------------------------------------------------------------------
 @router.get("/voice/config/public", response_model=VoicePublicConfig)
-def get_voice_public_config() -> VoicePublicConfig:
+def get_voice_public_config(request: Request, locale: str | None = Query(default=None)) -> VoicePublicConfig:
     """Return non-sensitive voice configuration to the main site frontend.
 
     Never returns API keys, decrypted secrets, or clone sample URLs.
     Includes disabled reasons from backend feature config.
     """
+    resolved_locale = resolve_locale(locale or request.query_params.get("lang"), request.headers.get("accept-language"))
     asr_ok, asr_reason = _check_asr_enabled()
     tts_ok, tts_reason = _check_tts_enabled()
 
@@ -179,18 +183,21 @@ def get_voice_public_config() -> VoicePublicConfig:
     clone_voices = get_published_clone_voices() if clone_feat_enabled else []
     clone_enabled = clone_feat_enabled and len(clone_voices) > 0
 
+    catalog = [localize_voice_item(item, resolved_locale) for item in get_all_catalog_items()]
     return VoicePublicConfig(
         asr_enabled=asr_ok,
         tts_enabled=tts_ok,
         voice_clone_enabled=clone_enabled,
-        asr_disabled_reason=asr_reason or "",
-        tts_disabled_reason=tts_reason or "",
+        asr_disabled_reason=error_message("ASR_CONFIG_MISSING", resolved_locale) if not asr_ok else "",
+        tts_disabled_reason=error_message("TTS_CONFIG_MISSING", resolved_locale) if not tts_ok else "",
         default_voice=DEFAULT_VOICE,
         available_voices=AVAILABLE_VOICE_NAMES,
         published_clone_voices=[
-            {"id": v["id"], "name": v["name"], "description": v.get("description", "")}
+            {"id": v["id"], "name": v["name"], "description": v.get("description", ""), "display_name": localize_voice_item(v, resolved_locale).get("display_name", ""), "display_description": localize_voice_item(v, resolved_locale).get("display_description", "")}
             for v in clone_voices
         ],
+        locale=resolved_locale,
+        available_voice_catalog=catalog,
     )
 
 
@@ -198,12 +205,13 @@ def get_voice_public_config() -> VoicePublicConfig:
 # GET /api/assistant/voice/catalog/public
 # ---------------------------------------------------------------------------
 @router.get("/voice/catalog/public", response_model=list[VoiceCatalogItem])
-def get_voice_catalog_public() -> list[VoiceCatalogItem]:
+def get_voice_catalog_public(request: Request, locale: str | None = Query(default=None)) -> list[VoiceCatalogItem]:
     """Return all available voices (presets + published clones).
 
     Never returns unpublished, disabled, or raw sample audio.
     """
-    items = get_all_catalog_items()
+    resolved_locale = resolve_locale(locale or request.query_params.get("lang"), request.headers.get("accept-language"))
+    items = [localize_voice_item(item, resolved_locale) for item in get_all_catalog_items()]
     return [VoiceCatalogItem(**item) for item in items]
 
 
@@ -212,9 +220,12 @@ def get_voice_catalog_public() -> list[VoiceCatalogItem]:
 # ---------------------------------------------------------------------------
 @router.post("/asr", response_model=ASRResponse)
 async def asr_recognize(
+    http_request: Request,
     audio: UploadFile = File(..., description="音频文件 (wav/mp3)"),
     session_id: str = Form(default=""),
     language: str = Form(default="zh"),
+    speech_language: str | None = Form(default=None),
+    locale: str | None = Form(default=None),
     format: str | None = Form(default=None),
 ) -> ASRResponse:
     """Speech-to-text endpoint. Accepts wav/mp3 audio, returns recognized text.
@@ -222,12 +233,16 @@ async def asr_recognize(
     Reused by both normal voice input and phone call mode.
     """
     # Validate language
-    _ALLOWED_LANGUAGES = {"zh", "en", "auto"}
-    if language not in _ALLOWED_LANGUAGES:
+    ui_locale = resolve_locale(locale or http_request.query_params.get("lang"), http_request.headers.get("accept-language"))
+    effective_language = (speech_language or language or "auto").strip().lower()
+    _ALLOWED_LANGUAGES = {"zh", "en", "ja", "auto"}
+    if effective_language not in _ALLOWED_LANGUAGES:
         return ASRResponse(
             success=False,
-            error={"code": "INVALID_LANGUAGE", "message": f"不支持的语言: {language}。支持: zh, en, auto。"},
-            language=language,
+            error={"code": "INVALID_LANGUAGE", "message": error_message("INVALID_LANGUAGE", ui_locale)},
+            language=effective_language,
+            speech_language=effective_language,
+            locale=ui_locale,
         )
 
     # Rate limit
@@ -235,8 +250,10 @@ async def asr_recognize(
     if not allowed:
         return ASRResponse(
             success=False,
-            error={"code": "RATE_LIMITED", "message": msg},
-            language=language,
+            error={"code": "RATE_LIMITED", "message": error_message("RATE_LIMITED", ui_locale)},
+            language=effective_language,
+            speech_language=effective_language,
+            locale=ui_locale,
         )
 
     # Detect format
@@ -247,11 +264,10 @@ async def asr_recognize(
     if not mime_type:
         return ASRResponse(
             success=False,
-            error={
-                "code": "UNSUPPORTED_FORMAT",
-                "message": "当前浏览器录音格式暂不支持，请切换浏览器或使用文字输入。",
-            },
-            language=language,
+            error={"code": "UNSUPPORTED_FORMAT", "message": error_message("UNSUPPORTED_FORMAT", ui_locale)},
+            language=effective_language,
+            speech_language=effective_language,
+            locale=ui_locale,
         )
 
     # Pre-check: reject oversized uploads before loading into memory.
@@ -266,9 +282,11 @@ async def asr_recognize(
                 success=False,
                 error={
                     "code": "FILE_TOO_LARGE",
-                    "message": f"音频文件过大（约 {spooled_size // (1024 * 1024)}MB），上限约 7.5MB。",
+                    "message": error_message("FILE_TOO_LARGE", ui_locale),
                 },
-                language=language,
+                language=effective_language,
+                speech_language=effective_language,
+                locale=ui_locale,
             )
     except Exception:
         pass  # Seek not supported; fall through to post-read validation
@@ -279,8 +297,10 @@ async def asr_recognize(
     if validation_error:
         return ASRResponse(
             success=False,
-            error={"code": "INVALID_AUDIO", "message": validation_error},
-            language=language,
+            error={"code": "INVALID_AUDIO", "message": error_message("INVALID_AUDIO", ui_locale)},
+            language=effective_language,
+            speech_language=effective_language,
+            locale=ui_locale,
         )
 
     # Check ASR availability — resolve config with model isolation
@@ -289,8 +309,10 @@ async def asr_recognize(
     if cfg_err or not api_key:
         return ASRResponse(
             success=False,
-            error={"code": "ASR_CONFIG_MISSING", "message": cfg_err or "语音识别暂不可用，请改用文字输入。"},
-            language=language,
+            error={"code": "ASR_CONFIG_MISSING", "message": error_message("ASR_CONFIG_MISSING", ui_locale)},
+            language=effective_language,
+            speech_language=effective_language,
+            locale=ui_locale,
         )
 
     # Call MiMo ASR — model is always ASR-specific, never chat model
@@ -303,16 +325,18 @@ async def asr_recognize(
         mime_type=mime_type,
         model=model,
         base_url=base_url,
-        language=language,
+        language=effective_language,
     )
 
     if recognized_text is None:
-        error = meta.get("error", {"code": "ASR_FAILED", "message": "语音识别失败，请改用文字输入。"})
+        error = {"code": "ASR_FAILED", "message": error_message("ASR_FAILED", ui_locale)}
         return ASRResponse(
             success=False,
             provider="mimo",
             model=model,
-            language=language,
+            language=effective_language,
+            speech_language=effective_language,
+            locale=ui_locale,
             latency_ms=meta.get("latency_ms"),
             error=error,
         )
@@ -329,7 +353,9 @@ async def asr_recognize(
         normalized_text=normalized,
         provider="mimo",
         model=model,
-        language=language,
+        language=effective_language,
+        speech_language=effective_language,
+        locale=ui_locale,
         duration_ms=meta.get("duration_ms"),
         latency_ms=meta.get("latency_ms"),
     )
@@ -339,11 +365,12 @@ async def asr_recognize(
 # POST /api/assistant/tts
 # ---------------------------------------------------------------------------
 @router.post("/tts", response_model=TTSResponse)
-async def tts_synthesize(request: TTSRequest) -> TTSResponse:
+async def tts_synthesize(http_request: Request, request: TTSRequest) -> TTSResponse:
     """Text-to-speech endpoint. Returns audio URL for playback.
 
     Reused by both normal voice input and phone call mode.
     """
+    ui_locale = resolve_locale(request.locale or http_request.query_params.get("lang"), http_request.headers.get("accept-language"))
     # Validate format
     _ALLOWED_TTS_FORMATS = {"wav", "mp3"}
     output_format = (request.format or "wav").strip().lower()
@@ -351,7 +378,8 @@ async def tts_synthesize(request: TTSRequest) -> TTSResponse:
         return TTSResponse(
             success=False,
             voice=request.voice or DEFAULT_VOICE,
-            error={"code": "INVALID_FORMAT", "message": f"不支持的音频格式: {output_format}。支持: wav, mp3。"},
+            error={"code": "INVALID_FORMAT", "message": error_message("INVALID_FORMAT", ui_locale)},
+            locale=ui_locale,
         )
 
     # Rate limit
@@ -360,7 +388,8 @@ async def tts_synthesize(request: TTSRequest) -> TTSResponse:
         return TTSResponse(
             success=False,
             voice=request.voice or DEFAULT_VOICE,
-            error={"code": "RATE_LIMITED", "message": msg},
+            error={"code": "RATE_LIMITED", "message": error_message("RATE_LIMITED", ui_locale)},
+            locale=ui_locale,
         )
 
     # Validate text
@@ -368,7 +397,8 @@ async def tts_synthesize(request: TTSRequest) -> TTSResponse:
         return TTSResponse(
             success=False,
             voice=request.voice or DEFAULT_VOICE,
-            error={"code": "EMPTY_TEXT", "message": "播报文本为空。"},
+            error={"code": "EMPTY_TEXT", "message": error_message("EMPTY_TEXT", ui_locale)},
+            locale=ui_locale,
         )
 
     # Truncate if too long
@@ -384,7 +414,8 @@ async def tts_synthesize(request: TTSRequest) -> TTSResponse:
         return TTSResponse(
             success=False,
             voice=request.voice or DEFAULT_VOICE,
-            error={"code": "TTS_CONFIG_MISSING", "message": cfg_err or "语音播报暂不可用，文字回复仍可查看。"},
+            error={"code": "TTS_CONFIG_MISSING", "message": error_message("TTS_CONFIG_MISSING", ui_locale)},
+            locale=ui_locale,
         )
 
     # Resolve voice (handles clone fallback)
@@ -400,6 +431,7 @@ async def tts_synthesize(request: TTSRequest) -> TTSResponse:
         style_prompt = load_active_prompt(
             "assistant_tts_style_prompt",
             fallback=_TTS_STYLE_FALLBACK,
+            locale=ui_locale,
         )
 
     # Call MiMo TTS — model is always TTS-specific, never chat model
@@ -417,7 +449,7 @@ async def tts_synthesize(request: TTSRequest) -> TTSResponse:
     )
 
     if audio_bytes is None:
-        error = meta.get("error", {"code": "TTS_FAILED", "message": "语音播报失败，文字回复仍可查看。"})
+        error = {"code": "TTS_FAILED", "message": error_message("TTS_FAILED", ui_locale)}
         return TTSResponse(
             success=False,
             voice=effective_voice,
@@ -425,6 +457,7 @@ async def tts_synthesize(request: TTSRequest) -> TTSResponse:
             model=model,
             format=output_format,
             error=error,
+            locale=ui_locale,
         )
 
     # Save to temp file and return URL
@@ -445,6 +478,7 @@ async def tts_synthesize(request: TTSRequest) -> TTSResponse:
         provider="mimo",
         model=model,
         format=output_format,
+        locale=ui_locale,
     )
 
 

@@ -1,0 +1,7 @@
+{
+  "component": true,
+  "usingComponents": {
+    "radar-chart": "/components/radar-chart/index",
+    "score-breakdown": "/components/score-breakdown/index"
+  }
+}

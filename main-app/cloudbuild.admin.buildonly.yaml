@@ -1,0 +1,17 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - admin/Dockerfile
+      - --build-arg
+      - VITE_ADMIN_API_BASE_URL=/
+      - -t
+      - asia-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/$_IMAGE_NAME:$_TAG
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - asia-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/$_IMAGE_NAME:$_TAG
+images:
+  - asia-east1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/$_IMAGE_NAME:$_TAG

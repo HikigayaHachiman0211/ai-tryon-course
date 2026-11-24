@@ -1,0 +1,8 @@
+{
+  "usingComponents": {
+    "lang-switcher": "/components/lang-switcher/index",
+    "model-picker": "/components/model-picker/index",
+    "radar-chart": "/components/radar-chart/index",
+    "score-breakdown": "/components/score-breakdown/index"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "header": "AI Stylist",
+  "welcome": "Hi! I am your AI down-jacket stylist. Tell me what you would like to wear.",
+  "inputPlaceholder": "Describe what you need, for example: a slimming black women's down jacket under CNY 500...",
+  "thinking": "Thinking...",
+  "send": "Send",
+  "clear": "Clear conversation",
+  "close": "Close assistant",
+  "windowSize": "Panel size",
+  "voiceSettings": "Voice settings",
+  "play": "Read this message aloud",
+  "playPending": "Play audio",
+  "ttsGenerating": "Generating audio",
+  "ttsStop": "Stop playback",
+  "messageFailed": "Sorry, the message could not be sent. Please try again later.",
+  "sendFailed": "Message could not be sent. Check your connection.",
+  "action": {
+    "extracted": "Recommendation conditions detected",
+    "fill": "Fill form",
+    "fillAndSubmit": "Fill and recommend",
+    "cancel": "Cancel"
+  },
+  "field": {
+    "gender": "Gender",
+    "color_preference": "Color",
+    "price_min": "Minimum price",
+    "price_max": "Maximum price",
+    "brand_preference": "Brand",
+    "size": "Size",
+    "mbti": "MBTI",
+    "style_preference": "Style",
+    "ai_provider": "AI engine",
+    "vision_provider": "Vision engine",
+    "mimo_model": "MiMo model",
+    "opencode_go_model": "OpenCode Go model"
+  },
+  "gender": {"male": "Male", "female": "Female"},
+  "provider": {"mimo": "Xiaomi MiMo", "gemini": "Gemini", "deepseek": "DeepSeek", "opencode_go": "OpenCode Go", "auto": "Automatic"},
+  "emptyValue": "-",
+  "price": "CNY {{value}}",
+  "sizePreset": {"compact": "Compact", "default": "Default", "large": "Large", "wide": "Wide", "custom": "Custom"}
+}

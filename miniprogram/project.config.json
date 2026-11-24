@@ -1,0 +1,35 @@
+{
+  "description": "AI 羽绒服智选与虚拟试穿微信小程序",
+  "miniprogramRoot": "miniprogram/",
+  "compileType": "miniprogram",
+  "appid": "touristappid",
+  "projectname": "ai-down-jacket-tryon-mp",
+  "libVersion": "3.7.0",
+  "packOptions": {
+    "ignore": [
+      { "type": "folder", "value": "node_modules" },
+      { "type": "folder", "value": "tests" },
+      { "type": "file", "value": "package.json" },
+      { "type": "file", "value": "package-lock.json" },
+      { "type": "file", "value": "tsconfig.json" },
+      { "type": "file", "value": "vitest.config.ts" },
+      { "type": "file", "value": "README.md" }
+    ]
+  },
+  "setting": {
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "urlCheck": false,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    },
+    "useCompilerPlugins": ["typescript"],
+    "minifyWXSS": true,
+    "minifyWXML": true
+  },
+  "condition": {}
+}

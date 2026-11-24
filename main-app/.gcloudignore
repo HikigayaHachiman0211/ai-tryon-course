@@ -1,15 +1,12 @@
 frontend/node_modules
 frontend/dist
 frontend/.vite
+!frontend/public/locales/**
+!backend/app/i18n/**
+!backend/read-model/**
 **/.env
 **/.env.*
 !**/.env.example
-**/.venv*/
-**/.pytest_cache/
-**/*credentials*.json
-**/*service-account*.json
-**/*.pem
-**/*.key
 backend/__pycache__/
 backend/app/__pycache__/
 backend/local.db
@@ -17,5 +14,5 @@ backend/gcs_public_urls.json
 downloaded_jd_images/
 cloudsql-ops/
 awesome-design-md-main/
-Project4.15-AI-Try-on-with-frontend-backup-*/
+main-app-backup-*/
 *.log

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ttsSynthesize, buildTTSUrl } from './voiceApi';
 import { loadVoiceSettings } from './voiceSettingsStorage';
+import { useTranslation } from 'react-i18next';
 
 export interface UseMessageTTSReturn {
   /** ID of the message currently being loaded (TTS request in flight) */
@@ -18,6 +19,7 @@ export interface UseMessageTTSReturn {
 }
 
 export function useMessageTTS(sessionId: string): UseMessageTTSReturn {
+  const { t } = useTranslation('voice');
   const [loadingMessageId, setLoadingMessageId] = useState<string | null>(null);
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -96,7 +98,7 @@ export function useMessageTTS(sessionId: string): UseMessageTTSReturn {
       if (!mountedRef.current || activeMessageRef.current !== messageId) return;
 
       if (!result.success || !result.audio_url) {
-        const errMsg = result.error?.message || '语音播报暂不可用，文字回复仍可查看。';
+        const errMsg = result.error?.message || t('errors.network');
         // Dispatch a custom event so the UI can show the error
         window.dispatchEvent(new CustomEvent('message-tts-error', { detail: { messageId, error: errMsg } }));
         if (mountedRef.current) {
@@ -130,7 +132,7 @@ export function useMessageTTS(sessionId: string): UseMessageTTSReturn {
         if (mountedRef.current) {
           setLoadingMessageId(null);
           setPlayingMessageId(null);
-          window.dispatchEvent(new CustomEvent('message-tts-error', { detail: { messageId, error: '音频播放失败。' } }));
+          window.dispatchEvent(new CustomEvent('message-tts-error', { detail: { messageId, error: t('errors.network') } }));
         }
       };
 
@@ -140,16 +142,16 @@ export function useMessageTTS(sessionId: string): UseMessageTTSReturn {
         // Autoplay blocked
         if (mountedRef.current && activeMessageRef.current === messageId) {
           setLoadingMessageId(null);
-          window.dispatchEvent(new CustomEvent('message-tts-error', { detail: { messageId, error: '浏览器拦截了自动播放，请点击消息播报按钮重试。' } }));
+          window.dispatchEvent(new CustomEvent('message-tts-error', { detail: { messageId, error: t('errors.network') } }));
         }
       }
     } catch {
       if (mountedRef.current && activeMessageRef.current === messageId) {
         setLoadingMessageId(null);
-        window.dispatchEvent(new CustomEvent('message-tts-error', { detail: { messageId, error: '语音播报暂不可用，文字回复仍可查看。' } }));
+        window.dispatchEvent(new CustomEvent('message-tts-error', { detail: { messageId, error: t('errors.network') } }));
       }
     }
-  }, [sessionId, playingMessageId, loadingMessageId, stopInternal, stop]);
+  }, [sessionId, playingMessageId, loadingMessageId, stopInternal, stop, t]);
 
   return {
     loadingMessageId,

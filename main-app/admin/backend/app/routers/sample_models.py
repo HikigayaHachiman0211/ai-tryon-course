@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import struct
 from io import BytesIO
+from urllib.parse import unquote, urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
@@ -32,7 +33,13 @@ def _check_magic(data: bytes) -> str | None:
 
 def _resolve_image_url(model: SampleModel) -> str:
     object_name = f"sample_models/{model.gender}/{model.image_filename}"
-    if not model.gcs_url or model.gcs_url.startswith("https://storage.googleapis.com/"):
+    parsed = urlsplit(model.gcs_url or "")
+    host = (parsed.hostname or "").lower()
+    managed_cloud_url = host == "storage.googleapis.com" or (
+        (host.endswith(".blob.core.windows.net") or (".oss-" in host and host.endswith(".aliyuncs.com")))
+        and "/sample_models/" in unquote(parsed.path)
+    )
+    if not model.gcs_url or managed_cloud_url:
         return gcs.get_blob_url(object_name)
     return model.gcs_url
 

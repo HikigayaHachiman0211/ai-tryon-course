@@ -1,0 +1,22 @@
+{
+  "supported_locales": ["zh-CN", "en", "ja"],
+  "default_locale": "zh-CN",
+  "normalization": [
+    {"input": "zh", "expected": "zh-CN"},
+    {"input": "zh-Hans", "expected": "zh-CN"},
+    {"input": "zh_CN", "expected": "zh-CN"},
+    {"input": "en-US", "expected": "en"},
+    {"input": "ja-JP", "expected": "ja"},
+    {"input": "fr-FR", "expected": null}
+  ],
+  "accept_language": [
+    {"input": "fr;q=0.9, ja-JP;q=0.8, en;q=0.7", "expected": "ja"},
+    {"input": "en;q=0.4, zh-CN;q=0.9", "expected": "zh-CN"},
+    {"input": "fr, *;q=0.5", "expected": null}
+  ],
+  "precedence": [
+    {"explicit": "ja", "accept_language": "en-US", "expected": "ja"},
+    {"explicit": "fr", "accept_language": "en-US", "expected": "en"},
+    {"explicit": null, "accept_language": "fr-FR", "expected": "zh-CN"}
+  ]
+}

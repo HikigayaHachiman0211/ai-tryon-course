@@ -1,4 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import AuthGuard from './components/AuthGuard'
 import AdminLayout from './components/AdminLayout'
 import LoginPage from './pages/LoginPage'
@@ -9,6 +11,7 @@ import HistoryPage from './pages/HistoryPage'
 import SystemPage from './pages/SystemPage'
 import ImagesPage from './pages/ImagesPage'
 import TryonTasksPage from './pages/TryonTasksPage'
+import RealtimeTryonPage from './pages/RealtimeTryonPage'
 import PromptsPage from './pages/PromptsPage'
 import AnnotationsPage from './pages/AnnotationsPage'
 import ProfilesPage from './pages/ProfilesPage'
@@ -16,8 +19,14 @@ import SampleModelsPage from './pages/SampleModelsPage'
 import SettingsPage from './pages/SettingsPage'
 import AIModelSettingsPage from './pages/AIModelSettingsPage'
 import VoiceClonePage from './pages/VoiceClonePage'
+import { DEFAULT_LOCALE, normalizeLocale } from './i18n/locale'
 
 export default function App() {
+  const { t, i18n } = useTranslation('common')
+  useEffect(() => {
+    document.title = t('meta.title')
+    document.documentElement.lang = normalizeLocale(i18n.resolvedLanguage) ?? DEFAULT_LOCALE
+  }, [i18n.resolvedLanguage, t])
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
@@ -35,6 +44,7 @@ export default function App() {
         <Route path="/system" element={<SystemPage />} />
         <Route path="/images" element={<ImagesPage />} />
         <Route path="/tryon-tasks" element={<TryonTasksPage />} />
+        <Route path="/realtime-tryon" element={<RealtimeTryonPage />} />
         <Route path="/prompts" element={<PromptsPage />} />
         <Route path="/annotations" element={<AnnotationsPage />} />
         <Route path="/profiles" element={<ProfilesPage />} />

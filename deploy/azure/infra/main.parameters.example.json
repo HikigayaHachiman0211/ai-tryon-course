@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": { "value": "eastus" },
+    "namePrefix": { "value": "ai-tryon-course" },
+    "adminUsername": { "value": "azureuser" },
+    "adminSshPublicKey": { "value": "__SET_FROM_COMMAND_LINE__" },
+    "sshSourceCidr": { "value": "__SET_FROM_PREFLIGHT__" },
+    "vmSize": { "value": "Standard_B2als_v2" },
+    "dnsLabel": { "value": "__SET_GLOBALLY_UNIQUE_DNS_LABEL__" },
+    "storageAccountName": { "value": "__SET_GLOBALLY_UNIQUE_STORAGE_NAME__" },
+    "tags": {
+      "value": {
+        "project": "ai-tryon-course",
+        "managedBy": "azure-bicep",
+        "environment": "course-demo"
+      }
+    }
+  }
+}

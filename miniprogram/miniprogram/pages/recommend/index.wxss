@@ -1,0 +1,133 @@
+.field-group {
+  margin-bottom: 24rpx;
+}
+
+.field-group-last {
+  margin-bottom: 0;
+}
+
+.color-swatch {
+  width: 20rpx;
+  height: 20rpx;
+  border-radius: 50%;
+  border: 1rpx solid rgba(255, 255, 255, 0.35);
+}
+
+.gender-grid {
+  display: flex;
+  gap: 16rpx;
+}
+
+.gender-pill {
+  flex: 1;
+  min-height: 78rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20rpx;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1rpx solid rgba(255, 255, 255, 0.12);
+  font-size: 27rpx;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.gender-pill-active {
+  background: rgba(0, 113, 227, 0.25);
+  border-color: #2997ff;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.price-row {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+}
+
+.picker-arrow {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.submit-btn {
+  margin-bottom: 28rpx;
+}
+
+.results-section {
+  margin-top: 8rpx;
+}
+
+.inference-card {
+  background: linear-gradient(155deg, rgba(0, 113, 227, 0.14), rgba(29, 29, 32, 0.96));
+  border-color: rgba(41, 151, 255, 0.26);
+}
+
+.inference-grid {
+  display: flex;
+  gap: 12rpx;
+}
+
+.inference-cell {
+  flex: 1;
+  min-width: 0;
+  padding: 14rpx 16rpx;
+  border-radius: 18rpx;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1rpx solid rgba(255, 255, 255, 0.06);
+}
+
+.cell-label {
+  display: block;
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.56);
+  margin-bottom: 6rpx;
+}
+
+.cell-val {
+  display: block;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.reasoning-box {
+  margin-top: 16rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 16rpx;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.reasoning-text {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.55;
+}
+
+.summary-caption {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.56);
+}
+
+.results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8rpx 6rpx 14rpx;
+}
+
+.results-heading {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.toggle-more-btn {
+  margin-bottom: 20rpx;
+}
+
+.empty-card {
+  text-align: center;
+  padding: 28rpx;
+}

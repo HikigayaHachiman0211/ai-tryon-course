@@ -9,6 +9,7 @@ import {
   listSampleModels, uploadSampleModel, updateSampleModel, deleteSampleModel,
   batchDeleteModels, batchStatus,
 } from '../api/sampleModels'
+import { useTranslation } from 'react-i18next'
 
 const { Title } = Typography
 const { Option } = Select
@@ -28,6 +29,7 @@ interface SampleModel {
 }
 
 export default function SampleModelsPage() {
+  const { t } = useTranslation('common')
   const [data, setData] = useState<SampleModel[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -49,7 +51,7 @@ export default function SampleModelsPage() {
   useEffect(() => { fetchData(1); setPage(1) }, [genderFilter])
 
   const handleUpload = async () => {
-    if (fileList.length === 0) { message.warning('请选择图片'); return }
+    if (fileList.length === 0) { message.warning(t('samples.selectImage')); return }
     const values = form.getFieldsValue()
     setUploading(true)
     try {
@@ -59,13 +61,13 @@ export default function SampleModelsPage() {
       fd.append('gender', values.gender)
       fd.append('display_order', String(values.display_order || 0))
       await uploadSampleModel(fd)
-      message.success('上传成功')
+      message.success(t('images.uploadSuccess'))
       setUploadOpen(false)
       form.resetFields()
       setFileList([])
       fetchData()
     } catch {
-      message.error('上传失败')
+      message.error(t('images.uploadFailed'))
     } finally {
       setUploading(false)
     }
@@ -78,55 +80,55 @@ export default function SampleModelsPage() {
 
   const handleDelete = async (id: number) => {
     await deleteSampleModel(id)
-    message.success('已删除')
+    message.success(t('products.deleted'))
     fetchData()
   }
 
   const handleBatchDelete = async () => {
     await batchDeleteModels(selectedIds)
-    message.success(`已删除 ${selectedIds.length} 个`)
+    message.success(t('messages.deletedCount', { count: selectedIds.length }))
     setSelectedIds([])
     fetchData()
   }
 
   const handleBatchActivate = async (active: boolean) => {
     await batchStatus(selectedIds, active)
-    message.success('状态已更新')
+    message.success(t('status.enabled'))
     setSelectedIds([])
     fetchData()
   }
 
   const columns: ColumnsType<SampleModel> = [
     {
-      title: '图片', dataIndex: 'gcs_url', width: 80,
+      title: t('samples.image'), dataIndex: 'gcs_url', width: 80,
       render: (url: string) => <Image src={url} width={48} height={64} style={{ objectFit: 'cover', borderRadius: 4 }} />,
     },
-    { title: '名称', dataIndex: 'name', width: 150 },
+    { title: t('samples.name'), dataIndex: 'name', width: 150 },
     {
-      title: '性别', dataIndex: 'gender', width: 80,
-      render: (v: string) => <Tag color={v === '男' ? 'blue' : 'pink'}>{v}</Tag>,
+      title: t('samples.gender'), dataIndex: 'gender', width: 80,
+      render: (v: string) => <Tag color={v === '男' ? 'blue' : 'pink'}>{v === '男' ? t('samples.male') : t('samples.female')}</Tag>,
     },
-    { title: '排序', dataIndex: 'display_order', width: 80 },
+    { title: t('samples.order'), dataIndex: 'display_order', width: 80 },
     {
-      title: '启用', dataIndex: 'is_active', width: 80,
+      title: t('samples.active'), dataIndex: 'is_active', width: 80,
       render: (v: boolean, record) => (
         <Switch checked={v} size="small" onChange={(c) => handleToggleActive(record.id, c)} />
       ),
     },
     {
-      title: '尺寸', width: 120,
+      title: t('samples.size'), width: 120,
       render: (_, r) => r.image_width ? `${r.image_width}×${r.image_height}` : '-',
     },
     {
-      title: '大小', dataIndex: 'file_size', width: 80,
+      title: t('samples.fileSize'), dataIndex: 'file_size', width: 80,
       render: (v: number) => v ? `${(v / 1024).toFixed(0)} KB` : '-',
     },
-    { title: '上传者', dataIndex: 'uploaded_by', width: 100 },
-    { title: '创建时间', dataIndex: 'created_at', width: 180 },
+    { title: t('samples.uploadedBy'), dataIndex: 'uploaded_by', width: 100 },
+    { title: t('samples.createdAt'), dataIndex: 'created_at', width: 180 },
     {
-      title: '操作', width: 80,
+      title: t('actions.submit'), width: 80,
       render: (_, record) => (
-        <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
+        <Popconfirm title={t('products.confirmDelete')} onConfirm={() => handleDelete(record.id)}>
           <Button size="small" danger icon={<DeleteOutlined />} />
         </Popconfirm>
       ),
@@ -135,28 +137,29 @@ export default function SampleModelsPage() {
 
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 16 }}>示例模特管理</Title>
+      <Title level={4} style={{ marginBottom: 16 }}>{t('samples.title')}</Title>
       <Card>
-        <Space wrap style={{ marginBottom: 16 }}>
+        <Space wrap style={{ marginBottom: 16, width: '100%' }}>
           <Select
-            placeholder="性别筛选"
+            className="admin-toolbar-input"
+            placeholder={t('samples.filterGender')}
             value={genderFilter || undefined}
             onChange={(v) => setGenderFilter(v || '')}
             allowClear
             style={{ width: 120 }}
           >
-            <Option value="男">男</Option>
-            <Option value="女">女</Option>
+            <Option value="男">{t('samples.male')}</Option>
+            <Option value="女">{t('samples.female')}</Option>
           </Select>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setUploadOpen(true)}>
-            上传模特
+            {t('samples.upload')}
           </Button>
           {selectedIds.length > 0 && (
             <>
-              <Button onClick={() => handleBatchActivate(true)}>批量启用</Button>
-              <Button onClick={() => handleBatchActivate(false)}>批量停用</Button>
-              <Popconfirm title={`确认删除 ${selectedIds.length} 个？`} onConfirm={handleBatchDelete}>
-                <Button danger>批量删除</Button>
+              <Button onClick={() => handleBatchActivate(true)}>{t('samples.batchEnable')}</Button>
+              <Button onClick={() => handleBatchActivate(false)}>{t('samples.batchDisable')}</Button>
+              <Popconfirm title={t('samples.confirmDelete', { count: selectedIds.length })} onConfirm={handleBatchDelete}>
+                <Button danger>{t('samples.batchDelete')}</Button>
               </Popconfirm>
             </>
           )}
@@ -167,6 +170,7 @@ export default function SampleModelsPage() {
           columns={columns}
           dataSource={data}
           loading={loading}
+          scroll={{ x: 'max-content' }}
           rowSelection={{
             selectedRowKeys: selectedIds,
             onChange: (keys) => setSelectedIds(keys as number[]),
@@ -174,34 +178,34 @@ export default function SampleModelsPage() {
           pagination={{
             current: page, pageSize: 50, total,
             onChange: (p) => { setPage(p); fetchData(p) },
-            showTotal: (t) => `共 ${t} 个`,
+            showTotal: (count) => t('pagination.items', { count }),
           }}
           size="middle"
         />
       </Card>
 
       <Modal
-        title="上传示例模特"
+        title={t('samples.uploadTitle')}
         open={uploadOpen}
         onCancel={() => setUploadOpen(false)}
         onOk={handleUpload}
         confirmLoading={uploading}
-        okText="上传"
+        okText={t('actions.upload')}
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="name" label="模特名称" rules={[{ required: true }]}>
+          <Form.Item name="name" label={t('samples.modelName')} rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="gender" label="性别" rules={[{ required: true }]}>
+          <Form.Item name="gender" label={t('samples.gender')} rules={[{ required: true }]}>
             <Select>
-              <Option value="男">男</Option>
-              <Option value="女">女</Option>
+              <Option value="男">{t('samples.male')}</Option>
+              <Option value="女">{t('samples.female')}</Option>
             </Select>
           </Form.Item>
-          <Form.Item name="display_order" label="排序">
+          <Form.Item name="display_order" label={t('samples.order')}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item label="图片">
+          <Form.Item label={t('samples.file')}>
             <Upload
               beforeUpload={(file) => { setFileList([file]); return false }}
               fileList={fileList.map((f) => ({ uid: f.name, name: f.name, status: 'done' as const }))}
@@ -209,7 +213,7 @@ export default function SampleModelsPage() {
               accept="image/*"
               maxCount={1}
             >
-              <Button icon={<UploadOutlined />}>选择文件</Button>
+              <Button icon={<UploadOutlined />}>{t('samples.chooseFile')}</Button>
             </Upload>
           </Form.Item>
         </Form>

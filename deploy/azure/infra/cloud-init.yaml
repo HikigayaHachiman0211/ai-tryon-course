@@ -1,0 +1,41 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - jq
+  - unzip
+  - rsync
+  - fail2ban
+  - ufw
+  - apt-transport-https
+  - gnupg
+  - lsb-release
+
+write_files:
+  - path: /etc/docker/daemon.json
+    permissions: '0644'
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {"max-size": "10m", "max-file": "3"}
+      }
+  - path: /etc/logrotate.d/ai-tryon-course
+    permissions: '0644'
+    content: |
+      /opt/ai-tryon-course/shared/*.log /opt/ai-tryon-course/backups/*.log {
+          weekly
+          rotate 8
+          missingok
+          notifempty
+          compress
+          copytruncate
+      }
+
+runcmd:
+  - [bash, -lc, "set -euxo pipefail; install -m 0755 -d /etc/apt/keyrings; curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc; chmod a+r /etc/apt/keyrings/docker.asc; echo \"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable\" > /etc/apt/sources.list.d/docker.list; apt-get update; apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin"]
+  - [bash, -lc, "set -euxo pipefail; deployment_user=$(awk -F: '$3 >= 1000 && $3 < 65534 {print $1; exit}' /etc/passwd); test -n \"$deployment_user\"; usermod -aG docker \"$deployment_user\"; systemctl enable --now docker; systemctl restart docker"]
+  - [bash, -lc, "set -euxo pipefail; install -d -m 0750 /opt/ai-tryon-course/releases /opt/ai-tryon-course/shared /opt/ai-tryon-course/backups; deployment_user=$(awk -F: '$3 >= 1000 && $3 < 65534 {print $1; exit}' /etc/passwd); chown -R \"$deployment_user\":\"$deployment_user\" /opt/ai-tryon-course"]
+  - [bash, -lc, "set -euxo pipefail; if ! swapon --show=NAME --noheadings | grep -q .; then if ! fallocate -l 4G /swapfile; then dd if=/dev/zero of=/swapfile bs=1M count=4096 status=none; fi; chmod 600 /swapfile; mkswap /swapfile; swapon /swapfile; grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab; fi"]
+  - [bash, -lc, "set -euxo pipefail; ufw default deny incoming; ufw default allow outgoing; ufw allow from __SSH_SOURCE_CIDR__ to any port 22 proto tcp; ufw allow 80/tcp; ufw allow 443/tcp; ufw allow 8443/tcp; ufw allow 9443/tcp; ufw --force enable; systemctl enable --now fail2ban"]

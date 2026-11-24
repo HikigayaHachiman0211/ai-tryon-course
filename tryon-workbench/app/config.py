@@ -10,13 +10,18 @@ GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "").strip()
 GCP_LOCATION = os.environ.get("GCP_LOCATION", "asia-east1")
 VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "global")
 VERTEX_AI_API_KEY = os.environ.get("VERTEX_AI_API_KEY", "")
-DEFAULT_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+DEFAULT_API_KEY = os.environ.get("GEMINI_API_KEY", "vertex-ai")
 RECOMMEND_APP_URL = str(os.environ.get("VITE_RECOMMEND_APP_URL", "") or "").strip()
 TRYON_EMBED_MODE = str(os.environ.get("VITE_TRYON_EMBED_MODE", "standalone") or "standalone").strip().lower()
 if TRYON_EMBED_MODE not in ("standalone", "embed"):
     TRYON_EMBED_MODE = "standalone"
 RESULTS_GCS_BUCKET = str(os.environ.get("RESULTS_GCS_BUCKET", "") or "").strip()
 RESULTS_GCS_PREFIX = str(os.environ.get("RESULTS_GCS_PREFIX", "tryon-results") or "tryon-results").strip().strip("/")
+OBJECT_STORAGE_PROVIDER = str(os.environ.get("OBJECT_STORAGE_PROVIDER", "") or "").strip().lower()
+AZURE_STORAGE_ACCOUNT_NAME = str(os.environ.get("AZURE_STORAGE_ACCOUNT_NAME", "") or "").strip()
+AZURE_STORAGE_CONNECTION_STRING = str(os.environ.get("AZURE_STORAGE_CONNECTION_STRING", "") or "").strip()
+AZURE_MEDIA_CONTAINER = str(os.environ.get("AZURE_MEDIA_CONTAINER", "course-media") or "course-media").strip()
+PUBLIC_MEDIA_BASE_URL = str(os.environ.get("PUBLIC_MEDIA_BASE_URL", "") or "").strip()
 INTAKE_MAX_IMAGE_BYTES = 15 * 1024 * 1024
 IMAGE_DATA_URL_RE = re.compile(r"^data:(image/[a-zA-Z0-9.+-]+);base64,(.+)$", re.IGNORECASE | re.DOTALL)
 
@@ -30,17 +35,23 @@ MODEL_MAP: Dict[str, Dict[str, Any]] = {
         "ids": ["gemini-3-pro-image-preview", "gemini-3-pro-image"],
         "name": "Nano Banana Pro",
     },
+    "chatgpt": {
+        "ids": ["gpt-image-2", "chatgpt-image-latest", "gpt-image-1.5", "gpt-image-1"],
+        "name": "ChatGPT Image",
+    },
 }
 DEFAULT_MODEL = "flash"
 
 MODEL_PRICING: Dict[str, float] = {
     "flash": 0.067,
     "pro": 0.134,
+    "chatgpt": 0.0,
 }
 
 MODEL_LIMITS: Dict[str, Dict[str, int]] = {
     "flash": {"rpm": 100, "tpm": 200000, "rpd": 1000},
     "pro": {"rpm": 20, "tpm": 100000, "rpd": 250},
+    "chatgpt": {"rpm": 30, "tpm": 120000, "rpd": 300},
 }
 
 # ===== Paths =====
@@ -59,9 +70,9 @@ LOCAL_ANTIGRAVITY_DIRS = [
     os.path.join(WORKSPACE_DIR, ".antigravity_tools"),
 ]
 
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
-ASSET_DIR = os.path.join(BASE_DIR, "assets")
-HISTORY_DIR = os.path.join(BASE_DIR, "history")
+UPLOAD_DIR = os.path.abspath(os.environ.get("UPLOAD_DIR", os.path.join(BASE_DIR, "uploads")))
+ASSET_DIR = os.path.abspath(os.environ.get("ASSET_DIR", os.path.join(BASE_DIR, "assets")))
+HISTORY_DIR = os.path.abspath(os.environ.get("HISTORY_DIR", os.path.join(BASE_DIR, "history")))
 HISTORY_FILES_DIR = os.path.join(HISTORY_DIR, "files")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(ASSET_DIR, exist_ok=True)

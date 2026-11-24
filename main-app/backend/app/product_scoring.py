@@ -204,7 +204,7 @@ def build_score_breakdown(
     style_score: int,
     brand_score: int | None,
     personality_score: int | None,
-) -> tuple[float, dict[str, int], list[dict[str, int]]]:
+) -> tuple[float, dict[str, int], list[dict[str, int | str]]]:
     weighted_scores = {
         "颜色适配度": (color_score, 0.34),
         "身材适配度": (body_score, 0.28),
@@ -218,5 +218,15 @@ def build_score_breakdown(
     total_weight = sum(weight for _, weight in weighted_scores.values())
     total_score = sum(score * weight for score, weight in weighted_scores.values()) / total_weight
     breakdown = {label: score for label, (score, _) in weighted_scores.items()}
-    radar = [{"dimension": label, "score": score} for label, score in breakdown.items()]
+    dimension_codes = {
+        "颜色适配度": "color",
+        "身材适配度": "size",
+        "款式适配度": "style",
+        "品牌偏好度": "brand",
+        "性格适配度": "personality",
+    }
+    radar = [
+        {"code": dimension_codes.get(label, "style"), "dimension": label, "score": score}
+        for label, score in breakdown.items()
+    ]
     return round(total_score, 2), breakdown, radar

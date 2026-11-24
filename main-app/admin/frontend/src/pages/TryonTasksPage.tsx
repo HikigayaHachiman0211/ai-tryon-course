@@ -5,13 +5,12 @@ import ReactECharts from 'echarts-for-react'
 import type { ColumnsType } from 'antd/es/table'
 import { listTasks, getTaskStats, getTask, retryTask } from '../api/tryon'
 import { message } from 'antd'
+import { useTranslation } from 'react-i18next'
 
 const { Title, Text } = Typography
 const { Option } = Select
 
 const AUTO_REFRESH_MS = 15000
-const LATENCY_HINT = '数据为试穿台异步上报，可能有数秒延迟；本页每 15 秒自动刷新'
-
 interface TryonTask {
   id: string
   status: string
@@ -27,6 +26,7 @@ interface TryonTask {
 }
 
 export default function TryonTasksPage() {
+  const { t } = useTranslation('common')
   const [data, setData] = useState<TryonTask[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -60,7 +60,7 @@ export default function TryonTasksPage() {
 
   const handleRetry = async (id: string) => {
     await retryTask(id)
-    message.success('已重试')
+    message.success(t('actions.retry'))
     fetchData()
   }
 
@@ -73,28 +73,28 @@ export default function TryonTasksPage() {
   const columns: ColumnsType<TryonTask> = [
     { title: 'ID', dataIndex: 'id', width: 60 },
     {
-      title: '状态',
+      title: t('tryon.status'),
       dataIndex: 'status',
       width: 100,
       render: (s: string) => {
         const colorMap: Record<string, string> = {
           completed: 'green', failed: 'red', queued: 'blue', processing: 'orange', pending: 'default',
         }
-        return <Tag color={colorMap[s] || 'default'}>{s}</Tag>
+        return <Tag color={colorMap[s] || 'default'}>{t(`status.${s}`, { defaultValue: s })}</Tag>
       },
     },
-    { title: '商品 ID', dataIndex: 'product_id', width: 80 },
-    { title: '创建时间', dataIndex: 'created_at', width: 180 },
-    { title: '耗时', dataIndex: 'duration_ms', width: 80, render: (v: number | null) => v ? `${(v / 1000).toFixed(1)}s` : '-' },
-    { title: '错误', dataIndex: 'error_detail', ellipsis: true },
+    { title: t('tryon.productId'), dataIndex: 'product_id', width: 80 },
+    { title: t('tryon.createdAt'), dataIndex: 'created_at', width: 180 },
+    { title: t('tryon.duration'), dataIndex: 'duration_ms', width: 80, render: (v: number | null) => v ? `${(v / 1000).toFixed(1)}s` : '-' },
+    { title: t('tryon.error'), dataIndex: 'error_detail', ellipsis: true },
     {
-      title: '操作',
+      title: t('actions.submit'),
       width: 130,
       render: (_, record) => (
         <Space>
-          <Button size="small" onClick={() => showDetail(record.id)}>详情</Button>
+          <Button size="small" onClick={() => showDetail(record.id)}>{t('actions.detail')}</Button>
           {record.status === 'failed' && (
-            <Button size="small" icon={<ReloadOutlined />} onClick={() => handleRetry(record.id)}>重试</Button>
+            <Button size="small" icon={<ReloadOutlined />} onClick={() => handleRetry(record.id)}>{t('actions.retry')}</Button>
           )}
         </Space>
       ),
@@ -109,33 +109,33 @@ export default function TryonTasksPage() {
     <div>
       <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
         <Space>
-          <Title level={4} style={{ margin: 0 }}>AI 试穿任务</Title>
-          <Tooltip title={LATENCY_HINT}><Text type="secondary" style={{ fontSize: 12 }}>数据可能有数秒延迟 ⓘ</Text></Tooltip>
+          <Title level={4} style={{ margin: 0 }}>{t('tryon.title')}</Title>
+          <Tooltip title={t('tryon.latencyHint')}><Text type="secondary" style={{ fontSize: 12 }}>{t('history.delayed')}</Text></Tooltip>
         </Space>
-        <Button icon={<ReloadOutlined />} onClick={refresh} loading={loading}>刷新</Button>
+        <Button icon={<ReloadOutlined />} onClick={refresh} loading={loading}>{t('actions.refresh')}</Button>
       </Space>
 
       {stats && (
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
           <Col xs={12} sm={6}>
             <Card className="stat-card">
-              <Statistic title="总任务" value={(stats.total as number) || 0} prefix={<ThunderboltOutlined />} />
+              <Statistic title={t('tryon.total')} value={(stats.total as number) || 0} prefix={<ThunderboltOutlined />} />
             </Card>
           </Col>
           <Col xs={12} sm={6}>
             <Card className="stat-card">
-              <Statistic title="已完成" value={(stats.completed as number) || 0} valueStyle={{ color: '#52c41a' }} prefix={<CheckCircleOutlined />} />
+              <Statistic title={t('tryon.completed')} value={(stats.completed as number) || 0} valueStyle={{ color: '#52c41a' }} prefix={<CheckCircleOutlined />} />
             </Card>
           </Col>
           <Col xs={12} sm={6}>
             <Card className="stat-card">
-              <Statistic title="失败" value={(stats.failed as number) || 0} valueStyle={{ color: '#ff4d4f' }} prefix={<CloseCircleOutlined />} />
+              <Statistic title={t('tryon.failed')} value={(stats.failed as number) || 0} valueStyle={{ color: '#ff4d4f' }} prefix={<CloseCircleOutlined />} />
             </Card>
           </Col>
           <Col xs={12} sm={6}>
             <Card className="stat-card">
-              <Tooltip title="已完成任务平均耗时">
-                <Statistic title="平均耗时" value={stats.avg_duration_ms ? ((stats.avg_duration_ms as number) / 1000).toFixed(1) : '0'} suffix="s" prefix={<ClockCircleOutlined />} />
+              <Tooltip title={t('tryon.completedAverage')}>
+                <Statistic title={t('tryon.averageDuration')} value={stats.avg_duration_ms ? ((stats.avg_duration_ms as number) / 1000).toFixed(1) : '0'} suffix="s" prefix={<ClockCircleOutlined />} />
               </Tooltip>
             </Card>
           </Col>
@@ -145,11 +145,11 @@ export default function TryonTasksPage() {
       {stats && (
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
           <Col xs={24} lg={16}>
-            <Card title="成功率趋势">
+            <Card title={t('tryon.successTrend')}>
               {hasTrendData ? (
                 <ReactECharts
                   option={{
-                    tooltip: { trigger: 'axis' as const },
+                    tooltip: { trigger: 'axis' as const, confine: true },
                     xAxis: { type: 'category' as const, data: successTrend.map((t) => t.date) },
                     yAxis: { type: 'value' as const, max: 100 },
                     series: [{
@@ -158,30 +158,31 @@ export default function TryonTasksPage() {
                       itemStyle: { color: '#52c41a' },
                       areaStyle: { color: 'rgba(82,196,26,0.1)' },
                     }],
-                    grid: { top: 10, right: 20, bottom: 30, left: 50 },
+                    grid: { top: 16, right: 16, bottom: 20, left: 16, containLabel: true },
                   }}
                   style={{ height: 200 }}
                 />
               ) : (
-                <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>暂无趋势数据</div>
+                <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>{t('empty.noTrend')}</div>
               )}
             </Card>
           </Col>
           <Col xs={24} lg={8}>
-            <Card title="错误分布">
+            <Card title={t('tryon.errorDistribution')}>
               {errorDist.length > 0 ? (
                 <ReactECharts
                   option={{
-                    tooltip: { trigger: 'item' as const },
+                    tooltip: { trigger: 'item' as const, confine: true },
                     series: [{
-                      type: 'pie', radius: ['35%', '65%'],
+                      type: 'pie', radius: ['32%', '62%'],
                       data: errorDist.map((e) => ({ value: e.count, name: e.type })),
+                      label: { overflow: 'truncate' as const },
                     }],
                   }}
                   style={{ height: 200 }}
                 />
               ) : (
-                <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>暂无错误</div>
+                <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>{t('empty.noErrorsShort')}</div>
               )}
             </Card>
           </Col>
@@ -189,9 +190,10 @@ export default function TryonTasksPage() {
       )}
 
       <Card>
-        <Space style={{ marginBottom: 16 }}>
+        <Space wrap style={{ marginBottom: 16, width: '100%' }}>
           <Select
-            placeholder="状态筛选"
+            className="admin-toolbar-input"
+            placeholder={t('tryon.statusFilter')}
             value={statusFilter || undefined}
             onChange={(v) => setStatusFilter(v || '')}
             allowClear
@@ -208,16 +210,17 @@ export default function TryonTasksPage() {
           columns={columns}
           dataSource={data}
           loading={loading}
+          scroll={{ x: 'max-content' }}
           pagination={{
             current: page, pageSize: 20, total,
             onChange: (p) => { setPage(p); fetchData(p) },
-            showTotal: (t) => `共 ${t} 条`,
+            showTotal: (count) => t('pagination.total', { count }),
           }}
           size="middle"
         />
       </Card>
 
-      <Modal title="任务详情" open={detailOpen} onCancel={() => setDetailOpen(false)} footer={null} width={600}>
+      <Modal title={t('tryon.detail')} open={detailOpen} onCancel={() => setDetailOpen(false)} footer={null} width={600}>
         {detail && (
           <Descriptions column={1} bordered size="small">
             {Object.entries(detail).map(([k, v]) => (

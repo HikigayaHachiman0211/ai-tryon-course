@@ -1,0 +1,53 @@
+<view class="card product-card">
+  <view class="product-top">
+    <image
+      src="{{imageUrl}}"
+      mode="aspectFill"
+      class="product-thumb"
+      lazy-load
+      bindtap="onPreviewImage"
+    />
+    <view class="product-info">
+      <view class="badge-row" wx:if="{{rankText || scoreText || item.platform}}">
+        <text wx:if="{{rankText}}" class="tag tag-blue">{{rankText}}</text>
+        <text wx:if="{{scoreText}}" class="tag tag-gold">{{texts.matchScore}} {{scoreText}}</text>
+        <text wx:if="{{item.platform}}" class="tag">{{item.platform}}</text>
+      </view>
+      <text class="product-title">{{displayTitle}}</text>
+      <view class="price-brand-row">
+        <text class="product-price">¥{{item.price}}</text>
+        <text wx:if="{{item.brand}}" class="product-brand">{{item.brand}}</text>
+      </view>
+      <view class="tag-row">
+        <text wx:if="{{displayStyle}}" class="tag">{{displayStyle}}</text>
+        <text wx:if="{{displayColor}}" class="tag">{{displayColor}}</text>
+        <text wx:if="{{item.gender_label}}" class="tag">{{item.gender_label}}</text>
+      </view>
+    </view>
+  </view>
+
+  <text wx:if="{{displayFit}}" class="fit-note">{{displayFit}}</text>
+
+  <view wx:if="{{sizePreview.length}}" class="size-row">
+    <text wx:for="{{sizePreview}}" wx:key="*this" class="size-pill">{{item}}</text>
+  </view>
+
+  <view wx:if="{{item.reason}}" class="reason-box">
+    <text class="reason-text">{{item.reason}}</text>
+  </view>
+
+  <view wx:if="{{item.radar_chart && item.radar_chart.length}}" class="analysis-toggle" bindtap="onToggleExpand">
+    <text class="analysis-toggle-text">{{expanded ? texts.collapseAnalysis : texts.expandAnalysis}}</text>
+    <text class="analysis-arrow">{{expanded ? '▲' : '▼'}}</text>
+  </view>
+
+  <view wx:if="{{expanded && item.radar_chart}}" class="analysis-body">
+    <radar-chart data="{{item.radar_chart}}" locale="{{locale}}" />
+    <score-breakdown breakdown="{{item.score_breakdown}}" locale="{{locale}}" />
+  </view>
+
+  <view class="action-row">
+    <button class="btn-secondary action-btn" bindtap="onStyleLab">{{texts.styleLabBtn}}</button>
+    <button class="btn-primary action-btn" bindtap="onTryOn">{{texts.tryOnBtn}}</button>
+  </view>
+</view>

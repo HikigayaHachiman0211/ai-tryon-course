@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Model Try-On | 模特试衣</title>
     <link rel="icon" href="data:,">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,8 +12,9 @@
         href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=20260606-errors-only">
-    <link rel="stylesheet" href="/static/css/custom.css?v=20260606-errors-only">
+    <link rel="stylesheet" href="/static/css/style.css?v=20261124-v8">
+    <link rel="stylesheet" href="/static/css/custom.css?v=20261124-v8">
+    <link rel="stylesheet" href="/static/css/video.css?v=20261124-v8">
 </head>
 
 <body>
@@ -66,6 +67,14 @@
                         <span>已从羽绒服推荐结果进入试穿</span>
                     </div>
                 </div>
+                <label class="workbench-language-switcher">
+                    <span class="sr-only">界面语言</span>
+                    <select id="workbench-locale-switcher" data-testid="language-switcher" aria-label="界面语言">
+                        <option value="zh-CN">简体中文</option>
+                        <option value="en">English</option>
+                        <option value="ja">日本語</option>
+                    </select>
+                </label>
             </div>
 
             <div class="hero-grid">
@@ -96,6 +105,8 @@
                         <p id="hero-recommendation-reason">等待推荐系统传入本次商品摘要。未联动时也可直接上传用户图与羽绒服商品图进行手动试穿。</p>
                     </div>
                     <div class="hero-action-row">
+                        <a href="#section-realtime" class="glass-btn large-btn"><i class="fas fa-camera" aria-hidden="true"></i> <span data-i18n="realtime.title">实时试穿</span></a>
+                        <a href="#section-video" class="glass-btn large-btn"><i class="fas fa-video"></i> <span data-i18n="video.title">试穿视频</span></a>
                         <a id="hero-product-url" class="glass-btn large-btn hidden" href="#" target="_blank" rel="noopener noreferrer">
                             🛒 去选购
                         </a>
@@ -305,52 +316,134 @@
                     <div class="card-header">
                         <div class="step-badge">3</div>
                         <div class="header-text">
-                            <h2>试穿微调</h2>
-                            <p>优先保留主流程：选风格、调还原强度、一键生成</p>
+                            <h2 data-i18n="tryon.stepTitle">试穿微调</h2>
+                            <p data-i18n="tryon.stepSubtitle">自由切换模型提供商与具体模型，精细调节输出规格后一键生成</p>
                         </div>
                     </div>
 
-                    <div class="model-selector-section">
-                        <div class="section-label">
-                            <i class="fas fa-microchip"></i> 生成模型
-                        </div>
-                        <div class="model-selector-grid" id="model-selector">
-                            <div class="model-card active" data-model="flash" data-model-alias="Gemini Flash Image">
-                                <div class="model-card-icon">快</div>
-                                <div class="model-card-body">
-                                    <div class="model-card-name">Gemini Flash Image</div>
-                                    <div class="model-card-desc">更快出图，适合先看羽绒服上身感觉</div>
-                                </div>
+                    <div class="tryon-routing-panel">
+                        <div class="tryon-panel-head">
+                            <div class="section-label">
+                                <i class="fas fa-microchip"></i>
+                                <span data-i18n="tryon.routingTitle">模型提供商与生成模型</span>
                             </div>
-                            <div class="model-card" data-model="pro" data-model-alias="Gemini Pro Image">
-                                <div class="model-card-icon">精</div>
-                                <div class="model-card-body">
-                                    <div class="model-card-name">Gemini Pro Image</div>
-                                    <div class="model-card-desc">细节更强，更适合最终定稿与下载</div>
-                                </div>
+                            <button type="button" class="tryon-mini-btn" id="tryon-refresh-models-btn">
+                                <i class="fas fa-sync-alt"></i>
+                                <span data-i18n="tryon.refreshModels">刷新目录</span>
+                            </button>
+                        </div>
+
+                        <div class="tryon-select-grid">
+                            <label class="tryon-field" for="tryon-provider-select">
+                                <span class="tryon-field-label" data-i18n="tryon.providerLabel">模型提供商 / 路由</span>
+                                <select id="tryon-provider-select"></select>
+                            </label>
+                            <label class="tryon-field" for="tryon-model-select">
+                                <span class="tryon-field-label" data-i18n="tryon.modelLabel">具体生成模型</span>
+                                <select id="tryon-model-select"></select>
+                            </label>
+                        </div>
+
+                        <div class="tryon-field hidden" id="tryon-totokens-profile-field" style="margin-top: 10px;">
+                            <label class="tryon-field-label" for="tryon-totokens-profile-select" data-i18n="tryon.totokensProfileLabel">ToTokens API Key Group</label>
+                            <select id="tryon-totokens-profile-select"></select>
+                            <small class="tryon-field-hint" id="tryon-totokens-profile-hint"></small>
+                        </div>
+
+                        <div class="tryon-custom-model-row">
+                            <label class="tryon-switch-label" for="tryon-custom-model-toggle">
+                                <input type="checkbox" id="tryon-custom-model-toggle">
+                                <span data-i18n="tryon.customModelToggle">手动指定 Model ID（沿用当前已选提供商通道）</span>
+                            </label>
+                            <div class="tryon-custom-model-input-wrap hidden" id="tryon-custom-model-wrap">
+                                <input type="text" id="tryon-custom-model-input" autocomplete="off" spellcheck="false"
+                                    placeholder="例如: gemini-3.1-flash-image-preview 或 gpt-image-2"
+                                    data-i18n-placeholder="tryon.customModelPlaceholder">
+                                <small class="tryon-field-hint" id="tryon-custom-model-hint"></small>
                             </div>
                         </div>
+
+                        <div class="tryon-model-meta" id="tryon-model-meta"></div>
                     </div>
 
-                    <div class="freedom-controls freedom-controls-main">
+                    <div class="freedom-controls freedom-controls-main tryon-specs-panel">
+                        <div class="tryon-panel-head">
+                            <div class="tryon-panel-title">
+                                <i class="fas fa-sliders-h"></i>
+                                <span data-i18n="tryon.detailsTitle">试穿控制与图像输出规格</span>
+                            </div>
+                            <button type="button" class="tryon-mini-btn" id="tryon-reset-params-btn">
+                                <i class="fas fa-undo"></i>
+                                <span data-i18n="tryon.resetDefaults">恢复默认参数</span>
+                            </button>
+                        </div>
+
                         <div class="freedom-slider-group">
                             <label for="freedom-slider">
-                                <i class="fas fa-sliders-h"></i> 试穿自由度
+                                <i class="fas fa-magic"></i> <span data-i18n="tryon.freedomLabel">试穿自由度</span>
                                 <span class="freedom-value" id="freedom-value">5</span>
                             </label>
                             <div class="freedom-slider-wrapper">
-                                <span class="freedom-label-min">更贴近商品图</span>
+                                <span class="freedom-label-min" data-i18n="tryon.freedomMin">更贴近商品图</span>
                                 <input type="range" id="freedom-slider" min="0" max="10" value="5" step="1">
-                                <span class="freedom-label-max">更强调风格氛围</span>
+                                <span class="freedom-label-max" data-i18n="tryon.freedomMax">更强调风格氛围</span>
                             </div>
                         </div>
                         <div class="freedom-random-group">
                             <label class="freedom-random-label">
                                 <input type="checkbox" id="freedom-random">
                                 <span class="checkmark"></span>
-                                <i class="fas fa-dice"></i> 批量模式随机自由度
+                                <i class="fas fa-dice"></i> <span data-i18n="tryon.freedomRandom">批量模式随机自由度</span>
                             </label>
                         </div>
+
+                        <div class="tryon-params-grid">
+                            <label class="tryon-field" for="tryon-aspect-ratio">
+                                <span class="tryon-field-label" data-i18n="tryon.aspectRatioLabel">画面比例 (Aspect Ratio)</span>
+                                <select id="tryon-aspect-ratio"></select>
+                            </label>
+
+                            <label class="tryon-field" id="tryon-image-size-field" for="tryon-image-size">
+                                <span class="tryon-field-label" data-i18n="tryon.imageSizeLabel">输出分辨率 (Resolution)</span>
+                                <select id="tryon-image-size"></select>
+                            </label>
+
+                            <label class="tryon-field hidden" id="tryon-quality-field" for="tryon-quality">
+                                <span class="tryon-field-label" data-i18n="tryon.qualityLabel">生成画质 (Quality)</span>
+                                <select id="tryon-quality"></select>
+                            </label>
+
+                            <div class="tryon-field" id="tryon-temperature-field">
+                                <div class="tryon-field-top">
+                                    <label class="tryon-field-label" for="tryon-temperature" data-i18n="tryon.temperatureLabel">采样温度 (Temperature)</label>
+                                    <span class="tryon-val-pill" id="tryon-temperature-val" data-i18n="tryon.defaultPlaceholder">默认</span>
+                                </div>
+                                <div class="tryon-range-inline">
+                                    <input type="range" id="tryon-temperature-slider" min="0" max="2" step="0.1" value="1">
+                                    <input type="number" id="tryon-temperature" min="0" max="2" step="0.05" placeholder="默认"
+                                        data-i18n-placeholder="tryon.defaultPlaceholder">
+                                    <button type="button" class="tryon-inline-clear" id="tryon-temperature-clear" aria-label="Reset temperature">×</button>
+                                </div>
+                                <small class="tryon-field-hint" id="tryon-temperature-hint" data-i18n="tryon.temperatureHint">0 ~ 2 之间，留空时由模型自动决定随机性</small>
+                            </div>
+
+                            <div class="tryon-field" id="tryon-seed-field">
+                                <div class="tryon-field-top">
+                                    <label class="tryon-field-label" for="tryon-seed" data-i18n="tryon.seedLabel">随机种子 (Seed)</label>
+                                    <button type="button" class="tryon-inline-action" id="tryon-seed-random-btn">
+                                        <i class="fas fa-dice"></i> <span data-i18n="tryon.rollSeed">随机填入</span>
+                                    </button>
+                                </div>
+                                <div class="tryon-seed-inline">
+                                    <input type="number" id="tryon-seed" min="0" max="2147483647" step="1" placeholder="留空则每次随机"
+                                        data-i18n-placeholder="tryon.seedPlaceholder">
+                                    <button type="button" class="tryon-inline-clear" id="tryon-seed-clear" aria-label="Clear seed">×</button>
+                                </div>
+                                <small class="tryon-field-hint" id="tryon-seed-hint" data-i18n="tryon.seedHint">填入整数可固定采样以对比参数差异；留空每次随机</small>
+                            </div>
+                        </div>
+
+                        <div class="tryon-effective-summary" id="tryon-effective-summary"></div>
                     </div>
 
                     <div class="generate-actions primary-generate-actions">
@@ -410,6 +503,7 @@
                 </div>
 
                 <div class="result-toolbar">
+                    <button id="video-from-result" class="glass-btn small-btn" type="button"><i class="fas fa-video"></i> <span data-i18n="video.fromResult">用此结果生成视频</span></button>
                     <button id="download-btn" class="glass-btn small-btn hidden" title="下载当前主结果" type="button">
                         <i class="fas fa-download"></i> 下载主结果
                     </button>
@@ -594,8 +688,293 @@
             </details>
         </section>
 
+        <section id="section-realtime" class="card glass-panel" aria-labelledby="realtime-title">
+            <div class="video-heading">
+                <div>
+                    <div id="realtime-eyebrow" class="video-eyebrow">REALTIME TRY-ON · XMAX X2.1 / REACTOR / DECART</div>
+                    <h2 id="realtime-title" data-i18n="realtime.title">实时试穿</h2>
+                    <p id="realtime-subtitle">支持 Xmax X2.1 (1080p)、Reactor 中转 (X2.1 / X2.0) 与 Decart Lucy VTON 实时试穿。</p>
+                </div>
+                <span id="realtime-rate-tag" class="video-tag" hidden></span>
+            </div>
+            <div id="realtime-provider-bar" class="realtime-provider-bar">
+                <div id="realtime-provider-tabs" class="realtime-provider-tabs" role="tablist" aria-label="实时试穿引擎切换">
+                    <button id="realtime-provider-xmax" class="realtime-provider-tab active" type="button" role="tab" data-provider="xmax" aria-selected="true">
+                        <span class="realtime-provider-name">Xmax X2.1</span>
+                        <small class="realtime-provider-spec">1080p HD</small>
+                        <span class="realtime-provider-state" data-state="off">未开启</span>
+                    </button>
+                    <button id="realtime-provider-reactor" class="realtime-provider-tab" type="button" role="tab" data-provider="reactor" aria-selected="false">
+                        <span class="realtime-provider-name">Reactor · Xmax X2.1 / X2.0</span>
+                        <small class="realtime-provider-spec">X2.1 · X2.0</small>
+                        <span class="realtime-provider-state" data-state="off">未开启</span>
+                    </button>
+                    <button id="realtime-provider-decart" class="realtime-provider-tab" type="button" role="tab" data-provider="decart" aria-selected="false">
+                        <span class="realtime-provider-name">Decart Lucy VTON 3.6</span>
+                        <small class="realtime-provider-spec">720p</small>
+                        <span class="realtime-provider-state" data-state="off">未开启</span>
+                    </button>
+                </div>
+                <button id="realtime-refresh-status" class="glass-btn small-btn realtime-refresh-btn" type="button">
+                    <i class="fas fa-rotate" aria-hidden="true"></i> <span data-i18n="realtime.refreshStatus">刷新状态</span>
+                </button>
+            </div>
+            <p id="realtime-status" class="video-notice" role="status" data-tone="info">正在检查实时试穿是否可用…</p>
+            <div id="realtime-quota-bar" class="realtime-quota-bar" hidden></div>
+            <div id="realtime-controls" class="video-layout" hidden>
+                <form id="realtime-form" class="video-settings" autocomplete="off">
+                    <div class="video-source">
+                        <div class="video-source-preview">
+                            <img id="realtime-garment" alt="" hidden>
+                            <i id="realtime-garment-icon" class="fas fa-shirt" aria-hidden="true"></i>
+                        </div>
+                        <div>
+                            <label class="video-field-label" for="realtime-upload-trigger" data-i18n="realtime.garment">服装参考图</label>
+                            <p id="realtime-source" class="video-help"></p>
+                            <div class="video-source-actions">
+                                <input id="realtime-file" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                                <button id="realtime-upload-trigger" class="glass-btn small-btn" type="button"><i class="fas fa-upload" aria-hidden="true"></i> <span data-i18n="realtime.uploadGarment">上传服装图</span></button>
+                                <button id="realtime-pick-catalog" class="glass-btn small-btn" type="button"><i class="fas fa-store" aria-hidden="true"></i> <span data-i18n="realtime.pickCatalog">从羽绒服库选</span></button>
+                                <button id="realtime-use-selected" class="glass-btn small-btn" type="button" data-i18n="realtime.useSelected" hidden>改用工作台商品图</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="video-preset-row" id="realtime-presets" aria-label="服装描述快捷预设"></div>
+                    <div class="video-field">
+                        <label for="realtime-prompt" data-i18n="realtime.prompt">服装描述（可选）</label>
+                        <input id="realtime-prompt" type="text" maxlength="280" placeholder="例如：将身上穿的外套替换为参考图羽绒服，保持颜色与绗缝细节。" data-i18n-placeholder="realtime.promptPlaceholder">
+                    </div>
+                    <div id="realtime-xmax-options" class="realtime-xmax-options" hidden>
+                        <div class="video-field">
+                            <label for="realtime-xmax-model" data-i18n="realtime.xmaxModelLabel">Xmax 模型档位</label>
+                            <select id="realtime-xmax-model">
+                                <option value="x2.1">X2.1 (1080p HD)</option>
+                                <option value="x2.1-flash">X2.1 Flash (720p)</option>
+                            </select>
+                        </div>
+                        <div class="video-field">
+                            <label for="realtime-xmax-preset" data-i18n="realtime.xmaxPresetLabel">采集分辨率 / 画幅</label>
+                            <select id="realtime-xmax-preset">
+                                <option value="auto" selected>自适应最佳比例（推荐）</option>
+                                <option value="1080x1920">1080×1920 (9:16)</option>
+                                <option value="1920x1080">1920×1080 (16:9)</option>
+                                <option value="1152x1536">1152×1536 (3:4)</option>
+                                <option value="1536x1152">1536×1152 (4:3)</option>
+                                <option value="1408x1408">1408×1408 (1:1)</option>
+                            </select>
+                        </div>
+                        <div class="video-field">
+                            <label for="realtime-xmax-source" data-i18n="realtime.xmaxSourceLabel">画面来源</label>
+                            <select id="realtime-xmax-source">
+                                <option value="camera" data-i18n="realtime.xmaxSourceCamera">实时摄像头</option>
+                                <option value="image" data-i18n="realtime.xmaxSourceImage">人像照片（免摄像头）</option>
+                                <option value="video" data-i18n="realtime.xmaxSourceVideo">本地视频文件（免摄像头）</option>
+                            </select>
+                        </div>
+                        <div id="realtime-xmax-source-upload" class="realtime-xmax-source-upload" hidden>
+                            <input id="realtime-xmax-source-file" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                            <button id="realtime-xmax-source-btn" class="glass-btn small-btn" type="button">
+                                <i class="fas fa-photo-film" aria-hidden="true"></i> <span id="realtime-xmax-source-btn-text">选择人像照片</span>
+                            </button>
+                            <span id="realtime-xmax-source-name" class="video-help">请先选择一张人像照片或一段人物视频。</span>
+                        </div>
+                        <div class="realtime-xmax-toggles">
+                            <label class="realtime-face-toggle">
+                                <input id="realtime-face-restoration" type="checkbox" checked>
+                                <span data-i18n="realtime.faceRestoration">保留本人面部特征 (Face Restoration)</span>
+                            </label>
+                            <label class="realtime-face-toggle">
+                                <input id="realtime-xmax-adaptive" type="checkbox" checked>
+                                <span data-i18n="realtime.xmaxAdaptiveQuality">网络自适应画质 (Adaptive Quality)</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div id="realtime-reactor-options" class="realtime-xmax-options" hidden>
+                        <div class="video-field">
+                            <label for="realtime-reactor-model" data-i18n="realtime.reactorModelLabel">Reactor 模型档位</label>
+                            <select id="realtime-reactor-model">
+                                <option value="reactor/xmax-x2-1">Xmax X2.1 (默认 · 热切参考图)</option>
+                                <option value="xmax/x2">Xmax X2.0 (24fps 稳定模式)</option>
+                            </select>
+                        </div>
+                        <p class="video-help" data-i18n="realtime.reactorModelHint">默认使用 X2.1（换衣不断流）；X2.0 换参考图时会短暂重开生成。</p>
+                    </div>
+                    <div class="video-form-row" style="margin-top: 14px;">
+                        <div id="realtime-code-field" class="video-field">
+                            <label for="realtime-code" data-i18n="realtime.accessCode">体验码</label>
+                            <div class="realtime-code-wrap">
+                                <input id="realtime-code" type="password" maxlength="256" autocomplete="off">
+                                <button id="realtime-code-toggle" class="realtime-code-toggle" type="button" aria-label="显示或隐藏体验码" title="显示或隐藏体验码">
+                                    <i class="fas fa-eye" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="video-field">
+                            <label for="realtime-duration" data-i18n="realtime.duration">单次时长上限（秒）</label>
+                            <input id="realtime-duration" type="number" min="10" max="20" step="1" value="15">
+                            <div id="realtime-duration-chips" class="realtime-duration-chips"></div>
+                        </div>
+                    </div>
+                    <div class="video-quote">
+                        <strong id="realtime-quote"></strong>
+                        <p class="video-help" data-i18n="realtime.costHelp">本地预览不计费。点开始后按生成秒数计入预算，离开页面或切到后台会自动停止。</p>
+                    </div>
+                    <label class="realtime-consent">
+                        <input id="realtime-consent" type="checkbox">
+                        <span id="realtime-consent-text">同意开始后上传服装图并建立 Xmax X2.1 实时音视频会话（无需麦克风）。</span>
+                    </label>
+                    <div id="realtime-inline-error" class="video-notice realtime-inline-error" data-tone="error" role="alert" hidden></div>
+                    <div class="video-actions">
+                        <button id="realtime-preview" class="glass-btn" type="button" data-i18n="realtime.preview" disabled>打开本地预览</button>
+                        <button id="realtime-start" class="glow-button" type="submit" data-i18n="realtime.start" disabled>开始实时试穿</button>
+                        <button id="realtime-apply" class="glass-btn" type="button" hidden>应用服装</button>
+                        <button id="realtime-stop" class="glass-btn" type="button" data-i18n="realtime.stop" hidden>结束并关闭相机</button>
+                    </div>
+                </form>
+                <div class="video-output">
+                    <div id="realtime-stage-backdrop" class="realtime-stage-backdrop" hidden></div>
+                    <div id="realtime-stage-placeholder" class="realtime-stage-placeholder" hidden>
+                        <i class="fas fa-window-restore realtime-stage-placeholder-icon" aria-hidden="true"></i>
+                        <p id="realtime-stage-placeholder-text" class="video-help"></p>
+                        <button id="realtime-stage-return" class="glass-btn small-btn" type="button">
+                            <i class="fas fa-arrow-down-left-and-arrow-up-right-to-center" aria-hidden="true"></i>
+                            <span data-i18n="realtime.stageReturn">收回窗口</span>
+                        </button>
+                    </div>
+                    <div id="realtime-stage-home" class="realtime-stage-home">
+                        <div id="realtime-stage" class="realtime-stage" data-display-mode="inline" data-layout="dual" data-fit="cover" data-swapped="false" data-float-size="md">
+                            <div id="realtime-stage-bar" class="realtime-stage-bar">
+                                <div class="realtime-layout-pills" role="group" aria-label="视图布局">
+                                    <button id="realtime-layout-dual" class="realtime-layout-pill active" type="button" data-layout="dual" aria-pressed="true"><span data-i18n="realtime.layoutDual">双屏</span></button>
+                                    <button id="realtime-layout-remote" class="realtime-layout-pill" type="button" data-layout="remote" aria-pressed="false"><span data-i18n="realtime.layoutRemote">仅试穿</span></button>
+                                    <button id="realtime-layout-pip" class="realtime-layout-pill" type="button" data-layout="pip-overlay" aria-pressed="false"><span data-i18n="realtime.layoutPip">画中画</span></button>
+                                    <button id="realtime-layout-local" class="realtime-layout-pill" type="button" data-layout="local" aria-pressed="false"><span data-i18n="realtime.layoutLocal">仅本地</span></button>
+                                </div>
+                                <div class="realtime-window-actions">
+                                    <button id="realtime-swap-panes" class="realtime-stage-btn" type="button" aria-label="互换画面">
+                                        <i class="fas fa-right-left" aria-hidden="true"></i>
+                                    </button>
+                                    <button id="realtime-fit-toggle" class="realtime-stage-btn" type="button">
+                                        <i class="fas fa-up-right-and-down-left-from-center" aria-hidden="true"></i>
+                                        <span id="realtime-fit-label">铺满</span>
+                                    </button>
+                                    <button id="realtime-float-size" class="realtime-stage-btn" type="button" hidden>
+                                        <i class="fas fa-arrows-left-right-to-line" aria-hidden="true"></i>
+                                        <span id="realtime-float-size-label">M</span>
+                                    </button>
+                                    <button id="realtime-float-toggle" class="realtime-stage-btn" type="button">
+                                        <i class="fas fa-window-restore" aria-hidden="true"></i>
+                                        <span id="realtime-float-label">悬浮窗</span>
+                                    </button>
+                                    <button id="realtime-maximize-toggle" class="realtime-stage-btn" type="button">
+                                        <i class="fas fa-maximize" aria-hidden="true"></i>
+                                        <span id="realtime-maximize-label">最大化</span>
+                                    </button>
+                                    <button id="realtime-popout-toggle" class="realtime-stage-btn" type="button">
+                                        <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                                        <span id="realtime-popout-label">独立窗</span>
+                                    </button>
+                                    <button id="realtime-fullscreen-toggle" class="realtime-stage-btn" type="button" aria-label="全屏">
+                                        <i class="fas fa-expand" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="realtime-streams" class="realtime-streams">
+                                <figure id="realtime-pane-local" class="realtime-pane" data-pane="local">
+                                    <div class="realtime-video-box" data-pane-box="local">
+                                        <span id="realtime-local-badge" class="realtime-live-badge" hidden>PREVIEW</span>
+                                        <div class="realtime-pane-actions">
+                                            <button id="realtime-focus-local" class="realtime-pane-btn" type="button" aria-label="放大本地预览"><i class="fas fa-up-right-and-down-left-from-center" aria-hidden="true"></i></button>
+                                            <button id="realtime-pip-local" class="realtime-pane-btn" type="button" aria-label="画中画" hidden><i class="fas fa-clone" aria-hidden="true"></i></button>
+                                        </div>
+                                        <div id="realtime-local-empty" class="realtime-video-empty"><i class="fas fa-camera" aria-hidden="true"></i><span id="realtime-local-empty-text">先点左侧“打开本地预览”检查镜头构图</span></div>
+                                        <video id="realtime-local" class="is-mirrored" autoplay playsinline muted aria-labelledby="realtime-local-title"></video>
+                                        <img id="realtime-local-image" class="realtime-local-image" alt="" hidden>
+                                        <div id="realtime-xmax-local" class="realtime-xmax-host" hidden></div>
+                                    </div>
+                                    <figcaption id="realtime-local-title" data-i18n="realtime.local">本地预览</figcaption>
+                                </figure>
+                                <figure id="realtime-pane-remote" class="realtime-pane" data-pane="remote">
+                                    <div class="realtime-video-box" data-pane-box="remote">
+                                        <span id="realtime-remote-badge" class="realtime-live-badge" data-state="live" hidden>LIVE</span>
+                                        <div class="realtime-pane-actions">
+                                            <button id="realtime-focus-remote" class="realtime-pane-btn" type="button" aria-label="放大试穿画面"><i class="fas fa-up-right-and-down-left-from-center" aria-hidden="true"></i></button>
+                                            <button id="realtime-pip-remote" class="realtime-pane-btn" type="button" aria-label="画中画" hidden><i class="fas fa-clone" aria-hidden="true"></i></button>
+                                        </div>
+                                        <div id="realtime-remote-empty" class="realtime-video-empty"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span data-i18n="realtime.remoteEmpty">开始试穿后，实时换装画面将显示在这里</span></div>
+                                        <video id="realtime-remote" autoplay playsinline muted aria-labelledby="realtime-remote-title"></video>
+                                        <div id="realtime-xmax-remote" class="realtime-xmax-host" hidden></div>
+                                    </div>
+                                    <figcaption id="realtime-remote-title" data-i18n="realtime.remote">实时试穿画面</figcaption>
+                                </figure>
+                            </div>
+                            <div class="realtime-camera-toolbar">
+                                <button id="realtime-flip-camera" class="glass-btn small-btn" type="button" hidden><i class="fas fa-camera-rotate" aria-hidden="true"></i> <span data-i18n="realtime.flipCamera">切换前后镜头</span></button>
+                                <button id="realtime-mirror-toggle" class="glass-btn small-btn" type="button" aria-pressed="true"><i class="fas fa-left-right" aria-hidden="true"></i> <span data-i18n="realtime.mirror">镜像预览</span></button>
+                                <button id="realtime-snapshot" class="glass-btn small-btn" type="button" hidden><i class="fas fa-camera-retro" aria-hidden="true"></i> <span data-i18n="realtime.snapshot">截取试穿帧</span></button>
+                                <button id="realtime-stage-apply" class="glass-btn small-btn" type="button" hidden></button>
+                                <button id="realtime-stage-stop" class="glass-btn small-btn realtime-danger-btn" type="button" hidden></button>
+                            </div>
+                            <div id="realtime-progress" class="realtime-progress-track" hidden><div id="realtime-progress-fill" class="realtime-progress-fill"></div></div>
+                            <p id="realtime-meter" class="video-task-meta" hidden></p>
+                            <div id="realtime-telemetry" class="realtime-telemetry" hidden></div>
+                            <div id="realtime-snapshot-result" class="realtime-snapshot-result" hidden>
+                                <img id="realtime-snapshot-img" alt="">
+                                <div>
+                                    <p id="realtime-snapshot-caption" class="video-help" data-i18n="realtime.snapshotSaved">已截取当前试穿帧</p>
+                                    <a id="realtime-snapshot-download" class="glass-btn small-btn" download="live-tryon-snapshot.png" data-i18n="realtime.snapshotDownload">下载截图</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <p id="realtime-receipt" class="video-notice" role="status" hidden></p>
+                </div>
+            </div>
+        </section>
+
+        <section id="section-video" class="card glass-panel" aria-labelledby="video-title">
+            <div class="video-heading">
+                <div><div class="video-eyebrow">01ROUTER · IMAGE TO VIDEO</div><h2 id="video-title" data-i18n="video.title">试穿视频</h2><p data-i18n="video.subtitle">让试穿效果动起来，查看转身、行走时的版型与面料细节。</p></div>
+                <span class="video-tag" data-i18n="video.liveModels">实时模型 · 自由参数</span>
+            </div>
+            <div id="video-connection" class="video-notice" role="status">正在加载视频模型…</div>
+            <div class="video-layout">
+                <div class="video-settings">
+                    <div class="video-form-row">
+                        <div class="video-field"><label for="video-model" data-i18n="video.model">视频模型</label><select id="video-model" disabled></select></div>
+                        <div class="video-field"><label for="video-provider" data-i18n="video.provider">供应商 / 路由</label><select id="video-provider" disabled></select></div>
+                    </div>
+                    <div id="video-model-info" class="video-model-info"></div>
+                    <div class="video-source">
+                        <div class="video-source-preview"><img id="video-source-preview" alt="" hidden><i id="video-source-icon" class="fas fa-image" aria-hidden="true"></i></div>
+                        <div><strong class="video-field-label" data-i18n="video.source">试穿参考图</strong><div class="video-source-actions"><button id="video-use-result" class="glass-btn small-btn" type="button" data-i18n="video.useResult">使用当前试穿结果</button><button id="video-upload-trigger" class="glass-btn small-btn" type="button" data-i18n="video.upload">上传图片</button></div><p id="video-source-help" class="video-help">建议先生成满意的试穿图片，再将它作为视频首帧。</p></div>
+                    </div>
+                    <input id="video-upload" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                    <div class="video-preset-row" id="video-presets" aria-label="动作预设"></div>
+                    <form id="video-form" novalidate>
+                        <div id="video-prompt-fields" class="video-param-grid"></div>
+                        <div class="video-panel-heading"><strong data-i18n="video.parameters">详细参数</strong><button id="video-reset" class="glass-btn small-btn" type="button" data-i18n="video.reset">恢复模型默认值</button></div>
+                        <p class="video-help" data-i18n="video.parametersHelp">所有参数均来自所选模型与供应商。标注 * 的参数必填，其余留空使用模型默认值。</p>
+                        <div id="video-parameter-fields" class="video-param-grid" style="margin-top:14px"></div>
+                        <div class="video-quote"><div class="video-quote-line"><strong data-i18n="video.estimate">本次费用预估</strong><button id="video-quote-btn" class="glass-btn small-btn" type="button" data-i18n="video.quote">获取报价</button></div><div id="video-quote-lines" class="video-quote-lines"></div><p id="video-quote-note" class="video-help" data-i18n="video.quoteHelp">报价不收费。提交后才会生成视频，最终费用以上游结算为准。</p></div>
+                        <div id="video-error" class="video-notice" data-tone="error" role="alert" hidden></div>
+                        <div class="video-actions"><button id="video-generate" type="submit" class="glow-button" disabled><i class="fas fa-video"></i> <span data-i18n="video.generate">生成试穿视频</span></button><button id="video-refresh-models" type="button" class="glass-btn" data-i18n="video.refreshModels">刷新模型目录</button></div>
+                    </form>
+                    <details class="video-request-preview"><summary data-i18n="video.previewRequest">查看本次生成参数</summary><pre id="video-request-preview"></pre></details>
+                </div>
+                <div class="video-output">
+                    <div class="video-stage"><div id="video-empty" class="video-stage-empty"><i class="fas fa-play-circle" aria-hidden="true"></i><p data-i18n="video.empty">你的动态试穿，从这里开始</p><p data-i18n="video.emptyHelp">选择模型与图片，设定动作，生成专属试穿短片。</p></div><video id="video-player" controls playsinline preload="metadata" hidden></video></div>
+                    <div class="video-status" aria-live="polite"><strong id="video-task-status">等待生成</strong><span id="video-task-cost"></span></div>
+                    <div id="video-task-meta" class="video-task-meta"></div>
+                    <div id="video-output-links" class="video-output-links"></div>
+                    <div class="video-actions"><button id="video-cancel" type="button" class="glass-btn small-btn" data-i18n="video.cancel" hidden>尝试取消任务</button><button id="video-resume" type="button" class="glass-btn small-btn" data-i18n="video.resume" hidden>继续查询</button></div>
+                    <p id="video-task-note" class="video-help">生成通常需要数分钟。结果链接可能过期，请及时下载保存。</p>
+                    <div class="video-history"><h3 data-i18n="video.history">最近的视频任务</h3><div id="video-history-list"></div></div>
+                </div>
+            </div>
+        </section>
         <footer>
-            <p>Powered by Google AI Studio | 当前模型：<span id="footer-model-name">Gemini Flash Image</span></p>
+            <p>Powered by <span id="footer-provider-name">Google AI Studio</span> | <span data-i18n="runtime.currentModel">当前模型：</span><span id="footer-model-name">Gemini Flash Image</span></p>
         </footer>
     </div>
 
@@ -719,7 +1098,11 @@
         </div>
     </div>
 
-    <script src="/static/js/script.js?v=20260606-errors-only"></script>
+    <script src="/static/js/i18n.js?v=20261124-v8"></script>
+    <script src="/static/js/tryon-form.js?v=20261124-v8"></script>
+    <script src="/static/js/script.js?v=20261124-v8"></script>
+    <script type="module" src="/static/js/video.js?v=20261124-v8"></script>
+    <script type="module" src="/static/js/realtime.js?v=20261124-v8"></script>
     <script>
     /* Global image error handler — Apple-style fallback */
     document.addEventListener('error', function(e) {

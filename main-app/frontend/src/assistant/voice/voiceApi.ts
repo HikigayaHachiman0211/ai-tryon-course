@@ -1,12 +1,23 @@
 /* Voice API client — single source of truth for ASR, TTS, and voice config endpoints */
 
-import axios from 'axios';
+import axios, { AxiosHeaders } from 'axios';
 import type { ASRResult, TTSResult, VoicePublicConfig } from './voiceTypes';
 import { getAudioFileInfo } from './audioEncoding';
+import i18n from '../../i18n';
+import { DEFAULT_LOCALE, normalizeLocale, type AppLocale } from '../../i18n/locale';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
 });
+
+api.interceptors.request.use((config) => {
+  const headers = AxiosHeaders.from(config.headers);
+  headers.set('Accept-Language', normalizeLocale(i18n.resolvedLanguage) ?? DEFAULT_LOCALE);
+  config.headers = headers;
+  return config;
+});
+
+const activeLocale = (): AppLocale => normalizeLocale(i18n.resolvedLanguage) ?? DEFAULT_LOCALE;
 
 /**
  * Fetch public voice configuration (non-sensitive).
@@ -41,7 +52,7 @@ export async function asrRecognize(
       language,
       error: {
         code: 'UNSUPPORTED_FORMAT',
-        message: '当前浏览器录音格式暂不支持，请切换浏览器或使用文字输入。',
+        message: 'UNSUPPORTED_FORMAT',
       },
     };
   }
@@ -50,6 +61,8 @@ export async function asrRecognize(
   formData.append('audio', audioBlob, `recording.${ext}`);
   formData.append('session_id', sessionId);
   formData.append('language', language);
+  formData.append('speech_language', language);
+  formData.append('locale', activeLocale());
   formData.append('format', format);
 
   const res = await api.post('/api/assistant/asr', formData, {
@@ -78,6 +91,7 @@ export async function ttsSynthesize(params: {
 
   const res = await api.post('/api/assistant/tts', {
     session_id: params.sessionId,
+    locale: activeLocale(),
     text: params.text,
     voice: params.voice,
     format: fmt,

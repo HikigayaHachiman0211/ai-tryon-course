@@ -28,6 +28,8 @@ export interface VoicePublicConfig {
   supported_audio_formats: string[];
   default_language: string;
   max_tts_text_length: number;
+  locale?: string;
+  available_voice_catalog?: Array<{ id: string; name: string; display_name?: string; display_description?: string; source?: string }>;
 }
 
 export interface ASRResult {
@@ -40,6 +42,8 @@ export interface ASRResult {
   duration_ms?: number;
   latency_ms?: number;
   error?: { code: string; message: string };
+  locale?: string;
+  speech_language?: string;
 }
 
 export interface TTSResult {
@@ -51,6 +55,7 @@ export interface TTSResult {
   provider: string;
   model: string;
   error?: { code: string; message: string };
+  locale?: string;
 }
 
 export type CallState =
@@ -122,8 +127,8 @@ export function callStateToVoiceState(cs: CallState): AssistantVoiceState {
 
 /** Tone presets for TTS style */
 export const TONE_PRESETS = [
-  { id: 'natural', label: '自然导购', prompt: '像亲切的导购助手，语速适中，语气自然。' },
-  { id: 'anime', label: '活泼二次元', prompt: '像活泼的二次元助手，语速稍快，语气可爱热情。' },
-  { id: 'gentle', label: '温柔客服', prompt: '像温柔的客服，语速偏慢，语气耐心温和。' },
-  { id: 'professional', label: '专业简洁', prompt: '像专业的顾问，语速适中，语气简洁明确。' },
+  { id: 'natural' },
+  { id: 'anime' },
+  { id: 'gentle' },
+  { id: 'professional' },
 ];

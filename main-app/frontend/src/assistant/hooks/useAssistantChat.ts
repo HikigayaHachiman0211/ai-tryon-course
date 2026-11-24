@@ -2,12 +2,16 @@ import { useCallback, useState } from 'react';
 import { postAssistantChat } from '../../api';
 import type { AssistantChatMessage } from '../assistantTypes';
 import { getSessionId } from '../utils/session';
+import i18n from '../../i18n';
+import { DEFAULT_LOCALE, normalizeLocale } from '../../i18n/locale';
+import { useTranslation } from 'react-i18next';
 
 function createId(): string {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function useAssistantChat(currentView: string, currentForm: Record<string, unknown>) {
+  const { t } = useTranslation('assistant');
   const [messages, setMessages] = useState<AssistantChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +38,7 @@ export function useAssistantChat(currentView: string, currentForm: Record<string
           view: currentView,
           current_form: currentForm,
         },
+        locale: normalizeLocale(i18n.resolvedLanguage) ?? DEFAULT_LOCALE,
       });
 
       const assistantMessage: AssistantChatMessage = {
@@ -48,18 +53,18 @@ export function useAssistantChat(currentView: string, currentForm: Record<string
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch {
-      setError('消息发送失败，请检查网络连接');
+      setError(t('sendFailed'));
       const errorMessage: AssistantChatMessage = {
         id: createId(),
         role: 'assistant',
-        content: '抱歉，消息发送失败。请稍后再试。',
+        content: t('messageFailed'),
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setLoading(false);
     }
-  }, [currentView, currentForm, loading]);
+  }, [currentView, currentForm, loading, t]);
 
   const clearMessages = useCallback(() => {
     setMessages([]);

@@ -1,0 +1,10 @@
+{
+  "call": {"title": "AI電話スタイリスト", "privacy": "音声は今回のAIスタイリングにのみ使用し、このブラウザには保存されません。"},
+  "status": {"idle": "準備完了", "requesting_permission": "マイクの権限を確認中…", "ready": "お話しください", "listening": "聞き取り中", "recording": "録音中", "recognizing": "認識中", "thinking": "考えています", "speaking": "読み上げ中", "paused": "一時停止", "muted": "ミュート中", "error": "エラー", "ended": "通話終了"},
+  "action": {"retry": "再試行", "stop": "読み上げを停止", "settings": "設定", "end": "通話を終了", "back": "チャットに戻る", "mute": "ミュート", "unmute": "ミュート解除"},
+  "input": {"recognizing": "認識中…", "release": "離して終了", "clickStop": "クリックして録音終了", "hold": "押して話す", "clickStart": "クリックして録音開始"},
+  "settings": {"title": "音声設定", "tts": "音声読み上げ", "ttsDescription": "AIの返信を自動で読み上げる", "source": "音声ソース", "preset": "プリセット音声", "clone": "クローン音声", "voice": "音声", "tone": "話し方", "language": "認識言語", "chinese": "中文", "english": "English", "japanese": "日本語", "auto": "自動", "recordMode": "録音モード", "clickMode": "クリックで開始/終了", "holdMode": "押して話す", "autoSend": "認識結果を自動送信", "autoSendDescription": "認識が終わるとAIへ自動送信", "volume": "音量：{{percent}}%", "privacy": "音声は今回のAIスタイリングにのみ使用し、このブラウザには保存されません。"},
+  "tone": {"natural": "自然な接客", "anime": "明るく楽しく", "gentle": "やさしい接客", "professional": "簡潔で専門的"},
+  "errors": {"asrUnavailable": "音声認識を利用できません。テキスト入力をご利用ください。", "network": "ネットワークに接続できません。もう一度お試しください。", "micPermission": "マイクを利用できません。権限を許可するか、テキストチャットをご利用ください。", "unsupported": "このブラウザは音声通話に対応していません。テキストチャットをご利用ください。", "recordFormat": "このブラウザの録音形式には対応していません。別のブラウザかテキスト入力をご利用ください。"},
+  "duration": "通話終了。時間：{{duration}}"
+}

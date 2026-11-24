@@ -31,6 +31,7 @@ def load_active_prompt(
     name: str,
     fallback: str,
     variables: dict[str, str] | None = None,
+    locale: str | None = None,
 ) -> str:
     """Load an active prompt from the database with optional variable substitution.
 
@@ -42,6 +43,9 @@ def load_active_prompt(
     Returns:
         The prompt content with variables substituted, or fallback on any error.
     """
+    from app.i18n.locale import DEFAULT_LOCALE, normalize_locale
+
+    requested_locale = normalize_locale(locale) or DEFAULT_LOCALE
     engine = _get_engine()
     if engine is None:
         return _apply_variables(fallback, variables)
@@ -51,16 +55,23 @@ def load_active_prompt(
 
         metadata = MetaData()
         prompts = Table("prompt_configs", metadata, autoload_with=engine)
-        stmt = (
-            select(
-                prompts.c.content,
-                prompts.c.is_active,
-            )
-            .where(
-                prompts.c.name == name,
-                prompts.c.is_active.is_(True),
-            )
+        columns = [prompts.c.content, prompts.c.is_active]
+        has_locale = hasattr(prompts.c, "locale")
+        if has_locale:
+            columns.append(prompts.c.locale)
+        stmt = select(*columns).where(
+            prompts.c.name == name,
+            prompts.c.is_active.is_(True),
         )
+        if has_locale:
+            from sqlalchemy import case
+
+            stmt = stmt.where(prompts.c.locale.in_([requested_locale, DEFAULT_LOCALE]))
+            stmt = stmt.order_by(case(
+                (prompts.c.locale == requested_locale, 0),
+                (prompts.c.locale == DEFAULT_LOCALE, 1),
+                else_=2,
+            )).limit(1)
         with engine.connect() as conn:
             row = conn.execute(stmt).fetchone()
             if not row:

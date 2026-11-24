@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from app.mimo_models import DEFAULT_MIMO_MODEL
+
 
 class AssistantFeatureFlags(BaseModel):
     text_chat: bool = True
@@ -18,8 +20,9 @@ class AssistantPublicConfig(BaseModel):
     defaults: dict[str, str] = Field(default_factory=lambda: {
         "ai_provider": "mimo",
         "vision_provider": "mimo",
-        "mimo_model": "mimo-v2.5",
+        "mimo_model": DEFAULT_MIMO_MODEL,
     })
+    locale: str = "zh-CN"
 
 
 class AssistantPageContext(BaseModel):
@@ -31,6 +34,7 @@ class AssistantChatRequest(BaseModel):
     session_id: str = ""
     message: str = ""
     page_context: AssistantPageContext = Field(default_factory=AssistantPageContext)
+    locale: str | None = None
 
 
 class RecommendFormPatch(BaseModel):
@@ -47,6 +51,7 @@ class RecommendFormPatch(BaseModel):
     mimo_model: str | None = None
     gemini_model: str | None = None
     deepseek_model: str | None = None
+    opencode_go_model: str | None = None
 
 
 class AssistantAction(BaseModel):
@@ -68,6 +73,7 @@ class AssistantChatResponse(BaseModel):
     action: AssistantAction = Field(default_factory=AssistantAction)
     sources: list[str] = Field(default_factory=list)
     debug: AssistantDebugInfo = Field(default_factory=AssistantDebugInfo)
+    locale: str = "zh-CN"
 
 
 class KnowledgeSearchItem(BaseModel):
@@ -80,3 +86,4 @@ class KnowledgeSearchItem(BaseModel):
 class KnowledgeSearchResponse(BaseModel):
     items: list[KnowledgeSearchItem] = Field(default_factory=list)
     total: int = 0
+    locale: str = "zh-CN"

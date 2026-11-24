@@ -11,6 +11,9 @@ import { useVoiceRecorder } from './useVoiceRecorder';
 import { useTTSPlayback } from './useTTSPlayback';
 import type { VoiceCallTurn, VoiceCallSessionState } from './voiceTypes';
 import { callStateToVoiceState } from './voiceTypes';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
+import { DEFAULT_LOCALE, normalizeLocale } from '../../i18n/locale';
 
 export interface UseVoiceCallSessionOptions {
   currentForm: Record<string, unknown>;
@@ -52,6 +55,7 @@ const INITIAL_STATE: VoiceCallSessionState = {
 };
 
 export function useVoiceCallSession(options: UseVoiceCallSessionOptions): UseVoiceCallSessionReturn {
+  const { t } = useTranslation(['voice', 'common']);
   const { currentForm, onFormPatch, onMessageToChat } = options;
 
   const [session, setSession] = useState<VoiceCallSessionState>(INITIAL_STATE);
@@ -60,9 +64,12 @@ export function useVoiceCallSession(options: UseVoiceCallSessionOptions): UseVoi
 
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mountedRef = useRef(true);
-  const pendingRequestRef = useRef(false);
-  // Set true between startCall and endCall; gates stale async callbacks
+  const pendingRequestRef = useRef<number | null>(null);
+  const requestSequenceRef = useRef(0);
+  const callGenerationRef = useRef(0);
   const callActiveRef = useRef(false);
+  const renderGeneration = callGenerationRef.current;
+  const isCurrentCall = (generation: number) => mountedRef.current && callActiveRef.current && callGenerationRef.current === generation;
 
   const sessionId = useRef(getSessionId());
 
@@ -70,17 +77,17 @@ export function useVoiceCallSession(options: UseVoiceCallSessionOptions): UseVoi
   const tts = useTTSPlayback({
     sessionId: sessionId.current,
     onPlayStart: () => {
-      if (mountedRef.current && callActiveRef.current) {
+      if (isCurrentCall(renderGeneration)) {
         setSession((s) => ({ ...s, state: 'speaking', isAudioPlaying: true }));
       }
     },
     onPlayEnd: () => {
-      if (mountedRef.current && callActiveRef.current) {
+      if (isCurrentCall(renderGeneration)) {
         setSession((s) => ({ ...s, state: 'ready', isAudioPlaying: false }));
       }
     },
     onError: () => {
-      if (mountedRef.current && callActiveRef.current) {
+      if (isCurrentCall(renderGeneration)) {
         // TTS error doesn't block the conversation
         setSession((s) => ({ ...s, state: 'ready', isAudioPlaying: false }));
       }
@@ -101,12 +108,17 @@ export function useVoiceCallSession(options: UseVoiceCallSessionOptions): UseVoi
       }
     },
   });
+  const stopTts = tts.stop;
+  const cancelRecorder = recorder.cancelRecording;
 
   // Cleanup on unmount
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      callActiveRef.current = false;
+      callGenerationRef.current += 1;
+      pendingRequestRef.current = null;
       if (durationTimerRef.current) clearInterval(durationTimerRef.current);
       tts.stop();
     };
@@ -114,10 +126,10 @@ export function useVoiceCallSession(options: UseVoiceCallSessionOptions): UseVoi
   }, []);
 
   // Duration timer
-  const startDurationTimer = useCallback(() => {
+  const startDurationTimer = useCallback((generation: number) => {
     if (durationTimerRef.current) clearInterval(durationTimerRef.current);
     durationTimerRef.current = setInterval(() => {
-      if (mountedRef.current) {
+      if (isCurrentCall(generation)) {
         setSession((s) => {
           if (!s.startedAt) return s;
           return { ...s, durationSeconds: Math.floor((Date.now() - s.startedAt) / 1000) };
@@ -127,21 +139,22 @@ export function useVoiceCallSession(options: UseVoiceCallSessionOptions): UseVoi
   }, []);
 
   // Always points to the latest sendToChat so handleASR uses current form state
-  const sendToChatRef = useRef<(text: string) => Promise<void>>(() => Promise.resolve());
+  const sendToChatRef = useRef<(text: string, generation?: number) => Promise<void>>(() => Promise.resolve());
 
   // ASR handler
   const handleASR = useCallback(async (audioBlob: Blob, _durationMs: number, language: string, autoSend: boolean) => {
-    if (!mountedRef.current || !callActiveRef.current) return;
+    const generation = callGenerationRef.current;
+    if (!isCurrentCall(generation)) return;
 
     setSession((s) => ({ ...s, state: 'recognizing', errorMessage: null }));
 
     try {
       const result = await asrRecognize(audioBlob, sessionId.current, language);
 
-      if (!mountedRef.current || !callActiveRef.current) return;
+      if (!isCurrentCall(generation)) return;
 
       if (!result.success || !result.text) {
-        const errMsg = result.error?.message || '语音识别暂不可用，请改用文字输入。';
+        const errMsg = result.error?.message || t('voice:errors.asrUnavailable');
         setSession((s) => ({ ...s, state: 'error', errorMessage: errMsg }));
         return;
       }
@@ -150,21 +163,22 @@ export function useVoiceCallSession(options: UseVoiceCallSessionOptions): UseVoi
       setSession((s) => ({ ...s, currentTranscript: text }));
 
       if (autoSend) {
-        await sendToChatRef.current(text);
+        await sendToChatRef.current(text, generation);
       } else {
         setSession((s) => ({ ...s, state: 'ready' }));
       }
     } catch {
-      if (mountedRef.current && callActiveRef.current) {
-        setSession((s) => ({ ...s, state: 'error', errorMessage: '网络请求失败，请稍后重试。' }));
+      if (isCurrentCall(generation)) {
+        setSession((s) => ({ ...s, state: 'error', errorMessage: t('voice:errors.network') }));
       }
     }
-  }, []);
+  }, [t]);
 
   // Send ASR text to AI chat
-  const sendToChat = useCallback(async (text: string) => {
-    if (!text.trim() || pendingRequestRef.current) return;
-    pendingRequestRef.current = true;
+  const sendToChat = useCallback(async (text: string, generation = callGenerationRef.current) => {
+    if (!text.trim() || !isCurrentCall(generation) || pendingRequestRef.current !== null) return;
+    const requestId = ++requestSequenceRef.current;
+    pendingRequestRef.current = requestId;
 
     setSession((s) => ({ ...s, state: 'thinking', errorMessage: null }));
 
@@ -183,9 +197,10 @@ export function useVoiceCallSession(options: UseVoiceCallSessionOptions): UseVoi
           view: 'voice_call',
           current_form: currentForm,
         },
+        locale: normalizeLocale(i18n.resolvedLanguage) ?? DEFAULT_LOCALE,
       });
 
-      if (!mountedRef.current || !callActiveRef.current) return;
+      if (!isCurrentCall(generation)) return;
 
       turn.assistantText = response.reply;
       turn.chatLatencyMs = Date.now() - turn.startedAt;
@@ -195,9 +210,11 @@ export function useVoiceCallSession(options: UseVoiceCallSessionOptions): UseVoi
       if (response.action?.form_patch) {
         onFormPatch?.(response.action.form_patch);
       }
+      if (!isCurrentCall(generation)) return;
 
       // Add to chat history
       onMessageToChat?.(text.trim(), response.reply);
+      if (!isCurrentCall(generation)) return;
 
       setSession((s) => ({
         ...s,
@@ -214,21 +231,21 @@ export function useVoiceCallSession(options: UseVoiceCallSessionOptions): UseVoi
         setSession((s) => ({ ...s, state: 'ready' }));
       }
     } catch {
-      if (mountedRef.current && callActiveRef.current) {
-        turn.error = '网络请求失败';
+      if (isCurrentCall(generation)) {
+        turn.error = t('voice:errors.network');
         turn.endedAt = Date.now();
         setSession((s) => ({
           ...s,
           state: 'error',
-          errorMessage: '网络请求失败，请稍后重试。',
+          errorMessage: t('voice:errors.network'),
           turns: [...s.turns, turn],
         }));
       }
     } finally {
-      pendingRequestRef.current = false;
+      if (pendingRequestRef.current === requestId) pendingRequestRef.current = null;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentForm, onFormPatch, onMessageToChat]);
+  }, [currentForm, onFormPatch, onMessageToChat, t, tts.speak]);
 
   // Keep ref current so handleASR always calls with latest currentForm
   sendToChatRef.current = sendToChat;
@@ -239,7 +256,12 @@ export function useVoiceCallSession(options: UseVoiceCallSessionOptions): UseVoi
     if (curState !== 'idle' && curState !== 'ended' && curState !== 'error') return;
 
     // Request microphone permission
+    stopTts();
+    cancelRecorder();
+    if (durationTimerRef.current) clearInterval(durationTimerRef.current);
+    const generation = ++callGenerationRef.current;
     callActiveRef.current = true;
+    pendingRequestRef.current = null;
     setSession({
       ...INITIAL_STATE,
       state: 'requesting_permission',
@@ -250,7 +272,7 @@ export function useVoiceCallSession(options: UseVoiceCallSessionOptions): UseVoi
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((t) => t.stop()); // Release immediately
 
-      if (!mountedRef.current) return;
+      if (!isCurrentCall(generation)) return;
 
       const callId = generateCallId();
       setSession((s) => ({
@@ -259,27 +281,28 @@ export function useVoiceCallSession(options: UseVoiceCallSessionOptions): UseVoi
         state: 'ready',
         startedAt: Date.now(),
       }));
-      startDurationTimer();
+      startDurationTimer(generation);
     } catch (err: unknown) {
-      if (!mountedRef.current) return;
+      if (!isCurrentCall(generation)) return;
       const msg = err instanceof Error ? err.message : String(err);
-      let errorMsg = '无法使用麦克风。请在浏览器地址栏允许麦克风权限，或改用文字聊天。';
+      let errorMsg = t('voice:errors.micPermission');
       if (msg.includes('NotFoundError')) {
-        errorMsg = '当前浏览器不支持语音通话，请使用文字聊天。';
+        errorMsg = t('voice:errors.unsupported');
       }
       setSession((s) => ({ ...s, state: 'error', errorMessage: errorMsg }));
     }
-  }, [startDurationTimer]);
+  }, [startDurationTimer, t, stopTts, cancelRecorder]);
 
   const endCall = useCallback(() => {
     callActiveRef.current = false;
-    pendingRequestRef.current = false;
+    callGenerationRef.current += 1;
+    pendingRequestRef.current = null;
     if (durationTimerRef.current) {
       clearInterval(durationTimerRef.current);
       durationTimerRef.current = null;
     }
-    tts.stop();
-    recorder.cancelRecording();
+    stopTts();
+    cancelRecorder();
 
     setSession((s) => ({
       ...s,
@@ -287,10 +310,10 @@ export function useVoiceCallSession(options: UseVoiceCallSessionOptions): UseVoi
       endedAt: Date.now(),
       isAudioPlaying: false,
     }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [stopTts, cancelRecorder]);
 
   const startRecordingFn = useCallback(async () => {
+    if (!callActiveRef.current) return;
     const s = sessionRef.current.state;
     if (s !== 'ready' && s !== 'error') return;
     if (s === 'error') {

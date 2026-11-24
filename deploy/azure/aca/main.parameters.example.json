@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namePrefix": {
+      "value": "tryon"
+    },
+    "imageTag": {
+      "value": "latest"
+    },
+    "pgAdminUser": {
+      "value": "tryonadmin"
+    },
+    "pgAdminPassword": {
+      "value": "REPLACE_WITH_STRONG_PG_PASSWORD"
+    },
+    "fernetSecretKey": {
+      "value": "REPLACE_WITH_FERNET_KEY"
+    },
+    "jwtSecretKey": {
+      "value": "REPLACE_WITH_STRONG_JWT_SECRET"
+    },
+    "ingestSecretKey": {
+      "value": "REPLACE_WITH_STRONG_INGEST_SECRET"
+    },
+    "taskTokenSecret": {
+      "value": "REPLACE_WITH_STRONG_TASK_TOKEN_SECRET"
+    },
+    "adminInitUsername": {
+      "value": "admin"
+    },
+    "adminInitPassword": {
+      "value": "REPLACE_WITH_STRONG_ADMIN_PASSWORD"
+    },
+    "adminRecoveryKey": {
+      "value": "REPLACE_WITH_STRONG_RECOVERY_KEY"
+    },
+    "corsAllowOrigins": {
+      "value": ""
+    }
+  }
+}

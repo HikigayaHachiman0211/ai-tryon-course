@@ -35,6 +35,7 @@ venv/
 
 **/uploads/
 **/history/
+!miniprogram/miniprogram/pages/history/
 /tryon-workbench/assets/
 cloudsql-ops/
 downloaded_jd_images/
@@ -47,3 +48,15 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# Deployment templates and local release artifacts
+!**/.env.*.example
+miniprogram/project.private.config.json
+deploy/azure/**/main.parameters.json
+deploy/azure/releases/
+**/product-assets-staging/
+outputs/
+coverage/
+playwright-report/
+test-results/
+tryon-workbench/static/vendor/

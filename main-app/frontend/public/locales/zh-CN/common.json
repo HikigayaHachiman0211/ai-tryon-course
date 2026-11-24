@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "title": "AI 羽绒服推荐平台",
+    "description": "基于 AI 的羽绒服推荐、搭配分析与虚拟试穿平台。"
+  },
+  "navigation": {
+    "brand": "AI 羽绒服推荐平台",
+    "tryOn": "羽绒服试穿",
+    "recommend": "智能推荐",
+    "styleLab": "自己搭配",
+    "history": "历史",
+    "admin": "站长后台"
+  },
+  "common": {
+    "language": "语言",
+    "loading": "加载中...",
+    "retry": "重试",
+    "close": "关闭",
+    "cancel": "取消",
+    "localeSwitchFailed": "语言资源加载失败，请稍后重试。",
+    "tryOnReturned": "已从试穿工作台返回主站推荐页。",
+    "tryOnSwitchRequested": "试穿工作台请求切回主站，方便你更换其他羽绒服。",
+    "validationColor": "请先填写颜色偏好",
+    "validationGender": "请选择性别",
+    "catalogLoadFailed": "商品列表加载失败",
+    "selectProduct": "请先在中间选择一件羽绒服",
+    "completeProfile": "请先补全颜色偏好和性别信息",
+    "analysisFailed": "搭配分析失败，请稍后再试",
+    "tryOnUnavailable": "试穿工作台地址尚未配置。",
+    "popupBlocked": "浏览器拦截了试穿工作台弹窗，请允许新窗口后重试。",
+    "tryOnOpenedWithPhoto": "已为“{{title}}”打开试穿工作台，并同步你的全身照与商品图。",
+    "tryOnOpenedWithoutPhoto": "已为“{{title}}”打开试穿工作台。商品图已同步，你的全身照未能自动同步，请在试穿站补传。",
+    "tryOnOpenedRequestPhoto": "已为“{{title}}”打开试穿工作台，请在试穿站上传你的全身照后继续。",
+    "unknownError": "发生未知错误，请稍后重试。",
+    "debugTools": "调试工具",
+    "errorCodes": "错误码",
+    "recentErrors": "最近错误"
+    ,"youSaid": "你说：",
+    "conversationHistory": "对话记录",
+    "editTranscript": "识别结果已填入，可编辑后发送..."
+  }
+}

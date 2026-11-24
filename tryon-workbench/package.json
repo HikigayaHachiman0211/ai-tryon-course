@@ -1,0 +1,18 @@
+{
+  "name": "ai-tryon-workbench",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-vendor.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@decartai/sdk": "0.2.14",
+    "@reactor-team/js-sdk": "3.5.0",
+    "@xmaxai/web-sdk": "1.1.5"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

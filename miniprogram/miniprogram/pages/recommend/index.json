@@ -1,0 +1,7 @@
+{
+  "usingComponents": {
+    "lang-switcher": "/components/lang-switcher/index",
+    "model-picker": "/components/model-picker/index",
+    "product-card": "/components/product-card/index"
+  }
+}

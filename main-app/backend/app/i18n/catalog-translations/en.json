@@ -1,0 +1,179 @@
+{
+  "kind": "catalog-translations",
+  "version": 1,
+  "locale": "en",
+  "generator": "build_catalog_translations.py:v1",
+  "source_path": "database.json",
+  "source_record_count": 8,
+  "items": {
+    "856266a36279dca0a550284d": {
+      "title": "Men's Down jacket Down Jacket — Blue · Warmth · #856266",
+      "styleType": "Down jacket",
+      "colorFamily": "Blue",
+      "bodyFit": "Standard fit",
+      "styleFeatures": [
+        "Other feature",
+        "Other feature"
+      ],
+      "functionFeatures": [
+        "Warmth",
+        "Windproof"
+      ],
+      "sizeNotes": "Size guidance: M, 3XL. See the size chart.",
+      "source_hash": "ef2a2840dbc9720f14add0d679fe47d295ad6e1ad0a50cab21aa7aadfbe08ea7",
+      "locale": "en",
+      "translation_source": "deterministic-descriptor",
+      "model": "catalog-domain-dictionary-v1",
+      "generated_at": "2026-11-24T18:19:50.413721+00:00",
+      "status": "validated"
+    },
+    "4643a1b00274974e3018fe59": {
+      "title": "Women's Down jacket Down Jacket — White · Warmth · #4643a1",
+      "styleType": "Down jacket",
+      "colorFamily": "White",
+      "bodyFit": "Standard fit",
+      "styleFeatures": [
+        "Other feature",
+        "Other feature"
+      ],
+      "functionFeatures": [
+        "Warmth",
+        "Other feature"
+      ],
+      "sizeNotes": "Size guidance: S, 2XL. See the size chart.",
+      "source_hash": "34bad64dae13e8ecfa7159c82445b30180e5026c857d45ee1ebe510565cb9b60",
+      "locale": "en",
+      "translation_source": "deterministic-descriptor",
+      "model": "catalog-domain-dictionary-v1",
+      "generated_at": "2026-11-24T18:19:50.414249+00:00",
+      "status": "validated"
+    },
+    "cc3659789f72cb4bd584173b": {
+      "title": "Unisex Down jacket Down Jacket — Black · Windproof · #cc3659",
+      "styleType": "Down jacket",
+      "colorFamily": "Black",
+      "bodyFit": "Standard fit",
+      "styleFeatures": [
+        "Other feature",
+        "Other feature"
+      ],
+      "functionFeatures": [
+        "Windproof",
+        "Other feature"
+      ],
+      "sizeNotes": "Size guidance: S, 4XL. See the size chart.",
+      "source_hash": "52a577e3347edd86952331b0748afa17d22f31c87d2dd3523e9ea5338f6698c4",
+      "locale": "en",
+      "translation_source": "deterministic-descriptor",
+      "model": "catalog-domain-dictionary-v1",
+      "generated_at": "2026-11-24T18:19:50.414249+00:00",
+      "status": "validated"
+    },
+    "c6fa154d7a4b3fba2f258e4f": {
+      "title": "Women's Down jacket Down Jacket — Red · Other feature · #c6fa15",
+      "styleType": "Down jacket",
+      "colorFamily": "Red",
+      "bodyFit": "Standard fit",
+      "styleFeatures": [
+        "Other feature",
+        "Other feature"
+      ],
+      "functionFeatures": [
+        "Other feature",
+        "Other feature"
+      ],
+      "sizeNotes": "Size guidance: XS, 2XL. See the size chart.",
+      "source_hash": "94d9a306a6ad929ac0a2be0369117d5e1b27bc63ab7489a73597adda54a685b1",
+      "locale": "en",
+      "translation_source": "deterministic-descriptor",
+      "model": "catalog-domain-dictionary-v1",
+      "generated_at": "2026-11-24T18:19:50.414249+00:00",
+      "status": "validated"
+    },
+    "d7fd306c07ca238853f27eab": {
+      "title": "Men's Down jacket Down Jacket — Green · Windproof · #d7fd30",
+      "styleType": "Down jacket",
+      "colorFamily": "Green",
+      "bodyFit": "Standard fit",
+      "styleFeatures": [
+        "Other feature",
+        "Other feature"
+      ],
+      "functionFeatures": [
+        "Windproof",
+        "Water-repellent",
+        "Other feature"
+      ],
+      "sizeNotes": "Size guidance: M, 4XL. See the size chart.",
+      "source_hash": "b5ce7dc4cb319d259c3eaffa2fa6a080a81e778964b7f97879c9711201a5753c",
+      "locale": "en",
+      "translation_source": "deterministic-descriptor",
+      "model": "catalog-domain-dictionary-v1",
+      "generated_at": "2026-11-24T18:19:50.414249+00:00",
+      "status": "validated"
+    },
+    "7d12b3a1ad152d49b4d6a659": {
+      "title": "Unisex Down jacket Down Jacket — Gray · Other feature · #7d12b3",
+      "styleType": "Down jacket",
+      "colorFamily": "Gray",
+      "bodyFit": "Standard fit",
+      "styleFeatures": [
+        "Other feature",
+        "Other feature"
+      ],
+      "functionFeatures": [
+        "Other feature",
+        "Other feature"
+      ],
+      "sizeNotes": "Size guidance: XS, 3XL. See the size chart.",
+      "source_hash": "2b595c1914e47fe646f5dd1ef25f0161bb270bdacab5ab4a6b7f0a1df397092f",
+      "locale": "en",
+      "translation_source": "deterministic-descriptor",
+      "model": "catalog-domain-dictionary-v1",
+      "generated_at": "2026-11-24T18:19:50.414249+00:00",
+      "status": "validated"
+    },
+    "f738f53483edaa578d940d53": {
+      "title": "Women's Down jacket Down Jacket — Color family · Other feature · #f738f5",
+      "styleType": "Down jacket",
+      "colorFamily": "Color family",
+      "bodyFit": "Standard fit",
+      "styleFeatures": [
+        "Other feature",
+        "Other feature"
+      ],
+      "functionFeatures": [
+        "Other feature",
+        "Windproof"
+      ],
+      "sizeNotes": "Size guidance: S, 3XL. See the size chart.",
+      "source_hash": "e3767e7b8630c840874801902ed36973b3fcd5aa1aa63db6be1717e8d073faf6",
+      "locale": "en",
+      "translation_source": "deterministic-descriptor",
+      "model": "catalog-domain-dictionary-v1",
+      "generated_at": "2026-11-24T18:19:50.415256+00:00",
+      "status": "validated"
+    },
+    "d81bdeeeaf7c46c02bb703dd": {
+      "title": "Men's Down jacket Down Jacket — Gray · Warmth · #d81bde",
+      "styleType": "Down jacket",
+      "colorFamily": "Gray",
+      "bodyFit": "Standard fit",
+      "styleFeatures": [
+        "Other feature",
+        "Other feature"
+      ],
+      "functionFeatures": [
+        "Warmth",
+        "Anti-static"
+      ],
+      "sizeNotes": "Size guidance: M, 3XL. See the size chart.",
+      "source_hash": "4c0741b6dc325d93e68ff884528f9131cc7bfd750719d5edcb4f34f6222f0aca",
+      "locale": "en",
+      "translation_source": "deterministic-descriptor",
+      "model": "catalog-domain-dictionary-v1",
+      "generated_at": "2026-11-24T18:19:50.415256+00:00",
+      "status": "validated"
+    }
+  }
+}

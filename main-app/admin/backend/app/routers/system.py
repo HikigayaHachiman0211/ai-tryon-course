@@ -12,6 +12,7 @@ from app.database import (
     Product, AdminUser, RequestLog, TryonTask, PromptConfig,
     UserProfile, AnnotationTask, AnnotationRecord, SampleModel,
     AIAPIProvider, AIFeatureConfig, AIAPITestLog,
+    WorkbenchRealtimeSession,
     get_db,
 )
 
@@ -49,7 +50,11 @@ async def proxy_errors(limit: int = 50, admin=Depends(get_current_admin)):
     settings = get_settings()
     try:
         async with httpx.AsyncClient(timeout=5) as client:
-            resp = await client.get(f"{settings.MAIN_SITE_URL}/api/debug/errors/recent", params={"limit": limit})
+            resp = await client.get(
+                f"{settings.MAIN_SITE_URL.rstrip('/')}/api/debug/errors/recent",
+                params={"limit": limit},
+                headers={"X-Ingest-Key": settings.INGEST_SECRET_KEY},
+            )
             if resp.status_code == 200:
                 return resp.json()
             return {"errors": [], "detail": f"主站返回 {resp.status_code}"}
@@ -62,8 +67,16 @@ def get_config(admin=Depends(get_current_admin)):
     settings = get_settings()
     return {
         "DATABASE_URL": _mask(settings.DATABASE_URL),
+        "OBJECT_STORAGE_PROVIDER": settings.OBJECT_STORAGE_PROVIDER,
+        "AZURE_STORAGE_ACCOUNT_NAME": settings.AZURE_STORAGE_ACCOUNT_NAME,
+        "AZURE_PRODUCT_CONTAINER": settings.AZURE_PRODUCT_CONTAINER,
+        "AZURE_MEDIA_CONTAINER": settings.AZURE_MEDIA_CONTAINER,
+        "OSS_REGION": settings.OSS_REGION,
+        "OSS_PRODUCT_BUCKET": settings.OSS_PRODUCT_BUCKET,
+        "OSS_MEDIA_BUCKET": settings.OSS_MEDIA_BUCKET,
         "GCS_BUCKET_NAME": settings.GCS_BUCKET_NAME,
         "PUBLIC_IMAGE_BASE_URL": settings.PUBLIC_IMAGE_BASE_URL,
+        "PUBLIC_MEDIA_BASE_URL": settings.PUBLIC_MEDIA_BASE_URL,
         "MAIN_SITE_URL": settings.MAIN_SITE_URL,
         "TRYON_WORKBENCH_URL": settings.TRYON_WORKBENCH_URL or "(未配置)",
         "JWT_SECRET_KEY": "***",
@@ -86,6 +99,7 @@ def db_stats(admin=Depends(get_current_admin), db=Depends(get_db)):
         "ai_api_providers": db.query(func.count(AIAPIProvider.id)).scalar() or 0,
         "ai_feature_configs": db.query(func.count(AIFeatureConfig.id)).scalar() or 0,
         "ai_api_test_logs": db.query(func.count(AIAPITestLog.id)).scalar() or 0,
+        "workbench_realtime_sessions": db.query(func.count(WorkbenchRealtimeSession.id)).scalar() or 0,
     }
     return tables
 

@@ -1,0 +1,14 @@
+{
+  "default": "Something went wrong. Please try again later.",
+  "codeLabel": "Error code: {{code}}",
+  "requestId": "Request ID: {{requestId}}",
+  "troubleshooting": "Please try again later. If the problem continues, share the request ID.",
+  "SYS-XXX": "The network request failed. Please try again.",
+  "VALIDATION_ERROR": "The submitted data is invalid. Check it and try again.",
+  "PRODUCT_NOT_FOUND": "The selected product could not be found.",
+  "CATALOG_UNAVAILABLE": "The product catalog is temporarily unavailable.",
+  "AI_CONFIG_MISSING": "The AI service is not configured yet.",
+  "ASR_FAILED": "Speech recognition failed. Please use text input.",
+  "TTS_FAILED": "Text-to-speech failed. The text reply is still available.",
+  "RATE_LIMITED": "Too many requests. Please try again later."
+}

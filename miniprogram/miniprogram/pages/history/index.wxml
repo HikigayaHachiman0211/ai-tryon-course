@@ -1,0 +1,86 @@
+<view class="page-shell">
+  <lang-switcher showShortcuts="{{false}}" bind:localechange="onLocaleChange" />
+
+  <view class="section-hero">
+    <view class="hero-title">{{texts.title}}</view>
+    <view class="hero-copy">{{texts.subtitle}}</view>
+  </view>
+
+  <view wx:if="{{errorMsg}}" class="error-banner">{{errorMsg}}</view>
+
+  <view wx:if="{{loading}}" class="card-subtle center-box">
+    <text class="muted-text">{{texts.loading}}</text>
+  </view>
+
+  <block wx:elif="{{entries.length}}">
+    <view
+      wx:for="{{entries}}"
+      wx:key="id"
+      class="card history-card"
+      data-id="{{item.id}}"
+      data-type="{{item.type}}"
+      bindtap="onOpenEntry"
+    >
+      <image wx:if="{{item.thumbUrl}}" src="{{item.thumbUrl}}" mode="aspectFill" class="history-thumb" lazy-load />
+      <view wx:else class="history-thumb history-thumb-empty">AI</view>
+      <view class="flex-1">
+        <view class="tag-row">
+          <text class="tag tag-blue">{{item.typeLabel}}</text>
+          <text wx:if="{{item.scoreText}}" class="tag tag-gold">{{item.scoreText}}</text>
+          <text wx:if="{{item.itemCountText}}" class="tag">{{item.itemCountText}}</text>
+        </view>
+        <text class="history-summary">{{item.summary}}</text>
+        <text class="history-time">{{item.formattedTime}}</text>
+      </view>
+    </view>
+  </block>
+
+  <view wx:else class="card-subtle center-box">
+    <text class="muted-text">{{texts.empty}}</text>
+  </view>
+
+  <view wx:if="{{detailOpen}}" class="modal-mask" bindtap="onCloseDetail">
+    <view class="modal-sheet" catchtap="">
+      <view class="card-title-row">
+        <text class="card-title">{{texts.detailTitle}}</text>
+        <text class="close-btn" bindtap="onCloseDetail">{{texts.close}}</text>
+      </view>
+
+      <view wx:if="{{detailLoading}}" class="center-box">
+        <text class="muted-text">{{texts.loading}}</text>
+      </view>
+
+      <scroll-view wx:else scroll-y class="modal-scroll">
+        <view wx:if="{{detailSummary}}" class="summary-box">
+          <text class="summary-text">{{detailSummary}}</text>
+        </view>
+
+        <view wx:if="{{detailKind === 'recommend'}}">
+          <button class="btn-primary restore-btn" bindtap="onRestoreRecommend">{{texts.restoreToRecommend}}</button>
+          <view wx:for="{{detailItems}}" wx:key="id" class="card-subtle detail-item">
+            <image src="{{item.thumbUrl}}" mode="aspectFill" class="detail-thumb" />
+            <view class="flex-1">
+              <text class="detail-item-title">{{item.display ? item.display.title : item.title}}</text>
+              <text class="detail-price">¥{{item.price}}</text>
+              <button class="btn-ghost detail-tryon-btn" data-index="{{index}}" bindtap="onTryOnHistoryItem">{{texts.tryOnBtn}}</button>
+            </view>
+          </view>
+        </view>
+
+        <view wx:elif="{{detailProduct}}" class="card-subtle detail-item">
+          <image src="{{detailProduct.thumbUrl}}" mode="aspectFill" class="detail-thumb" />
+          <view class="flex-1">
+            <text class="detail-item-title">{{detailProduct.display ? detailProduct.display.title : detailProduct.title}}</text>
+            <text class="detail-price">¥{{detailProduct.price}}</text>
+            <view class="detail-btn-row">
+              <button class="btn-ghost detail-tryon-btn" bindtap="onOpenStyleLabDetail">{{texts.styleLabBtn}}</button>
+              <button class="btn-primary detail-tryon-btn" data-index="-1" bindtap="onTryOnHistoryItem">{{texts.tryOnBtn}}</button>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <view class="safe-bottom-spacer"></view>
+</view>

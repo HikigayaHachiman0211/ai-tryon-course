@@ -1,0 +1,244 @@
+<view class="page-shell">
+  <lang-switcher bind:localechange="onLocaleChange" />
+
+  <view class="section-hero">
+    <view class="section-eyebrow">{{texts.eyebrow}}</view>
+    <view class="hero-title">{{texts.heroTitle}}</view>
+    <view class="hero-copy">{{texts.heroCopy}}</view>
+  </view>
+
+  <model-picker
+    previewUrl="{{photoPreview}}"
+    sampleModelId="{{sampleModelId}}"
+    locale="{{locale}}"
+    bind:change="onPhotoChange"
+    bind:clear="onPhotoClear"
+  />
+
+  <view class="card">
+    <view class="field-group">
+      <view class="field-label-row">
+        <text class="field-label">{{texts.colorLabel}}</text>
+        <text class="required-badge">{{texts.colorRequired}}</text>
+      </view>
+      <input
+        class="dark-input"
+        value="{{formData.color_preference}}"
+        placeholder="{{texts.colorPlaceholder}}"
+        placeholder-class="input-placeholder"
+        data-field="color_preference"
+        bindinput="onInputField"
+      />
+      <view class="chip-wrap">
+        <view
+          wx:for="{{options.colors}}"
+          wx:key="value"
+          class="chip {{formData.color_preference === item.value ? 'chip-active' : ''}}"
+          data-field="color_preference"
+          data-value="{{item.value}}"
+          bindtap="onPickChip"
+        >
+          <view class="color-swatch" style="background: {{item.swatch}};"></view>
+          <text>{{item.label}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="field-group">
+      <view class="field-label-row">
+        <text class="field-label">{{texts.genderLabel}}</text>
+        <text class="required-badge">{{texts.colorRequired}}</text>
+      </view>
+      <view class="gender-grid">
+        <view
+          wx:for="{{options.genders}}"
+          wx:key="value"
+          class="gender-pill {{formData.gender === item.value ? 'gender-pill-active' : ''}}"
+          data-field="gender"
+          data-value="{{item.value}}"
+          bindtap="onPickChip"
+        >
+          <text>{{item.label}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="field-group">
+      <view class="field-label-row">
+        <text class="field-label">{{texts.brandLabel}}</text>
+      </view>
+      <input
+        class="dark-input"
+        value="{{formData.brand_preference || ''}}"
+        placeholder="{{texts.brandPlaceholder}}"
+        placeholder-class="input-placeholder"
+        data-field="brand_preference"
+        bindinput="onInputField"
+      />
+      <view class="chip-wrap">
+        <view
+          wx:for="{{options.brands}}"
+          wx:key="value"
+          class="chip {{formData.brand_preference === item.value ? 'chip-active' : ''}}"
+          data-field="brand_preference"
+          data-value="{{item.value}}"
+          bindtap="onPickChip"
+        >
+          <text>{{item.label}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="price-row">
+      <view class="flex-1">
+        <view class="field-label-row">
+          <text class="field-label">{{texts.priceMin}}</text>
+        </view>
+        <input
+          type="digit"
+          class="dark-input"
+          value="{{formData.price_min !== undefined ? formData.price_min : ''}}"
+          placeholder="0"
+          placeholder-class="input-placeholder"
+          data-field="price_min"
+          bindinput="onInputField"
+        />
+      </view>
+      <view class="flex-1">
+        <view class="field-label-row">
+          <text class="field-label">{{texts.priceMax}}</text>
+        </view>
+        <input
+          type="digit"
+          class="dark-input"
+          value="{{formData.price_max !== undefined ? formData.price_max : ''}}"
+          placeholder="{{texts.priceUnlimited}}"
+          placeholder-class="input-placeholder"
+          data-field="price_max"
+          bindinput="onInputField"
+        />
+      </view>
+    </view>
+
+    <view class="price-row">
+      <view class="flex-1">
+        <view class="field-label-row">
+          <text class="field-label">{{texts.mbtiLabel}}</text>
+        </view>
+        <picker mode="selector" range="{{options.mbtiRange}}" value="{{mbtiIndex}}" bindchange="onPickMbti">
+          <view class="dark-picker">
+            <text class="{{mbtiIndex === 0 ? 'input-placeholder' : ''}}">{{options.mbtiRange[mbtiIndex]}}</text>
+            <text class="picker-arrow">▾</text>
+          </view>
+        </picker>
+      </view>
+      <view class="flex-1">
+        <view class="field-label-row">
+          <text class="field-label">{{texts.sizeLabel}}</text>
+        </view>
+        <picker mode="selector" range="{{options.sizeRange}}" value="{{sizeIndex}}" bindchange="onPickSize">
+          <view class="dark-picker">
+            <text class="{{sizeIndex === 0 ? 'input-placeholder' : ''}}">{{options.sizeRange[sizeIndex]}}</text>
+            <text class="picker-arrow">▾</text>
+          </view>
+        </picker>
+      </view>
+    </view>
+
+    <view class="field-group-last">
+      <view class="field-label-row">
+        <text class="field-label">{{texts.styleLabel}}</text>
+        <text class="ai-hint-badge">✨ {{texts.sizeAuto}}</text>
+      </view>
+      <input
+        class="dark-input"
+        value="{{formData.style_preference || ''}}"
+        placeholder="{{texts.stylePlaceholder}}"
+        placeholder-class="input-placeholder"
+        data-field="style_preference"
+        bindinput="onInputField"
+      />
+      <view class="chip-wrap">
+        <view
+          wx:for="{{options.styles}}"
+          wx:key="value"
+          class="chip {{formData.style_preference === item.value ? 'chip-active' : ''}}"
+          data-field="style_preference"
+          data-value="{{item.value}}"
+          bindtap="onPickChip"
+        >
+          <text>{{item.label}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{errorMsg}}" class="error-banner">{{errorMsg}}</view>
+
+  <button class="btn-primary submit-btn" disabled="{{loading}}" loading="{{loading}}" bindtap="onSubmitRecommend">
+    {{loading ? texts.submittingBtn : texts.submitBtn}}
+  </button>
+
+  <view wx:if="{{result}}" class="results-section">
+    <view class="card inference-card">
+      <view class="card-title-row">
+        <text class="card-title">{{texts.inferenceTitle}}</text>
+        <text class="tag tag-blue">
+          {{result.inference.rule_fallback_used ? texts.ruleFallback : (result.inference.ai_provider || 'AI')}}
+        </text>
+      </view>
+      <view class="inference-grid">
+        <view class="inference-cell">
+          <text class="cell-label">{{texts.resolvedSize}}</text>
+          <text class="cell-val">{{result.inference.display ? result.inference.display.size : result.inference.resolved_size}}</text>
+        </view>
+        <view class="inference-cell">
+          <text class="cell-label">{{texts.resolvedStyle}}</text>
+          <text class="cell-val">{{result.inference.display ? result.inference.display.style : result.inference.resolved_style}}</text>
+        </view>
+        <view class="inference-cell">
+          <text class="cell-label">{{texts.bodyShape}}</text>
+          <text class="cell-val">{{result.inference.display ? result.inference.display.bodyShape : result.inference.body_shape}}</text>
+        </view>
+      </view>
+      <view wx:if="{{result.inference.reasoning}}" class="reasoning-box">
+        <text class="reasoning-text">{{result.inference.reasoning}}</text>
+      </view>
+      <text class="summary-caption">{{texts.catalogSummary}}</text>
+    </view>
+
+    <view wx:if="{{result.filters.gender_fallback}}" class="warn-banner">
+      {{texts.genderFallbackNotice}}
+    </view>
+
+    <view class="results-header">
+      <text class="results-heading">{{texts.resultsTitle}}</text>
+      <text class="muted-text">{{result.items.length}}</text>
+    </view>
+
+    <block wx:for="{{result.items}}" wx:key="id">
+      <product-card
+        wx:if="{{showAllItems || index < visibleCount}}"
+        item="{{item}}"
+        rank="{{index + 1}}"
+        locale="{{locale}}"
+        bind:tryon="onCardTryOn"
+        bind:stylelab="onCardStyleLab"
+      />
+    </block>
+
+    <button
+      wx:if="{{result.items.length > visibleCount}}"
+      class="btn-secondary toggle-more-btn"
+      bindtap="onToggleShowAll"
+    >
+      {{showAllItems ? texts.showTop3 : texts.showAll}}
+    </button>
+  </view>
+
+  <view wx:else class="card-subtle empty-card">
+    <text class="muted-text">{{texts.emptyHint}}</text>
+  </view>
+
+  <view class="safe-tab-spacer"></view>
+</view>

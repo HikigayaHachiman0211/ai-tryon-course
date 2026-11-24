@@ -1,0 +1,74 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  padding: 14rpx 20rpx;
+  margin-bottom: 18rpx;
+  border-radius: 24rpx;
+  background: rgba(24, 24, 28, 0.92);
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  min-width: 0;
+}
+
+.brand-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2997ff, #64d2ff);
+  box-shadow: 0 0 12rpx rgba(41, 151, 255, 0.7);
+  flex-shrink: 0;
+}
+
+.brand-text {
+  font-size: 25rpx;
+  font-weight: 600;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  flex-shrink: 0;
+}
+
+.locale-pills {
+  display: flex;
+  align-items: center;
+  padding: 4rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+}
+
+.locale-pill {
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 21rpx;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.locale-pill-active {
+  background: #0071e3;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.shortcut-btn {
+  padding: 8rpx 16rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.84);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1rpx solid rgba(255, 255, 255, 0.1);
+}

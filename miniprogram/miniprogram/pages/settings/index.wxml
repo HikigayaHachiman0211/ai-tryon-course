@@ -1,0 +1,98 @@
+<view class="page-shell">
+  <view class="section-hero">
+    <view class="hero-title">{{texts.title}}</view>
+  </view>
+
+  <view class="card">
+    <view class="card-title-row">
+      <text class="card-title">{{texts.languageSection}}</text>
+    </view>
+    <view class="chip-wrap">
+      <view
+        wx:for="{{localeOptions}}"
+        wx:key="value"
+        class="chip {{locale === item.value ? 'chip-active' : ''}}"
+        data-locale="{{item.value}}"
+        bindtap="onSelectLocale"
+      >
+        {{item.label}}
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title-row">
+      <text class="card-title">{{texts.endpointSection}}</text>
+    </view>
+
+    <view class="chip-wrap preset-wrap">
+      <view
+        class="chip {{presetId === 'local_batch' ? 'chip-active' : ''}}"
+        data-preset="local_batch"
+        bindtap="onSelectPreset"
+      >{{texts.presetLocalBatch}}</view>
+      <view
+        class="chip {{presetId === 'local_manual' ? 'chip-active' : ''}}"
+        data-preset="local_manual"
+        bindtap="onSelectPreset"
+      >{{texts.presetLocalManual}}</view>
+      <view
+        class="chip {{presetId === 'cloud_443' ? 'chip-active' : ''}}"
+        data-preset="cloud_443"
+        bindtap="onSelectPreset"
+      >{{texts.presetCloud443}}</view>
+    </view>
+
+    <view class="field-group">
+      <view class="field-label-row"><text class="field-label">{{texts.mainApiLabel}}</text></view>
+      <input
+        class="dark-input"
+        value="{{mainApiBaseUrl}}"
+        data-field="mainApiBaseUrl"
+        bindinput="onInputEndpoint"
+      />
+    </view>
+
+    <view class="field-group">
+      <view class="field-label-row"><text class="field-label">{{texts.tryonApiLabel}}</text></view>
+      <input
+        class="dark-input"
+        value="{{tryonApiBaseUrl}}"
+        data-field="tryonApiBaseUrl"
+        bindinput="onInputEndpoint"
+      />
+    </view>
+
+    <view class="btn-row">
+      <button class="btn-secondary flex-1" bindtap="onResetEndpoints">{{texts.resetEndpoints}}</button>
+      <button class="btn-primary flex-1" bindtap="onSaveEndpoints">{{texts.saveEndpoints}}</button>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title-row">
+      <text class="card-title">{{texts.probeSection}}</text>
+    </view>
+
+    <view wx:for="{{probes}}" wx:key="id" class="probe-row">
+      <view class="probe-left">
+        <view class="probe-dot dot-{{item.status}}"></view>
+        <text class="probe-label">{{item.label}}</text>
+      </view>
+      <text class="probe-detail detail-{{item.status}}">{{item.detail}}</text>
+    </view>
+
+    <button class="btn-primary probe-btn" disabled="{{probing}}" loading="{{probing}}" bindtap="onRunProbe">
+      {{probing ? texts.probing : texts.runProbe}}
+    </button>
+  </view>
+
+  <view class="card tip-card">
+    <view class="card-title-row">
+      <text class="card-title">{{texts.defenseTipTitle}}</text>
+    </view>
+    <text class="tip-body">{{texts.defenseTipBody}}</text>
+  </view>
+
+  <view class="safe-bottom-spacer"></view>
+</view>

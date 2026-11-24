@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlalchemy import (
@@ -13,6 +14,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     create_engine,
     func,
     text,
@@ -25,9 +27,19 @@ from sqlalchemy.orm import (
     relationship,
     sessionmaker,
 )
+from app.i18n.prompt_migration import rebuild_sqlite_prompt_configs
 from sqlalchemy.types import JSON
 
 from app.config import get_settings
+from app.i18n.prompts import PROMPT_LOCALES, localize_prompt_seed
+from app.deepseek_models import (
+    DEFAULT_DEEPSEEK_MODEL,
+    DEEPSEEK_TEXT_MODELS,
+    RETIRED_DEEPSEEK_MODEL_ALIASES,
+    normalize_deepseek_model,
+)
+from app.mimo_models import DEFAULT_MIMO_MODEL, MIMO_TEXT_MODELS, RETIRED_MIMO_MODELS, normalize_mimo_model
+from app.opencode_go import DEFAULT_OPENCODE_GO_BASE_URL, DEFAULT_OPENCODE_GO_MODEL, OPENCODE_GO_MODELS
 
 # ---------------------------------------------------------------------------
 # Base
@@ -81,6 +93,8 @@ class AdminUser(Base):
     role: Mapped[str] = mapped_column(String(50), server_default=text("'admin'"))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    recovery_question: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    recovery_answer_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 # ---------------------------------------------------------------------------
@@ -142,9 +156,11 @@ class TryonTask(Base):
 
 class PromptConfig(Base):
     __tablename__ = "prompt_configs"
+    __table_args__ = (UniqueConstraint("name", "locale", name="uq_prompt_configs_name_locale"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    locale: Mapped[str] = mapped_column(String(10), nullable=False, server_default=text("'zh-CN'"), index=True)
     display_name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     category: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
@@ -349,6 +365,66 @@ class VoiceCloneProfile(Base):
 
 
 # ---------------------------------------------------------------------------
+# RecommendationHistory (shared with main site)
+# ---------------------------------------------------------------------------
+
+class RecommendationHistory(Base):
+    __tablename__ = "recommendation_history"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    created_at: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    result_type: Mapped[str] = mapped_column(String(32), nullable=False, default="recommend", index=True)
+    summary: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    summary_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    translation_version: Mapped[str] = mapped_column(String(32), nullable=False, default="catalog-v1")
+    created_locale: Mapped[str] = mapped_column(String(16), nullable=False, default="zh-CN")
+    thumbnail_blob_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    result_blob_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    user_photo_blob_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    item_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    total_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+# ---------------------------------------------------------------------------
+# WorkbenchRealtimeSession (shared with try-on workbench Decart Lucy VTON)
+# ---------------------------------------------------------------------------
+
+class WorkbenchRealtimeSession(Base):
+    __tablename__ = "workbench_realtime_sessions"
+    __table_args__ = {"extend_existing": True}
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    provider_key: Mapped[str] = mapped_column(String(32), nullable=False, server_default=text("'decart'"), default="decart", index=True)
+    model_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    visitor_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    budget_day: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False, index=True)
+    claim_before: Mapped[float] = mapped_column(Float, nullable=False)
+    hold_until: Mapped[float] = mapped_column(Float, nullable=False, index=True)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    stop_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    limit_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    cents_per_second: Mapped[int] = mapped_column(Integer, nullable=False)
+    cents_per_minute: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    credits_per_second: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    accounted_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    provider_session_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    provider_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    provider_credits: Mapped[float | None] = mapped_column(Float, nullable=True)
+    provider_temp_key_uid: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    provider_temp_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    ended_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+# ---------------------------------------------------------------------------
 # Engine / Session factory
 # ---------------------------------------------------------------------------
 
@@ -392,6 +468,7 @@ def get_db():
 def _migrate_prompt_configs(engine):
     """Add new columns to prompt_configs if they don't exist (idempotent)."""
     new_columns = [
+        ("locale", "VARCHAR(10) NOT NULL DEFAULT 'zh-CN'"),
         ("description", "VARCHAR(500)"),
         ("category", "VARCHAR(50)"),
         ("prompt_type", "VARCHAR(50)"),
@@ -415,36 +492,127 @@ def _migrate_prompt_configs(engine):
                 if col_name not in existing:
                     conn.execute(text(f"ALTER TABLE prompt_configs ADD COLUMN {col_name} {col_type}"))
                     print(f"[init_db] Added column prompt_configs.{col_name}")
+            if engine.url.drivername.startswith("sqlite") and rebuild_sqlite_prompt_configs(conn):
+                print("[init_db] Rebuilt legacy SQLite prompt_configs for locale uniqueness")
+            # Fresh metadata has a composite uniqueness constraint. PostgreSQL
+            # databases created before the locale migration may still have the
+            # old name-only constraint, which would prevent translated rows.
+            if not engine.url.drivername.startswith("sqlite"):
+                constraints = conn.execute(text(
+                    "SELECT constraint_name FROM information_schema.table_constraints "
+                    "WHERE table_name = 'prompt_configs' AND constraint_type = 'UNIQUE'"
+                )).fetchall()
+                for (constraint_name,) in constraints:
+                    columns = conn.execute(text(
+                        "SELECT column_name FROM information_schema.key_column_usage "
+                        "WHERE table_name = 'prompt_configs' AND constraint_name = :name"
+                    ), {"name": constraint_name}).fetchall()
+                    if {row[0] for row in columns} == {"name"}:
+                        conn.execute(text(f'ALTER TABLE prompt_configs DROP CONSTRAINT "{constraint_name}"'))
+                        print(f"[init_db] Dropped legacy prompt constraint {constraint_name}")
+            # Keep the locale pair unique for databases whose table predates
+            # the ORM metadata migration. The index is idempotent and also
+            # documents the compatibility contract for manual migrations.
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_prompt_configs_name_locale "
+                "ON prompt_configs (name, locale)"
+            ))
             conn.commit()
     except Exception as exc:
         # Table might not exist yet (first run) — that's fine
         print(f"[init_db] Prompt config migration skipped: {exc}")
 
 
-def init_db():
-    """Create tables and seed initial admin user (idempotent)."""
+def _migrate_admin_users(engine):
+    """Add recovery columns to admin_users if missing (idempotent)."""
+    new_columns = [
+        ("recovery_question", "VARCHAR(255)"),
+        ("recovery_answer_hash", "VARCHAR(255)"),
+    ]
+    try:
+        with engine.connect() as conn:
+            if engine.url.drivername.startswith("sqlite"):
+                result = conn.execute(text("PRAGMA table_info(admin_users)"))
+                existing = {row[1] for row in result}
+            else:
+                result = conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'admin_users'"
+                ))
+                existing = {row[0] for row in result}
+
+            for col_name, col_type in new_columns:
+                if col_name not in existing:
+                    conn.execute(text(f"ALTER TABLE admin_users ADD COLUMN {col_name} {col_type}"))
+                    print(f"[init_db] Added column admin_users.{col_name}")
+            conn.commit()
+    except Exception as exc:
+        print(f"[init_db] Admin user migration skipped: {exc}")
+
+
+def _migrate_realtime_sessions(engine):
+    """Add multi-provider & Xmax billing columns to workbench_realtime_sessions if missing (idempotent)."""
+    new_columns = [
+        ("provider_key", "VARCHAR(32) NOT NULL DEFAULT 'decart'"),
+        ("model_id", "VARCHAR(64)"),
+        ("cents_per_minute", "INTEGER"),
+        ("credits_per_second", "FLOAT"),
+        ("max_credits", "INTEGER"),
+        ("provider_credits", "FLOAT"),
+        ("provider_temp_key_uid", "VARCHAR(128)"),
+        ("provider_temp_key_encrypted", "TEXT"),
+    ]
+    try:
+        with engine.connect() as conn:
+            if engine.url.drivername.startswith("sqlite"):
+                result = conn.execute(text("PRAGMA table_info(workbench_realtime_sessions)"))
+                existing = {row[1] for row in result}
+            else:
+                result = conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'workbench_realtime_sessions'"
+                ))
+                existing = {row[0] for row in result}
+
+            for col_name, col_type in new_columns:
+                if col_name not in existing:
+                    conn.execute(text(f"ALTER TABLE workbench_realtime_sessions ADD COLUMN {col_name} {col_type}"))
+                    print(f"[init_db] Added column workbench_realtime_sessions.{col_name}")
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_workbench_realtime_sessions_provider_key "
+                "ON workbench_realtime_sessions (provider_key)"
+            ))
+            conn.commit()
+    except Exception as exc:
+        print(f"[init_db] Realtime session migration skipped: {exc}")
+
+
+_DB_INIT_ADVISORY_LOCK_ID = 2026111301
+
+
+def _init_db_unlocked(seed: bool = True):
     engine = _get_engine()
-
-    # For PostgreSQL with existing products table, use checkfirst
     Base.metadata.create_all(engine, checkfirst=True)
-
-    # Migrate: add new columns to prompt_configs if they don't exist
     _migrate_prompt_configs(engine)
+    _migrate_admin_users(engine)
+    _migrate_realtime_sessions(engine)
+
+    if not seed:
+        return
 
     settings = get_settings()
     factory = get_session_factory()
 
     with factory() as session:
-        # Idempotent admin creation
         from app.auth import hash_password
         from app.config import is_production
 
         existing = session.query(AdminUser).filter_by(username=settings.ADMIN_INIT_USERNAME).first()
         if not existing:
-            if not settings.ADMIN_INIT_PASSWORD:
+            if len(settings.ADMIN_INIT_PASSWORD) < 12:
                 print(
-                    "[admin-security] ADMIN_INIT_PASSWORD is not configured — "
-                    "skipping administrator creation."
+                    "[admin-security] ADMIN_INIT_PASSWORD is missing or too short. "
+                    "skipping admin user creation. Set ADMIN_INIT_PASSWORD to a strong password."
                 )
             else:
                 admin = AdminUser(
@@ -454,28 +622,39 @@ def init_db():
                 )
                 session.add(admin)
                 session.commit()
-        elif not is_production() and settings.ADMIN_INIT_PASSWORD:
-            # Local dev only: if the stored hash is stale (e.g. DB left over from a
-            # different password), re-sync it so login always works without deleting data.
+        elif not is_production() and len(settings.ADMIN_INIT_PASSWORD) >= 12:
             from app.auth import verify_password
             if not verify_password(settings.ADMIN_INIT_PASSWORD, existing.password_hash):
                 existing.password_hash = hash_password(settings.ADMIN_INIT_PASSWORD)
                 session.commit()
                 print(f"[admin-dev] Local admin password synced: {settings.ADMIN_INIT_USERNAME}")
 
-        # Seed default prompt configs (skip if name already exists)
         _seed_prompts(session)
 
-        # Seed products from database.json if products table is empty
         if session.query(Product).count() == 0:
             _seed_products(session)
+        else:
+            _backfill_product_metadata(session)
 
-        # Seed sample models if empty
         if session.query(SampleModel).count() == 0:
             _seed_sample_models(session)
 
-        # Seed AI provider and feature configs
         _seed_ai_configs(session)
+
+
+def init_db(seed: bool = True):
+    """Create tables and seed initial data (idempotent and concurrency-safe)."""
+    engine = _get_engine()
+    if engine.dialect.name == "postgresql":
+        with engine.connect() as conn:
+            conn.execute(text("SELECT pg_advisory_lock(:lock_id)"), {"lock_id": _DB_INIT_ADVISORY_LOCK_ID})
+            try:
+                _init_db_unlocked(seed=seed)
+            finally:
+                conn.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": _DB_INIT_ADVISORY_LOCK_ID})
+                conn.commit()
+        return
+    _init_db_unlocked(seed=seed)
 
 
 def _seed_ai_configs(session: Session):
@@ -492,8 +671,8 @@ def _seed_ai_configs(session: Session):
             "base_url": "https://api.xiaomimimo.com/v1",
             "auth_type": "api_key_header",
             "auth_header_name": "api-key",
-            "default_model": "mimo-v2.5",
-            "model_options": ["mimo-v2.5", "mimo-v2.5-pro", "mimo-v2-omni"],
+            "default_model": DEFAULT_MIMO_MODEL,
+            "model_options": list(MIMO_TEXT_MODELS),
             "notes": "默认推荐和图像分析 Provider",
         },
         {
@@ -506,6 +685,11 @@ def _seed_ai_configs(session: Session):
             "auth_type": "query_key",
             "default_model": "gemini-3.1-flash-lite-preview",
             "model_options": [
+                "gemini-4-hydrogen",
+                "gemini-4-argon",
+                "gemini-4-carbon",
+                "gemini-3.8-flash",
+                "gemini-3.1-flash-lite",
                 "gemini-3.1-flash-lite-preview",
                 "gemini-3.1-flash-image-preview",
                 "gemini-3-pro-image-preview",
@@ -513,16 +697,110 @@ def _seed_ai_configs(session: Session):
             ],
         },
         {
+            "provider_key": "01router",
+            "display_name": "01Router Video",
+            "category": "video",
+            "enabled": True,
+            "is_default": False,
+            "base_url": "https://01router.com/api/v1",
+            "auth_type": "bearer",
+            "auth_header_name": "Authorization",
+            "timeout_seconds": 60,
+            "retry_count": 0,
+            "rate_limit_per_minute": 3,
+            "daily_quota_limit": 20,
+        },
+        {
+            "provider_key": "decart",
+            "display_name": "Decart Lucy VTON",
+            "category": "realtime",
+            "enabled": False,
+            "is_default": False,
+            "base_url": "https://api.decart.ai",
+            "auth_type": "api_key_header",
+            "auth_header_name": "X-API-KEY",
+            "default_model": "lucy-vton-3.6",
+            "model_options": ["lucy-vton-3.6"],
+            "timeout_seconds": 15,
+            "retry_count": 0,
+            "cost_note": "Lucy VTON 3.6 720p $0.02/s",
+        },
+        {
+            "provider_key": "xmax",
+            "display_name": "Xmax X2.1 Realtime",
+            "category": "realtime",
+            "enabled": False,
+            "is_default": False,
+            "base_url": "https://api.xmax.ai/open/api/v1",
+            "auth_type": "api_key_header",
+            "auth_header_name": "X-Api-Key",
+            "default_model": "x2.1",
+            "model_options": ["x2.1", "x2.1-flash"],
+            "timeout_seconds": 15,
+            "retry_count": 0,
+            "cost_note": "Xmax X2.1 1080p 1 credit/s (~$0.10/min, $6/h)",
+        },
+        {
+            "provider_key": "reactor",
+            "display_name": "Reactor Xmax Relay (X2.1 / X2.0)",
+            "category": "realtime",
+            "enabled": False,
+            "is_default": False,
+            "base_url": "https://api.reactor.inc",
+            "auth_type": "bearer",
+            "auth_header_name": "Authorization",
+            "default_model": "reactor/xmax-x2-1",
+            "model_options": ["reactor/xmax-x2-1", "xmax/x2"],
+            "timeout_seconds": 15,
+            "retry_count": 0,
+            "cost_note": "Reactor Xmax X2.1 / X2.0 (17 credits/s, $0.0017/s, ~$0.102/min)",
+        },
+        {
+            "provider_key": "totokens",
+            "display_name": "ToTokens Image Relay",
+            "category": "tryon",
+            "enabled": True,
+            "is_default": False,
+            "base_url": "https://totokens.cc",
+            "auth_type": "bearer",
+            "auth_header_name": "Authorization",
+            "default_model": "gemini-3.1-flash-image",
+            "model_options": [
+                "gemini-3.1-flash-image",
+                "gpt-image-2",
+                "chatgpt-image-latest",
+                "gpt-image-1.5",
+                "gpt-image-1",
+            ],
+            "timeout_seconds": 120,
+            "retry_count": 0,
+        },
+        {
             "provider_key": "deepseek",
-            "display_name": "Deepseek",
-            "category": "llm",
+            "display_name": "DeepSeek",
+            "category": "multi",
             "enabled": True,
             "is_default": False,
             "base_url": "https://api.deepseek.com",
             "auth_type": "bearer",
             "auth_header_name": "Authorization",
-            "default_model": "deepseek-v4-flash",
-            "model_options": ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"],
+            "default_model": DEFAULT_DEEPSEEK_MODEL,
+            "model_options": list(DEEPSEEK_TEXT_MODELS),
+            "notes": "DeepSeek-V4.1-Flash (deepseek-flash) 支持多模态图像分析与推荐",
+        },
+        {
+            "provider_key": "opencode_go",
+            "display_name": "OpenCode Go",
+            "category": "multi",
+            "enabled": True,
+            "is_default": False,
+            "base_url": DEFAULT_OPENCODE_GO_BASE_URL,
+            "auth_type": "bearer",
+            "auth_header_name": "Authorization",
+            "default_model": DEFAULT_OPENCODE_GO_MODEL,
+            "model_options": list(OPENCODE_GO_MODELS),
+            "timeout_seconds": 60,
+            "notes": "OpenCode Go 多协议网关（支持 OpenAI Chat/Responses、Anthropic Messages、Google generateContent 与多模态视觉）",
         },
         {
             "provider_key": "mimo_asr",
@@ -573,23 +851,101 @@ def _seed_ai_configs(session: Session):
             "feature_key": "recommendation",
             "enabled": True,
             "default_provider": "mimo",
-            "fallback_order": ["mimo", "gemini", "deepseek", "rule"],
-            "default_model": "mimo-v2.5",
+            "fallback_order": ["mimo", "gemini", "deepseek", "opencode_go", "rule"],
+            "default_model": DEFAULT_MIMO_MODEL,
         },
         {
             "feature_key": "vision_analysis",
             "enabled": True,
             "default_provider": "mimo",
-            "fallback_order": ["mimo", "gemini"],
-            "default_model": "mimo-v2.5",
+            "fallback_order": ["mimo", "gemini", "deepseek", "opencode_go"],
+            "default_model": DEFAULT_MIMO_MODEL,
         },
         {
             "feature_key": "assistant_chat",
             "enabled": True,
             "default_provider": "mimo",
-            "fallback_order": ["mimo", "deepseek", "rule"],
-            "default_model": "mimo-v2.5",
+            "fallback_order": ["mimo", "deepseek", "opencode_go", "rule"],
+            "default_model": DEFAULT_MIMO_MODEL,
             "config": {"allow_auto_fill": True, "allow_auto_submit": False},
+        },
+        {
+            "feature_key": "tryon_video",
+            "enabled": True,
+            "default_provider": "01router",
+            "fallback_order": ["01router"],
+            "config": {"project_id": ""},
+        },
+        {
+            "feature_key": "tryon_realtime",
+            "enabled": False,
+            "default_provider": "decart",
+            "fallback_order": ["decart"],
+            "default_model": "lucy-vton-3.6",
+            "config": {
+                "require_access_code": True,
+                "max_seconds": 20,
+                "default_seconds": 15,
+                "cents_per_second": 2,
+                "daily_cents": 200,
+                "monthly_cents": 1000,
+                "visitor_daily_cents": 80,
+                "max_active": 1,
+                "starts_per_minute": 3,
+                "origin": "",
+                "default_prompt": "Replace the person's outfit with the garment shown in the reference image, keeping natural body motion, lighting, and face identity.",
+            },
+        },
+        {
+            "feature_key": "tryon_realtime_xmax",
+            "enabled": False,
+            "default_provider": "xmax",
+            "fallback_order": ["xmax"],
+            "default_model": "x2.1",
+            "config": {
+                "environment": "global",
+                "allowed_models": ["x2.1", "x2.1-flash"],
+                "camera_preset": "1080x1920",
+                "face_restoration": True,
+                "require_access_code": True,
+                "origin": "",
+                "min_seconds": 10,
+                "max_seconds": 60,
+                "default_seconds": 30,
+                "credits_per_second": 1,
+                "cents_per_minute": 10,
+                "daily_cents": 200,
+                "monthly_cents": 1000,
+                "visitor_daily_cents": 50,
+                "min_account_credits": 60,
+                "max_active": 1,
+                "starts_per_minute": 3,
+                "default_prompt": "将参考图的服装穿戴到视频角色身上，跟随角色原有动作。",
+            },
+        },
+        {
+            "feature_key": "tryon_realtime_reactor",
+            "enabled": False,
+            "default_provider": "reactor",
+            "fallback_order": ["reactor"],
+            "default_model": "reactor/xmax-x2-1",
+            "config": {
+                "allowed_models": ["reactor/xmax-x2-1", "xmax/x2"],
+                "require_access_code": True,
+                "origin": "",
+                "min_seconds": 10,
+                "max_seconds": 60,
+                "default_seconds": 30,
+                "credits_per_second": 17,
+                "cents_per_minute": 11,
+                "daily_cents": 200,
+                "monthly_cents": 1000,
+                "visitor_daily_cents": 50,
+                "min_account_credits": 1000,
+                "max_active": 1,
+                "starts_per_minute": 3,
+                "default_prompt": "将参考图的服装穿戴到视频角色身上，保持人物面部、姿态和自然光影，服装贴合身体动作。",
+            },
         },
         {
             "feature_key": "tryon",
@@ -633,6 +989,10 @@ def _seed_ai_configs(session: Session):
     # Migrate existing gemini provider and tryon feature for unified management
     _migrate_tryon_configs(session)
 
+    # Migrate persisted retired IDs, including administrator-customized rows.
+    _migrate_mimo_models(session)
+    _migrate_provider_model_updates(session)
+
     for fdata in features:
         existing = session.query(AIFeatureConfig).filter_by(feature_key=fdata["feature_key"]).first()
         if not existing:
@@ -640,6 +1000,91 @@ def _seed_ai_configs(session: Session):
     session.commit()
 
     print("[init_db] Seeded AI provider and feature configs")
+
+
+def _migrate_mimo_models(session: Session):
+    """Replace retired MiMo text IDs while preserving all other settings."""
+    provider = session.query(AIAPIProvider).filter_by(provider_key="mimo").first()
+    if provider:
+        provider.default_model = normalize_mimo_model(provider.default_model or "") or provider.default_model
+        if provider.model_options is not None:
+            options = list(dict.fromkeys(normalize_mimo_model(model) for model in provider.model_options))
+            if options != provider.model_options:
+                provider.model_options = options
+
+    features = session.query(AIFeatureConfig).filter(
+        AIFeatureConfig.default_provider == "mimo",
+        AIFeatureConfig.default_model.in_(RETIRED_MIMO_MODELS),
+    ).all()
+    for feature in features:
+        feature.default_model = normalize_mimo_model(feature.default_model)
+
+    prompts = session.query(PromptConfig).filter(PromptConfig.model_name.in_(RETIRED_MIMO_MODELS)).all()
+    for prompt in prompts:
+        prompt.model_name = normalize_mimo_model(prompt.model_name)
+
+
+def _migrate_provider_model_updates(session: Session):
+    """Upgrade DeepSeek to multimodal V4.1 Flash, merge new Gemini/Go model options, and keep default chains current."""
+    deepseek = session.query(AIAPIProvider).filter_by(provider_key="deepseek").first()
+    if deepseek:
+        if deepseek.category == "llm":
+            deepseek.category = "multi"
+        current_default = deepseek.default_model or ""
+        normalized_default = normalize_deepseek_model(current_default)
+        if normalized_default != current_default:
+            deepseek.default_model = normalized_default
+        if deepseek.model_options is not None:
+            migrated_opts = list(
+                dict.fromkeys(
+                    [normalize_deepseek_model(m) for m in deepseek.model_options]
+                    + list(DEEPSEEK_TEXT_MODELS)
+                )
+            )
+            if migrated_opts != deepseek.model_options:
+                deepseek.model_options = migrated_opts
+        if deepseek.updated_by in ("system", None):
+            deepseek.display_name = "DeepSeek"
+
+    opencode_go = session.query(AIAPIProvider).filter_by(provider_key="opencode_go").first()
+    if opencode_go and opencode_go.updated_by in ("system", None):
+        merged_go = list(dict.fromkeys(list(OPENCODE_GO_MODELS) + list(opencode_go.model_options or [])))
+        if merged_go != opencode_go.model_options:
+            opencode_go.model_options = merged_go
+
+    gemini = session.query(AIAPIProvider).filter_by(provider_key="gemini").first()
+    if gemini and gemini.model_options is not None:
+        latest_gemini = [
+            "gemini-4-hydrogen",
+            "gemini-4-argon",
+            "gemini-4-carbon",
+            "gemini-3.8-flash",
+            "gemini-3.1-flash-lite",
+        ]
+        merged_gemini = list(dict.fromkeys(list(gemini.model_options) + latest_gemini))
+        if merged_gemini != gemini.model_options:
+            gemini.model_options = merged_gemini
+
+    legacy_chains = {
+        "recommendation": (["mimo", "gemini", "deepseek", "rule"], ["mimo", "gemini", "deepseek", "opencode_go", "rule"]),
+        "vision_analysis": (["mimo", "gemini"], ["mimo", "gemini", "deepseek", "opencode_go"]),
+        "assistant_chat": (["mimo", "deepseek", "rule"], ["mimo", "deepseek", "opencode_go", "rule"]),
+    }
+    for fk, (old_chain, new_chain) in legacy_chains.items():
+        feat = session.query(AIFeatureConfig).filter_by(feature_key=fk).first()
+        if feat and feat.fallback_order == old_chain:
+            feat.fallback_order = new_chain
+
+    for feat in session.query(AIFeatureConfig).filter(
+        AIFeatureConfig.default_provider == "deepseek",
+        AIFeatureConfig.default_model.in_(RETIRED_DEEPSEEK_MODEL_ALIASES),
+    ).all():
+        feat.default_model = normalize_deepseek_model(feat.default_model)
+
+    for prompt in session.query(PromptConfig).filter(
+        PromptConfig.model_name.in_(RETIRED_DEEPSEEK_MODEL_ALIASES)
+    ).all():
+        prompt.model_name = normalize_deepseek_model(prompt.model_name)
 
 
 def _migrate_voice_feature_keys(session: Session):
@@ -740,9 +1185,14 @@ def _migrate_tryon_configs(session: Session):
         # Merge model_options: add new tryon models while preserving existing ones
         existing_opts = list(gemini.model_options or [])
         new_opts = [
+            "gemini-4-hydrogen",
+            "gemini-4-argon",
+            "gemini-4-carbon",
+            "gemini-3.8-flash",
+            "gemini-3.1-flash-lite",
+            "gemini-3.1-flash-lite-preview",
             "gemini-3.1-flash-image-preview",
             "gemini-3-pro-image-preview",
-            "gemini-3.1-flash-lite-preview",
             "gemini-2.5-flash",
         ]
         merged = list(dict.fromkeys(existing_opts + new_opts))  # dedupe preserving order
@@ -853,7 +1303,7 @@ def _seed_prompts(session: Session):
                 "- 如果照片或信息不足无法可靠判断，请写 unknown 或 未知。"
             ),
             "variables": ["color_preference", "gender", "mbti", "size", "style_preference"],
-            "model_name": "mimo-v2.5",
+            "model_name": DEFAULT_MIMO_MODEL,
             "temperature": 0.2,
         },
         {
@@ -911,7 +1361,7 @@ def _seed_prompts(session: Session):
                 "- 如果信息不足无法可靠判断，请写 unknown 或 未知。"
             ),
             "variables": ["color_preference", "gender", "mbti", "size", "style_preference"],
-            "model_name": "deepseek-v4-flash",
+            "model_name": DEFAULT_DEEPSEEK_MODEL,
             "temperature": 0.2,
         },
         {
@@ -935,7 +1385,7 @@ def _seed_prompts(session: Session):
                 "要求：50字以内，中文，友好亲切。"
             ),
             "variables": ["color_preference", "gender", "size", "style_preference", "product_title", "product_color", "product_style", "product_brand"],
-            "model_name": "mimo-v2.5",
+            "model_name": DEFAULT_MIMO_MODEL,
             "temperature": 0.3,
         },
         {
@@ -956,7 +1406,7 @@ def _seed_prompts(session: Session):
                 "请只返回意图类别名称，不要返回其他内容。"
             ),
             "variables": ["message"],
-            "model_name": "mimo-v2.5",
+            "model_name": DEFAULT_MIMO_MODEL,
             "temperature": 0.1,
         },
         {
@@ -1007,7 +1457,7 @@ def _seed_prompts(session: Session):
                 "- 不要默认填写 ai_provider、vision_provider 或模型字段，使用后台配置。"
             ),
             "variables": ["message"],
-            "model_name": "mimo-v2.5",
+            "model_name": DEFAULT_MIMO_MODEL,
             "temperature": 0.1,
         },
         {
@@ -1028,7 +1478,7 @@ def _seed_prompts(session: Session):
                 "请用简洁友好的中文回答。"
             ),
             "variables": ["question"],
-            "model_name": "mimo-v2.5",
+            "model_name": DEFAULT_MIMO_MODEL,
             "temperature": 0.3,
         },
         {
@@ -1050,7 +1500,7 @@ def _seed_prompts(session: Session):
                 "要求：30字以内，中文，友好亲切，引导用户确认。"
             ),
             "variables": ["gender", "color", "brand", "size", "price_range", "style", "mbti"],
-            "model_name": "mimo-v2.5",
+            "model_name": DEFAULT_MIMO_MODEL,
             "temperature": 0.3,
         },
         {
@@ -1061,7 +1511,7 @@ def _seed_prompts(session: Session):
             "prompt_type": "system",
             "content": "要进行虚拟试穿，请先在推荐结果或「自己搭配」页面选择一件羽绒服，然后点击「尝试试穿」按钮。系统会自动打开试穿工作台并同步商品图，你只需在试穿站上传全身照即可。",
             "variables": [],
-            "model_name": "mimo-v2.5",
+            "model_name": DEFAULT_MIMO_MODEL,
             "temperature": 0.1,
         },
         {
@@ -1072,7 +1522,7 @@ def _seed_prompts(session: Session):
             "prompt_type": "system",
             "content": "你可以在页面顶部导航栏点击「自己搭配」进入 Style Lab。在那里你可以从商品库中挑选任意羽绒服，系统会对该单品与你的偏好进行多维评分和穿搭建议。",
             "variables": [],
-            "model_name": "mimo-v2.5",
+            "model_name": DEFAULT_MIMO_MODEL,
             "temperature": 0.1,
         },
         {
@@ -1083,7 +1533,7 @@ def _seed_prompts(session: Session):
             "prompt_type": "system",
             "content": "你是一个语音识别后处理助手。请清理以下 ASR 识别文本：1. 去除多余空格和重复词。2. 修正明显的同音错别字（如「羽绒福」->「羽绒服」）。3. 统一中文标点。4. 不改变用户原意，不过度改写。5. 保留口语化表达。",
             "variables": [],
-            "model_name": "mimo-v2.5",
+            "model_name": DEFAULT_MIMO_MODEL,
             "temperature": 0.1,
         },
         {
@@ -1094,7 +1544,7 @@ def _seed_prompts(session: Session):
             "prompt_type": "system",
             "content": "像一个亲切的羽绒服导购助手在和用户说话。语气温和自然，语速适中，不过度夸张。像在帮朋友挑选适合的冬季外套，耐心、专业、温暖。",
             "variables": [],
-            "model_name": "mimo-v2.5",
+            "model_name": DEFAULT_MIMO_MODEL,
             "temperature": 0.1,
         },
         {
@@ -1105,7 +1555,7 @@ def _seed_prompts(session: Session):
             "prompt_type": "system",
             "content": "声音克隆功能仅限后台管理员操作。普通主站用户不可上传声音样本进行克隆。所有克隆音色必须经过后台审核和发布后才能在主站使用。如需使用克隆音色，请联系管理员。",
             "variables": [],
-            "model_name": "mimo-v2.5",
+            "model_name": DEFAULT_MIMO_MODEL,
             "temperature": 0.1,
         },
         {
@@ -1116,7 +1566,7 @@ def _seed_prompts(session: Session):
             "prompt_type": "system",
             "content": "你好，我是你的 AI 羽绒服导购助手。你可以直接告诉我你的需求，比如性别、颜色偏好、预算、尺码和喜欢的风格，我会帮你找到最合适的羽绒服。",
             "variables": [],
-            "model_name": "mimo-v2.5",
+            "model_name": DEFAULT_MIMO_MODEL,
             "temperature": 0.1,
         },
         {
@@ -1127,7 +1577,7 @@ def _seed_prompts(session: Session):
             "prompt_type": "system",
             "content": "抱歉，我没有听清楚。你可以再说一次吗？或者你可以告诉我：1. 你想要什么颜色？2. 大概预算多少？3. 男款还是女款？4. 什么尺码？",
             "variables": [],
-            "model_name": "mimo-v2.5",
+            "model_name": DEFAULT_MIMO_MODEL,
             "temperature": 0.1,
         },
         {
@@ -1138,34 +1588,74 @@ def _seed_prompts(session: Session):
             "prompt_type": "system",
             "content": "根据通话内容，整理用户的核心需求：性别、颜色、预算、尺码、品牌、风格。总结后告知用户已整理好推荐条件，建议用户确认后生成推荐。",
             "variables": [],
-            "model_name": "mimo-v2.5",
+            "model_name": DEFAULT_MIMO_MODEL,
             "temperature": 0.1,
         },
     ]
 
-    for pdata in prompts:
-        existing = session.query(PromptConfig).filter_by(name=pdata["name"]).first()
-        if not existing:
-            session.add(PromptConfig(**pdata, default_content=pdata["content"], updated_by="system"))
-        else:
+    seeded = 0
+    for seed in prompts:
+        for locale in PROMPT_LOCALES:
+            pdata = localize_prompt_seed(seed, locale)
+            existing = session.query(PromptConfig).filter_by(name=pdata["name"], locale=locale).first()
+            if not existing:
+                session.add(PromptConfig(**pdata, default_content=pdata["content"], updated_by="system"))
+                seeded += 1
+                continue
             # Backfill: update default_content if empty or if seed content changed
-            # Do NOT overwrite admin-edited content
+            # Do NOT overwrite admin-edited content.
             if not existing.default_content:
                 existing.default_content = pdata["content"]
             elif existing.default_content != pdata["content"]:
-                # Seed content changed (e.g. 2.1A update) — update default only
                 existing.default_content = pdata["content"]
             if (
                 pdata["name"] == "assistant_param_extractor"
                 and existing.updated_by in ("system", None, "migration")
                 and existing.content != pdata["content"]
             ):
-                # Upgrade stale system seed while preserving administrator edits.
                 existing.content = pdata["content"]
                 existing.version = int(existing.version or 1) + 1
                 existing.updated_by = "system"
     session.commit()
-    print(f"[init_db] Seeded/backfilled {len(prompts)} prompt configs")
+    print(f"[init_db] Seeded/backfilled {len(prompts)} prompt definitions across {len(PROMPT_LOCALES)} locales ({seeded} new rows)")
+
+
+_SIZE_PATTERN = re.compile(
+    r"(?:(?<=^)|(?<=[\s/_(（【\[-]))(7XL|6XL|5XL|4XL|3XL|2XL|XXXL|XXL|XL|XS|S|M|L)(?=(?:\s|$|码|[)\]_/）】,\-]))",
+    re.IGNORECASE,
+)
+_SIZE_NOTE_PATTERN = re.compile(r"(建议体重[^ ]+|体重约\d+(?:-\d+)?斤|[12]\d{2}/\d{2,3}A)")
+_SIZE_ALIASES = {"XXL": "2XL", "XXXL": "3XL"}
+
+
+def _extract_size_tags(title: str) -> list[str]:
+    tags: list[str] = []
+    for match in _SIZE_PATTERN.finditer(str(title or "").upper()):
+        val = _SIZE_ALIASES.get(match.group(1).upper(), match.group(1).upper())
+        if val not in tags:
+            tags.append(val)
+    return tags
+
+
+def _extract_size_notes(title: str) -> str | None:
+    notes = []
+    for match in _SIZE_NOTE_PATTERN.finditer(str(title or "")):
+        val = match.group(1).strip()
+        if val and val not in notes:
+            notes.append(val)
+    return " / ".join(notes)[:255] if notes else None
+
+
+def _resolve_seed_json_path() -> Path | None:
+    candidates = [
+        Path("/app/database.json"),
+        Path(__file__).resolve().parent.parent.parent / "database.json",
+        Path(__file__).resolve().parent.parent.parent.parent / "database.json",
+    ]
+    for p in candidates:
+        if p.is_file():
+            return p
+    return None
 
 
 # Chinese→English key mapping for database.json
@@ -1178,23 +1668,81 @@ _KEY_MAP = {
     "版型与身材适配度": "body_fit",
     "风格特征": "style_features",
     "功能属性": "function_features",
+    "商品链接": "product_url",
 }
+
+
+def _build_product_kwargs(item: dict) -> dict | None:
+    mapped: dict = {}
+    for cn_key, en_key in _KEY_MAP.items():
+        if cn_key in item:
+            mapped[en_key] = item[cn_key]
+
+    if "title" not in mapped or "price" not in mapped:
+        return None
+
+    mapped["title"] = str(mapped["title"]).strip()
+    mapped["image_path"] = str(mapped.get("image_path") or "").replace("\\", "/")
+    mapped["style_features"] = list(mapped.get("style_features") or [])
+    brand = str(item.get("品牌") or "").strip()
+    if brand:
+        brand_tag = f"品牌:{brand}" if not brand.startswith("品牌:") else brand
+        if brand_tag not in mapped["style_features"] and brand not in mapped["style_features"]:
+            mapped["style_features"].append(brand_tag)
+    mapped["function_features"] = list(mapped.get("function_features") or [])
+    mapped["size_tags"] = _extract_size_tags(mapped["title"])
+    mapped["size_notes"] = _extract_size_notes(mapped["title"])
+    url_val = str(mapped.get("product_url") or "").strip()
+    mapped["product_url"] = url_val or None
+    return mapped
+
+
+def _backfill_product_metadata(session: Session) -> int:
+    """Backfill product_url / size_tags / size_notes if existing rows lack product_url."""
+    missing_url_count = session.query(Product).filter(Product.product_url.is_(None)).count()
+    if missing_url_count == 0:
+        return 0
+    db_json_path = _resolve_seed_json_path()
+    if db_json_path is None:
+        return 0
+    with open(db_json_path, "r", encoding="utf-8") as f:
+        items = json.load(f)
+    by_img: dict[str, dict] = {}
+    for item in items:
+        img = str(item.get("图片路径") or "").replace("\\", "/").strip()
+        if img:
+            by_img[img] = item
+    updated = 0
+    for prod in session.query(Product).all():
+        src = by_img.get(str(prod.image_path or "").replace("\\", "/").strip())
+        if not src:
+            continue
+        url_val = str(src.get("商品链接") or "").strip() or None
+        changed = False
+        if url_val and not prod.product_url:
+            prod.product_url = url_val
+            changed = True
+        if not prod.size_tags:
+            tags = _extract_size_tags(prod.title)
+            if tags:
+                prod.size_tags = tags
+                changed = True
+        if not prod.size_notes:
+            notes = _extract_size_notes(prod.title)
+            if notes:
+                prod.size_notes = notes
+                changed = True
+        if changed:
+            updated += 1
+    if updated:
+        session.commit()
+        print(f"[init_db] Backfilled metadata on {updated} existing products")
+    return updated
 
 
 def _seed_products(session: Session):
     """Load products from database.json into the products table."""
-    # Try several possible locations for database.json
-    candidates = [
-        Path("/app/database.json"),
-        Path(__file__).resolve().parent.parent.parent / "database.json",
-        Path(__file__).resolve().parent.parent.parent.parent / "database.json",
-    ]
-    db_json_path = None
-    for p in candidates:
-        if p.is_file():
-            db_json_path = p
-            break
-
+    db_json_path = _resolve_seed_json_path()
     if db_json_path is None:
         print("[init_db] database.json not found, skipping product seed")
         return
@@ -1205,31 +1753,19 @@ def _seed_products(session: Session):
 
     count = 0
     for item in items:
-        mapped = {}
-        for cn_key, en_key in _KEY_MAP.items():
-            if cn_key in item:
-                mapped[en_key] = item[cn_key]
-
-        if "title" not in mapped or "price" not in mapped:
+        mapped = _build_product_kwargs(item)
+        if not mapped:
             continue
-
-        # Ensure list fields default to empty list
-        mapped.setdefault("style_features", [])
-        mapped.setdefault("function_features", [])
-        mapped.setdefault("size_tags", [])
-
         product = Product(**mapped)
         session.add(product)
         count += 1
 
-        # Batch commit every 500 rows
         if count % 500 == 0:
             session.commit()
 
     session.commit()
     print(f"[init_db] Seeded {count} products")
 
-    # Compute real annotation confidence and create AnnotationTask records
     from app.services.annotation_engine import compute_annotation_confidence, derive_priority
 
     products = session.query(Product).all()
@@ -1255,14 +1791,20 @@ _SAMPLE_MODELS = [
 
 
 def _seed_sample_models(session: Session):
-    """Seed sample model records (images already uploaded to GCS)."""
-    bucket_name = get_settings().GCS_BUCKET_NAME
-    if not bucket_name:
-        print("[init_db] GCS_BUCKET_NAME is not configured; skipping sample model seed")
-        return
-    print("[init_db] Seeding generic sample models")
+    """Seed sample model records (images already staged in object storage)."""
+    print("[init_db] Seeding sample models")
+    settings = get_settings()
     for m in _SAMPLE_MODELS:
-        gcs_url = f"https://storage.googleapis.com/{bucket_name}/sample_models/{m['gender']}/{m['filename']}"
+        object_name = f"sample_models/{m['gender']}/{m['filename']}"
+        if str(getattr(settings, "OBJECT_STORAGE_PROVIDER", "gcs")).lower() == "oss":
+            base_url = getattr(settings, "PUBLIC_IMAGE_BASE_URL", "") or f"https://{settings.OSS_PRODUCT_BUCKET}.oss-{settings.OSS_REGION}.aliyuncs.com"
+            from urllib.parse import quote
+            gcs_url = f"{base_url.rstrip('/')}/{quote(object_name, safe='/')}"
+        elif str(getattr(settings, "OBJECT_STORAGE_PROVIDER", "gcs")).lower() == "azure" and getattr(settings, "AZURE_STORAGE_ACCOUNT_NAME", ""):
+            container = getattr(settings, "AZURE_PRODUCT_CONTAINER", "product-assets")
+            gcs_url = f"https://{settings.AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net/{container}/{object_name}"
+        else:
+            gcs_url = f"https://storage.googleapis.com/{settings.GCS_BUCKET_NAME}/{object_name}"
         model = SampleModel(
             name=m["name"],
             gender=m["gender"],

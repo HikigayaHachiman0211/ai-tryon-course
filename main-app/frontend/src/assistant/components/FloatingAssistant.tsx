@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { RecommendFormPatch } from '../assistantTypes';
 import { ChatPanel } from './ChatPanel';
 import { useResizablePanel } from '../hooks/useResizablePanel';
 
 /* z-index layer constants — must match CSS variables in index.css */
 const Z_BUTTON = 'var(--z-assistant-button)'; // 850
-const Z_PANEL = 'var(--z-assistant-panel)';    // 900
+const Z_PANEL = 'var(--z-assistant-panel)';    // 1100
 
 /* Selectors for elements that must never be covered by the assistant */
 const AVOID_SELECTORS = [
@@ -16,6 +17,7 @@ const AVOID_SELECTORS = [
   '.error-toast',
   '.debug-error-panel',
   '.app-notification',
+  '.tryon-status-banner',
   '[data-error-panel]',
 ].join(', ');
 
@@ -34,10 +36,34 @@ export const FloatingAssistant: React.FC<Props> = ({
   onSubmitRecommend,
   onFillAndSubmit,
 }) => {
+  const { t } = useTranslation('assistant');
   const [open, setOpen] = useState(false);
   const [avoiding, setAvoiding] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => (
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(max-width: 768px)').matches
+      : false
+  ));
   const observerRef = useRef<MutationObserver | null>(null);
   const panel = useResizablePanel();
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(max-width: 768px)');
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener?.('change', sync);
+    return () => mq.removeEventListener?.('change', sync);
+  }, []);
+
+  useEffect(() => {
+    if (!open || !isMobile || typeof document === 'undefined') return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open, isMobile]);
 
   /* MutationObserver: detect error/toast panels and shift assistant away */
   useEffect(() => {
@@ -67,7 +93,10 @@ export const FloatingAssistant: React.FC<Props> = ({
       {/* Floating button */}
       {!open && (
         <button
+          type="button"
           onClick={() => setOpen(true)}
+          aria-label={t('header')}
+          title={t('header')}
           className={`floating-assistant-btn ${avoidClass}`}
           style={{
             position: 'fixed',
@@ -86,17 +115,23 @@ export const FloatingAssistant: React.FC<Props> = ({
             zIndex: Z_BUTTON,
             transition: 'transform 0.2s, box-shadow 0.2s, bottom 0.3s',
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'scale(1.1)';
-            e.currentTarget.style.boxShadow = '0 6px 28px rgba(0, 113, 227, 0.6)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.boxShadow = '0 4px 20px rgba(0, 113, 227, 0.4)';
-          }}
         >
           <MessageCircle size={24} color="#fff" />
         </button>
+      )}
+
+      {/* Mobile backdrop */}
+      {open && isMobile && (
+        <div
+          className="floating-assistant-backdrop"
+          onClick={handleClose}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.55)',
+            zIndex: 'var(--z-assistant-backdrop-mobile, 1290)',
+          }}
+        />
       )}
 
       {/* Chat panel overlay */}
@@ -125,6 +160,8 @@ export const FloatingAssistant: React.FC<Props> = ({
             onSubmitRecommend={onSubmitRecommend}
             onFillAndSubmit={onFillAndSubmit}
             onClose={handleClose}
+            panel={panel}
+            isMobile={isMobile}
           />
         </div>
       )}
@@ -139,9 +176,10 @@ export const FloatingAssistant: React.FC<Props> = ({
         .assistant-resizing * {
           pointer-events: none !important;
         }
-        @supports (padding-bottom: env(safe-area-inset-bottom)) {
-          .floating-assistant-panel {
-            padding-bottom: env(safe-area-inset-bottom);
+        @media (hover: hover) {
+          .floating-assistant-btn:hover {
+            transform: scale(1.08);
+            box-shadow: 0 6px 28px rgba(0, 113, 227, 0.6) !important;
           }
         }
         @media (max-width: 768px) {
@@ -149,15 +187,18 @@ export const FloatingAssistant: React.FC<Props> = ({
             bottom: 0 !important;
             right: 0 !important;
             left: 0 !important;
-            width: 100vw !important;
-            max-width: 100vw !important;
-            height: calc(100vh - 60px) !important;
-            max-height: calc(100vh - 60px) !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: 88vh !important;
+            height: min(88dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 12px)) !important;
+            max-height: 88vh !important;
+            max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 12px)) !important;
             border-radius: 20px 20px 0 0 !important;
+            z-index: var(--z-assistant-panel-mobile, 1300) !important;
           }
           .floating-assistant-btn {
             bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
-            right: 16px !important;
+            right: calc(16px + env(safe-area-inset-right, 0px)) !important;
           }
           .floating-assistant-btn.assistant--avoid-error {
             bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;

@@ -1,0 +1,23 @@
+.filter-card {
+  padding: 22rpx;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.search-btn {
+  min-width: 130rpx;
+  min-height: 76rpx;
+}
+
+.count-row {
+  padding: 4rpx 8rpx 14rpx;
+}
+
+.center-box {
+  text-align: center;
+  padding: 26rpx;
+}

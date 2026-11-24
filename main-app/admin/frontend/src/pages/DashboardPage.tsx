@@ -9,10 +9,12 @@ import {
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import { getOverview, getTrends, getTopPreferences } from '../api/dashboard'
+import { useTranslation } from 'react-i18next'
 
 const { Title } = Typography
 
 export default function DashboardPage() {
+  const { t } = useTranslation('common')
   const [overview, setOverview] = useState<Record<string, unknown> | null>(null)
   const [trends, setTrends] = useState<Record<string, unknown>[]>([])
   const [prefs, setPrefs] = useState<Record<string, unknown> | null>(null)
@@ -38,10 +40,10 @@ export default function DashboardPage() {
   const dateSet = new Set<string>()
   const seriesMap: Record<string, Record<string, number>> = {}
   const seriesMeta: Record<string, { label: string; color: string }> = {
-    recommend: { label: '推荐请求', color: '#0071e3' },
-    'style-lab': { label: '风格实验室', color: '#af52de' },
-    main_site: { label: '主站访问', color: '#34c759' },
-    tryon_workbench: { label: '试衣访问', color: '#ff9500' },
+    recommend: { label: t('dashboard.recommend'), color: '#0071e3' },
+    'style-lab': { label: t('dashboard.styleLab'), color: '#af52de' },
+    main_site: { label: t('dashboard.mainSite'), color: '#34c759' },
+    tryon_workbench: { label: t('dashboard.workbench'), color: '#ff9500' },
   }
   for (const t of trends) {
     const date = t.date as string
@@ -62,35 +64,36 @@ export default function DashboardPage() {
   }))
 
   const trendOption = {
-    tooltip: { trigger: 'axis' as const },
-    legend: { data: trendSeries.map((s) => s.name), top: 0 },
+    tooltip: { trigger: 'axis' as const, confine: true },
+    legend: { type: 'scroll' as const, data: trendSeries.map((s) => s.name), top: 0 },
     xAxis: { type: 'category' as const, data: dates },
     yAxis: { type: 'value' as const },
     series: trendSeries,
-    grid: { top: 40, right: 20, bottom: 30, left: 50 },
+    grid: { top: 40, right: 16, bottom: 20, left: 16, containLabel: true },
   }
 
   const colors = (prefs?.top_colors as { color: string; count: number }[]) || []
   const colorOption = {
-    tooltip: { trigger: 'item' as const },
+    tooltip: { trigger: 'item' as const, confine: true },
     series: [
       {
         type: 'pie',
-        radius: ['40%', '70%'],
+        radius: ['36%', '64%'],
         data: colors.slice(0, 8).map((c) => ({ value: c.count, name: c.color })),
         itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
+        label: { overflow: 'truncate' as const },
       },
     ],
   }
 
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 24 }}>仪表盘</Title>
+      <Title level={4} style={{ marginBottom: 20, letterSpacing: '-0.02em', fontWeight: 600 }}>{t('dashboard.title')}</Title>
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={5}>
           <Card className="stat-card">
             <Statistic
-              title="商品总数"
+              title={t('dashboard.products')}
               value={(overview?.total_products as number) || 0}
               prefix={<ShoppingOutlined />}
             />
@@ -99,7 +102,7 @@ export default function DashboardPage() {
         <Col xs={24} sm={12} lg={5}>
           <Card className="stat-card">
             <Statistic
-              title="今日请求"
+              title={t('dashboard.requestsToday')}
               value={(overview?.today_requests as number) || 0}
               prefix={<EyeOutlined />}
             />
@@ -108,19 +111,19 @@ export default function DashboardPage() {
         <Col xs={24} sm={12} lg={5}>
           <Card className="stat-card">
             <Statistic
-              title="今日访问"
+              title={t('dashboard.visitsToday')}
               value={(overview?.today_visits as number) || 0}
               prefix={<GlobalOutlined />}
             />
             <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
-              主站 {(overview?.today_visits_main as number) || 0} / 试衣 {(overview?.today_visits_tryon as number) || 0}
+              {t('dashboard.mainVisits', { count: (overview?.today_visits_main as number) || 0, tryon: (overview?.today_visits_tryon as number) || 0 })}
             </div>
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={5}>
           <Card className="stat-card">
             <Statistic
-              title="京东商品"
+              title={t('dashboard.jdProducts')}
               value={(overview?.jd_products as number) || 0}
               prefix={<RiseOutlined />}
             />
@@ -129,7 +132,7 @@ export default function DashboardPage() {
         <Col xs={24} sm={8} lg={4}>
           <Card className="stat-card">
             <Statistic
-              title="淘宝商品"
+              title={t('dashboard.taobaoProducts')}
               value={(overview?.taobao_products as number) || 0}
               prefix={<UserOutlined />}
             />
@@ -139,12 +142,12 @@ export default function DashboardPage() {
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} lg={16}>
-          <Card title="访问趋势（近 7 天）">
+          <Card title={t('dashboard.trend')}>
             <ReactECharts option={trendOption} style={{ height: 300 }} />
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="热门颜色偏好">
+          <Card title={t('dashboard.colors')}>
             <ReactECharts option={colorOption} style={{ height: 300 }} />
           </Card>
         </Col>
@@ -152,10 +155,10 @@ export default function DashboardPage() {
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24}>
-          <Card title="价格分布">
+          <Card title={t('dashboard.priceDistribution')}>
             <ReactECharts
               option={{
-                tooltip: { trigger: 'axis' as const },
+                tooltip: { trigger: 'axis' as const, confine: true },
                 xAxis: {
                   type: 'category' as const,
                   data: ((prefs?.price_distribution as { range: string; count: number }[]) || []).map((p) => p.range),
@@ -168,7 +171,7 @@ export default function DashboardPage() {
                     itemStyle: { color: '#0071e3', borderRadius: [4, 4, 0, 0] },
                   },
                 ],
-                grid: { top: 10, right: 20, bottom: 30, left: 50 },
+                grid: { top: 16, right: 16, bottom: 20, left: 16, containLabel: true },
               }}
               style={{ height: 250 }}
             />

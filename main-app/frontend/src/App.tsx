@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { analyzeStyleLab, buildImageURL, getCatalogProducts, getHistoryDetail, getRecommend } from './api';
+import { useTranslation } from 'react-i18next';
+import { analyzeStyleLab, buildImageURL, getCatalogProducts, getHistoryDetail, getRecommend, localizeResult } from './api';
 import {
   type TryOnBridgePayload,
   getTryOnBaseUrl,
@@ -20,12 +21,16 @@ import type {
 import { applyAssistantFormPatch } from './assistant/utils/formPatch';
 import type { RecommendFormPatch } from './assistant/assistantTypes';
 import {
+  SAMPLE_MODELS,
   type ViewMode,
   type CatalogMode,
   type CatalogPlatform,
   type SampleModel,
   getInitialView,
 } from './constants/formOptions';
+import { LanguageSwitcher } from './i18n/LanguageSwitcher';
+import i18n, { setAppLocale } from './i18n';
+import { DEFAULT_LOCALE, normalizeLocale, type AppLocale } from './i18n/locale';
 import { getAdminUrl } from './utils/adminUrl';
 import { toApiError } from './utils/apiError';
 import { fileToDataUrl } from './utils/fileUtils';
@@ -39,6 +44,8 @@ const FloatingAssistant = React.lazy(async () => ({ default: (await import('./as
 
 
 export default function App() {
+  const { t } = useTranslation('common');
+  const locale = normalizeLocale(i18n.resolvedLanguage) ?? DEFAULT_LOCALE;
   const [view, setView] = useState<ViewMode>(getInitialView);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -51,6 +58,7 @@ export default function App() {
   const [result, setResult] = useState<RecommendationResponse | null>(null);
   const [error, setError] = useState<ErrorResponse['error'] | null>(null);
   const [tryOnMessage, setTryOnMessage] = useState<string | null>(null);
+  const [tryOnFallbackUrl, setTryOnFallbackUrl] = useState<string | null>(null);
   const [visibleRecommendationCount, setVisibleRecommendationCount] = useState(3);
 
   const [catalogMode, setCatalogMode] = useState<CatalogMode>('gender');
@@ -61,6 +69,9 @@ export default function App() {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogGenderFallback, setCatalogGenderFallback] = useState(false);
+  const catalogGenerationRef = useRef(0);
+  const catalogRequestRef = useRef(0);
+  const catalogReadyRef = useRef(false);
 
   const [selectedProduct, setSelectedProduct] = useState<ProductCatalogItem | null>(null);
   const [styleLabLoading, setStyleLabLoading] = useState(false);
@@ -68,9 +79,18 @@ export default function App() {
   const [styleLabError, setStyleLabError] = useState<ErrorResponse['error'] | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const recommendPhotoFileRef = useRef<File | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [sampleModelGender, setSampleModelGender] = useState<'male' | 'female'>('male');
   const [selectedSampleModel, setSelectedSampleModel] = useState<string | null>(null);
+
+  const handleLocaleChange = useCallback(async (nextLocale: AppLocale) => {
+    try {
+      await setAppLocale(nextLocale);
+    } catch {
+      setTryOnMessage(t('common.localeSwitchFailed'));
+    }
+  }, [t]);
 
   useEffect(() => {
     const syncView = () => {
@@ -96,10 +116,37 @@ export default function App() {
     setStyleLabError(null);
   }, [photoFile, formData.color_preference, formData.brand_preference, formData.gender, formData.mbti, formData.size, formData.style_preference, formData.price_min, formData.price_max]);
 
+  useEffect(() => {
+    if (!result || result.locale === locale) return;
+    let cancelled = false;
+    void localizeResult('recommend', result, locale).then((localized) => {
+      if (!cancelled) setResult((current) => current === result ? localized : current);
+    }).catch(() => { /* Keep the previous result available if localization fails. */ });
+    return () => { cancelled = true; };
+  }, [locale, result]);
+
+  useEffect(() => {
+    if (!styleLabResult || styleLabResult.locale === locale) return;
+    let cancelled = false;
+    void localizeResult('style-lab', styleLabResult, locale).then((localized) => {
+      if (cancelled) return;
+      setStyleLabResult((current) => current === styleLabResult ? localized : current);
+      setSelectedProduct((current) => current?.id === localized.product.id ? localized.product : current);
+    }).catch(() => { /* Keep the previous analysis available if localization fails. */ });
+    return () => { cancelled = true; };
+  }, [locale, styleLabResult]);
+
+  useEffect(() => {
+    if (!selectedProduct || selectedProduct.locale === locale || styleLabResult?.product.id === selectedProduct.id) return;
+    let cancelled = false;
+    void localizeResult('product', selectedProduct, locale).then((localized) => {
+      if (!cancelled) setSelectedProduct((current) => current === selectedProduct ? localized : current);
+    }).catch(() => { /* Keep the selected product available if localization fails. */ });
+    return () => { cancelled = true; };
+  }, [locale, selectedProduct, styleLabResult]);
+
   const profileReady = Boolean(formData.color_preference && formData.gender);
   const canLoadMoreCatalog = catalogItems.length < catalogTotal;
-  const tryOnBaseUrl = getTryOnBaseUrl();
-  const adminUrl = getAdminUrl();
   const assistantCurrentForm = {
     ...formData,
     photo_uploaded: Boolean(photoFile),
@@ -155,11 +202,11 @@ export default function App() {
       const type = String((message as { type?: string }).type || '').toUpperCase();
       if (type === 'DOWN_JACKET_TRYON_BACK') {
         navigateToView('recommend');
-        setTryOnMessage('已从试穿工作台返回主站推荐页。');
+        setTryOnMessage(t('common.tryOnReturned'));
       }
       if (type === 'DOWN_JACKET_TRYON_SWITCH_REQUEST') {
         navigateToView('recommend');
-        setTryOnMessage('试穿工作台请求切回主站，方便你更换其他羽绒服。');
+        setTryOnMessage(t('common.tryOnSwitchRequested'));
       }
     };
 
@@ -167,7 +214,7 @@ export default function App() {
     return () => {
       window.removeEventListener('message', handler);
     };
-  }, [navigateToView]);
+  }, [navigateToView, t]);
 
   const updatePhotoFile = (file: File) => {
     if (photoPreview?.startsWith('blob:')) {
@@ -183,8 +230,9 @@ export default function App() {
     const imageUrl = `/sample-models/${model.gender}/${model.filename}`;
     try {
       const response = await fetch(imageUrl);
+      if (!response.ok) return;
       const blob = await response.blob();
-      const file = new File([blob], model.filename, { type: blob.type });
+      const file = new File([blob], model.filename, { type: blob.type || 'image/jpeg' });
       updatePhotoFile(file);
       setSelectedSampleModel(model.id);
     } catch {
@@ -233,11 +281,11 @@ export default function App() {
   const runRecommendation = async (override?: RecommendationRequest) => {
     const effectiveForm = override || formData;
     if (!effectiveForm.color_preference) {
-      setError({ code: 'VAL-001', message: '请先填写颜色偏好', request_id: 'local', details: null });
+      setError({ code: 'VAL-001', message: t('common.validationColor'), request_id: 'local', details: null });
       return;
     }
     if (!effectiveForm.gender) {
-      setError({ code: 'VAL-002', message: '请选择性别', request_id: 'local', details: null });
+      setError({ code: 'VAL-002', message: t('common.validationGender'), request_id: 'local', details: null });
       return;
     }
 
@@ -245,9 +293,12 @@ export default function App() {
     setError(null);
     setResult(null);
     setTryOnMessage(null);
+    setTryOnFallbackUrl(null);
 
+    const submittedPhoto = photoFile;
     try {
       const response = await getRecommend(buildRequestPayload(override));
+      recommendPhotoFileRef.current = submittedPhoto;
       setResult(response);
       setVisibleRecommendationCount(3);
     } catch (err: unknown) {
@@ -262,6 +313,7 @@ export default function App() {
     try {
       const detail = await getHistoryDetail(entry.id);
       if (entry.type === 'recommend' && detail.items) {
+        recommendPhotoFileRef.current = null;
         setResult(detail);
         setVisibleRecommendationCount(3);
         setError(null);
@@ -280,6 +332,10 @@ export default function App() {
   };
 
   const loadCatalog = useCallback(async ({ reset, offset }: { reset: boolean; offset: number }) => {
+    if (!reset && !catalogReadyRef.current) return;
+    const generation = catalogGenerationRef.current;
+    const request = ++catalogRequestRef.current;
+    const isCurrent = () => generation === catalogGenerationRef.current && request === catalogRequestRef.current;
     setCatalogLoading(true);
     setCatalogError(null);
 
@@ -295,6 +351,8 @@ export default function App() {
         price_max: formData.price_max,
       });
 
+      if (!isCurrent()) return;
+      if (reset) catalogReadyRef.current = true;
       setCatalogItems((previous) => (reset ? response.items : [...previous, ...response.items]));
       setCatalogTotal(response.total);
       setCatalogGenderFallback(Boolean(response.gender_fallback));
@@ -310,13 +368,16 @@ export default function App() {
         });
       }
     } catch (err: unknown) {
-      setCatalogError(toApiError(err, '商品列表加载失败').message);
+      if (isCurrent()) setCatalogError(toApiError(err, t('common.catalogLoadFailed')).message);
     } finally {
-      setCatalogLoading(false);
+      if (isCurrent()) setCatalogLoading(false);
     }
-  }, [catalogMode, catalogPlatform, catalogQuery, formData.gender, formData.price_max, formData.price_min]);
+  }, [catalogMode, catalogPlatform, catalogQuery, formData.gender, formData.price_max, formData.price_min, t]);
 
   useEffect(() => {
+    const generation = ++catalogGenerationRef.current;
+    catalogRequestRef.current += 1;
+    catalogReadyRef.current = false;
     if (view !== 'style-lab') {
       return undefined;
     }
@@ -327,16 +388,17 @@ export default function App() {
 
     return () => {
       window.clearTimeout(timer);
+      if (catalogGenerationRef.current === generation) catalogGenerationRef.current += 1;
     };
-  }, [view, loadCatalog]);
+  }, [view, loadCatalog, locale]);
 
   const analyzeCurrentSelection = async () => {
     if (!selectedProduct) {
-      setStyleLabError({ code: 'LAB-SELECT', message: '请先在中间选择一件羽绒服', request_id: 'local', details: null });
+      setStyleLabError({ code: 'LAB-SELECT', message: t('common.selectProduct'), request_id: 'local', details: null });
       return;
     }
     if (!profileReady) {
-      setStyleLabError({ code: 'LAB-PROFILE', message: '请先补全颜色偏好和性别信息', request_id: 'local', details: null });
+      setStyleLabError({ code: 'LAB-PROFILE', message: t('common.completeProfile'), request_id: 'local', details: null });
       return;
     }
 
@@ -349,135 +411,213 @@ export default function App() {
       setSelectedProduct(response.product);
       setStyleLabResult(response);
     } catch (err: unknown) {
-      setStyleLabError(toApiError(err, '搭配分析失败，请稍后再试'));
+      setStyleLabError(toApiError(err, t('common.analysisFailed')));
     } finally {
       setStyleLabLoading(false);
     }
   };
 
-  const buildTryOnPayload = (item: RecommendationResponse['items'][number]): TryOnBridgePayload => ({
-    source: 'down-jacket-recommendation',
-    garmentImageUrl: buildImageURL(item.image_url),
-    productTitle: item.title,
-    productId: String(item.id),
-    productPrice: item.price,
-    productUrl: item.product_url || '',
-    styleType: item.style_type,
-    colorFamily: item.color_family,
-    sizeHint: formData.size || result?.inference.resolved_size || '',
-    recommendationReason: item.reason,
-    score: item.total_score,
-    sceneHint: formData.style_preference || result?.inference.resolved_style || '',
-    fitNote: item.size_notes || '',
-    returnUrl: window.location.href,
-    // Pass the already-uploaded photo's public GCS URL via the URL channel so the
-    // workbench imports it deterministically (postMessage data URL stays as backup).
-    userImageUrl: result?.user_photo_url || '',
-  });
+  const resolveBridgeUserImageUrl = (backendPhotoUrl?: string | null): string => {
+    if (backendPhotoUrl) {
+      return buildImageURL(backendPhotoUrl);
+    }
+    if (selectedSampleModel) {
+      const model = SAMPLE_MODELS.find((entry) => entry.id === selectedSampleModel);
+      if (model) {
+        return buildImageURL(`/sample-models/${model.gender}/${model.filename}`);
+      }
+    }
+    return '';
+  };
 
-  const openTryOnFromStyleLab = async (product: ProductCatalogItem) => {
-    if (!tryOnBaseUrl) {
-      setTryOnMessage('尚未配置试穿工作台地址，请设置 VITE_TRYON_BASE_URL 后重试。');
+  const buildTryOnFallbackUrl = (payload: TryOnBridgePayload): string | null => {
+    try {
+      const targetUrl = new URL(getTryOnBaseUrl(payload.locale));
+      const cleanPayload = { ...payload };
+      delete cleanPayload.userImageDataUrl;
+      targetUrl.searchParams.set('lang', payload.locale);
+      targetUrl.searchParams.set('tryonPayload', JSON.stringify(cleanPayload));
+      return targetUrl.toString();
+    } catch {
+      return null;
+    }
+  };
+
+  const dispatchTryOnWindow = async (payload: TryOnBridgePayload, title: string) => {
+    const tryOnOrigin = getTryOnOrigin();
+    if (!tryOnOrigin) {
+      setTryOnMessage(t('common.tryOnUnavailable'));
+      setTryOnFallbackUrl(null);
       return;
     }
-    const tryOnOrigin = getTryOnOrigin();
-    const payload: TryOnBridgePayload = {
-      source: 'down-jacket-recommendation',
-      garmentImageUrl: buildImageURL(product.image_url),
-      productTitle: product.title,
-      productId: String(product.id),
-      productPrice: product.price,
-      productUrl: product.product_url || '',
-      styleType: product.style_type,
-      colorFamily: product.color_family,
-      returnUrl: window.location.href,
-    };
     const tryonWindow = openTryOnWindow(payload);
     if (!tryonWindow) {
-      setTryOnMessage('浏览器拦截了试穿工作台弹窗，请允许新窗口后重试。');
+      setTryOnMessage(t('common.popupBlocked'));
+      setTryOnFallbackUrl(buildTryOnFallbackUrl(payload));
       return;
     }
+    setTryOnFallbackUrl(null);
+
     if (photoFile) {
       try {
         const userImageDataUrl = await fileToDataUrl(photoFile);
         postTryOnPayloadWithAck(tryonWindow, { ...payload, userImageDataUrl }, tryOnOrigin);
         setTryOnMessage(
           tryOnOrigin
-            ? `已为"${product.title}"打开试穿工作台，并同步你的全身照与商品图。`
-            : `已为"${product.title}"打开试穿工作台。商品图已同步，你的全身照未能自动同步，请在试穿站补传。`,
+            ? t('common.tryOnOpenedWithPhoto', { title })
+            : t('common.tryOnOpenedWithoutPhoto', { title }),
         );
         return;
       } catch {
         postTryOnPayloadWithAck(tryonWindow, payload, tryOnOrigin);
-        setTryOnMessage(`已为"${product.title}"打开试穿工作台。商品图已同步，你的全身照未能自动读取，请在试穿站补传。`);
+        setTryOnMessage(t('common.tryOnOpenedWithoutPhoto', { title }));
         return;
       }
     }
+
     postTryOnPayloadWithAck(tryonWindow, payload, tryOnOrigin);
-    setTryOnMessage(`已为"${product.title}"打开试穿工作台，请在试穿站上传你的全身照后继续。`);
+    setTryOnMessage(
+      payload.userImageUrl
+        ? t('common.tryOnOpenedWithPhoto', { title })
+        : t('common.tryOnOpenedRequestPhoto', { title }),
+    );
+  };
+
+  const buildTryOnPayload = (item: RecommendationResponse['items'][number]): TryOnBridgePayload => {
+    const recommendPhotoValid = !photoFile || recommendPhotoFileRef.current === photoFile;
+    return {
+      source: 'down-jacket-recommendation',
+      garmentImageUrl: buildImageURL(item.image_url),
+      productTitle: item.display?.title ?? item.title,
+      productId: String(item.id),
+      productPrice: item.price,
+      productUrl: item.product_url || '',
+      styleType: item.display?.styleType ?? item.style_type,
+      colorFamily: item.display?.colorFamily ?? item.color_family,
+      sizeHint: formData.size || result?.inference.resolved_size || '',
+      recommendationReason: item.reason,
+      score: item.total_score,
+      sceneHint: result?.inference.display?.style || formData.style_preference || result?.inference.resolved_style || '',
+      fitNote: item.display?.sizeNotes || item.size_notes || '',
+      returnUrl: window.location.href,
+      locale,
+      presentationSource: result ? {
+        kind: 'recommend',
+        result: {
+          locale: result.locale,
+          inference: { resolved_style: result.inference.resolved_style, resolved_size: result.inference.resolved_size },
+          items: [item],
+        },
+      } : undefined,
+      // Pass a signed/public URL via the URL channel so the workbench imports it
+      // deterministically on load (postMessage data URL stays as backup).
+      userImageUrl: resolveBridgeUserImageUrl(recommendPhotoValid ? result?.user_photo_url : undefined),
+    };
+  };
+
+  const openTryOnFromStyleLab = async (product: ProductCatalogItem) => {
+    const matchedAnalysis = styleLabResult && styleLabResult.product.id === product.id ? styleLabResult : null;
+    const effectiveProduct = matchedAnalysis?.product ?? product;
+    const payload: TryOnBridgePayload = {
+      source: 'down-jacket-recommendation',
+      garmentImageUrl: buildImageURL(effectiveProduct.image_url),
+      productTitle: effectiveProduct.display?.title ?? effectiveProduct.title,
+      productId: String(effectiveProduct.id),
+      productPrice: effectiveProduct.price,
+      productUrl: effectiveProduct.product_url || '',
+      styleType: effectiveProduct.display?.styleType ?? effectiveProduct.style_type,
+      colorFamily: effectiveProduct.display?.colorFamily ?? effectiveProduct.color_family,
+      sizeHint: formData.size || matchedAnalysis?.inference.resolved_size || '',
+      recommendationReason: matchedAnalysis?.analysis.reason || '',
+      score: matchedAnalysis?.analysis.total_score,
+      sceneHint:
+        matchedAnalysis?.inference.display?.style
+        || formData.style_preference
+        || matchedAnalysis?.inference.resolved_style
+        || '',
+      fitNote: effectiveProduct.display?.sizeNotes || effectiveProduct.size_notes || '',
+      returnUrl: window.location.href,
+      locale,
+      presentationSource: matchedAnalysis
+        ? {
+            kind: 'style-lab',
+            result: {
+              locale: matchedAnalysis.locale,
+              product: effectiveProduct,
+              inference: {
+                resolved_style: matchedAnalysis.inference.resolved_style,
+                resolved_size: matchedAnalysis.inference.resolved_size,
+                display: matchedAnalysis.inference.display,
+              },
+              analysis: {
+                total_score: matchedAnalysis.analysis.total_score,
+                reason: matchedAnalysis.analysis.reason,
+              },
+            },
+          }
+        : { kind: 'product', result: effectiveProduct },
+      userImageUrl: resolveBridgeUserImageUrl(matchedAnalysis?.user_photo_url),
+    };
+    await dispatchTryOnWindow(payload, effectiveProduct.display?.title ?? effectiveProduct.title);
   };
 
   const openTryOnWorkbench = async (item: RecommendationResponse['items'][number]) => {
-    if (!tryOnBaseUrl) {
-      setTryOnMessage('尚未配置试穿工作台地址，请设置 VITE_TRYON_BASE_URL 后重试。');
-      return;
-    }
-    const tryOnOrigin = getTryOnOrigin();
     const payload = buildTryOnPayload(item);
-    const tryonWindow = openTryOnWindow(payload);
-    if (!tryonWindow) {
-      setTryOnMessage('浏览器拦截了试穿工作台弹窗，请允许新窗口后重试。');
-      return;
-    }
-
-    if (photoFile) {
-      try {
-        const userImageDataUrl = await fileToDataUrl(photoFile);
-        postTryOnPayloadWithAck(tryonWindow, { ...payload, userImageDataUrl }, tryOnOrigin);
-        setTryOnMessage(
-          tryOnOrigin
-            ? `已为”${item.title}”打开新的试穿工作台，并同步你的全身照与商品图。`
-            : `已为”${item.title}”打开新的试穿工作台。商品图已同步，你的全身照未能自动同步，请在试穿站补传。`,
-        );
-        return;
-      } catch {
-        postTryOnPayloadWithAck(tryonWindow, payload, tryOnOrigin);
-        setTryOnMessage(`已为”${item.title}”打开新的试穿工作台。商品图已同步，你的全身照未能自动读取，请在试穿站补传。`);
-        return;
-      }
-    }
-
-    postTryOnPayloadWithAck(tryonWindow, payload, tryOnOrigin);
-    setTryOnMessage(`已为”${item.title}”打开新的试穿工作台，请在试穿站上传你的全身照后继续。`);
+    await dispatchTryOnWindow(payload, item.display?.title ?? item.title);
   };
+
+  const tryOnUrl = getTryOnBaseUrl(locale);
+  const adminUrl = getAdminUrl(locale);
 
   return (
     <>
       <div className="apple-nav">
         <div className="apple-nav-inner">
-          <button className="apple-brand" onClick={() => navigateToView('recommend')}>AI 羽绒服推荐平台</button>
+          <button className="apple-brand" onClick={() => navigateToView('recommend')}>{t('navigation.brand')}</button>
           <div className="apple-nav-links">
-            {tryOnBaseUrl ? (
-              <a className="nav-chip nav-chip-tryon" href={tryOnBaseUrl} target="_blank" rel="noopener noreferrer">羽绒服试穿</a>
-            ) : (
-              <span className="nav-chip nav-chip-tryon" aria-disabled="true" title="请配置 VITE_TRYON_BASE_URL">羽绒服试穿</span>
-            )}
-            <button className={`nav-chip ${view === 'recommend' ? 'nav-chip-active' : ''}`} onClick={() => navigateToView('recommend')}>智能推荐</button>
-            <button className={`nav-chip ${view === 'style-lab' ? 'nav-chip-active' : ''}`} onClick={() => navigateToView('style-lab')}>自己搭配</button>
-            <button className="nav-history-btn" onClick={() => setHistoryOpen(true)}>
+            {tryOnUrl && <a className="nav-chip nav-chip-tryon" href={tryOnUrl} target="_blank" rel="noopener noreferrer">{t('navigation.tryOn')}</a>}
+            <button aria-current={view === 'recommend' ? 'page' : undefined} className={`nav-chip ${view === 'recommend' ? 'nav-chip-active' : ''}`} onClick={() => navigateToView('recommend')}>{t('navigation.recommend')}</button>
+            <button aria-current={view === 'style-lab' ? 'page' : undefined} className={`nav-chip ${view === 'style-lab' ? 'nav-chip-active' : ''}`} onClick={() => navigateToView('style-lab')}>{t('navigation.styleLab')}</button>
+            <button className="nav-history-btn" onClick={() => setHistoryOpen(true)} aria-label={t('navigation.history')}>
               <Clock size={14} />
-              历史
+              {t('navigation.history')}
             </button>
-            {adminUrl ? (
-              <a className="nav-chip nav-chip-admin" href={adminUrl} target="_blank" rel="noopener noreferrer">站长后台</a>
-            ) : (
-              <span className="nav-chip nav-chip-admin" aria-disabled="true" title="请配置 VITE_ADMIN_BASE_URL">站长后台</span>
-            )}
+            {adminUrl && <a className="nav-chip nav-chip-admin" href={adminUrl} target="_blank" rel="noopener noreferrer">{t('navigation.admin')}</a>}
+            <LanguageSwitcher locale={locale} onChange={(nextLocale) => void handleLocaleChange(nextLocale)} />
           </div>
         </div>
       </div>
 
       <div className="app-frame">
+        {tryOnMessage && (
+          <div className="tryon-status-banner" role="status">
+            <span>{tryOnMessage}</span>
+            <div className="tryon-status-banner-actions">
+              {tryOnFallbackUrl && (
+                <a
+                  href={tryOnFallbackUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-secondary"
+                  style={{ display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '6px 12px', textDecoration: 'none' }}
+                >
+                  {t('navigation.tryOn')}
+                </a>
+              )}
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setTryOnMessage(null);
+                  setTryOnFallbackUrl(null);
+                }}
+                style={{ minHeight: 36, padding: '6px 12px' }}
+              >
+                {t('common.close')}
+              </button>
+            </div>
+          </div>
+        )}
         <AnimatePresence mode="wait">
           {view === 'recommend' ? (
             <motion.div key="recommend" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>

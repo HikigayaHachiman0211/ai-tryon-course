@@ -9,15 +9,21 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
+import { useTranslation } from 'react-i18next'
+import { detectInitialLocale } from '../i18n/locale'
+import { resolveAdminApiBaseUrl } from '../utils/adminApi'
 
 const { Title, Text } = Typography
 const { TextArea } = Input
 
-const API = import.meta.env.VITE_ADMIN_API_URL || ''
+const API = resolveAdminApiBaseUrl({
+  VITE_ADMIN_API_BASE_URL: import.meta.env.VITE_ADMIN_API_BASE_URL,
+  VITE_ADMIN_API_URL: import.meta.env.VITE_ADMIN_API_URL,
+})
 
 function authHeaders(): Record<string, string> {
   const token = localStorage.getItem('admin_token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
+  return { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Accept-Language': detectInitialLocale() }
 }
 
 interface CloneProfile {
@@ -36,6 +42,7 @@ interface CloneProfile {
 }
 
 export default function VoiceClonePage() {
+  const { t } = useTranslation('common')
   const [data, setData] = useState<CloneProfile[]>([])
   const [loading, setLoading] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
@@ -50,10 +57,10 @@ export default function VoiceClonePage() {
     setLoading(true)
     try {
       const res = await fetch(`${API}/api/voice-clones`, { headers: authHeaders() })
-      if (!res.ok) throw new Error('Failed')
+      if (!res.ok) throw new Error(t('errors.network'))
       setData(await res.json())
     } catch {
-      message.error('加载声音克隆列表失败')
+      message.error(t('errors.network'))
     } finally {
       setLoading(false)
     }
@@ -62,7 +69,7 @@ export default function VoiceClonePage() {
   useEffect(() => { fetchData() }, [])
 
   const handleCreate = async () => {
-    if (!newName.trim()) { message.warning('请输入名称'); return }
+    if (!newName.trim()) { message.warning(t('auth.requiredUsername')); return }
     setCreating(true)
     try {
       const form = new FormData()
@@ -70,17 +77,18 @@ export default function VoiceClonePage() {
       form.append('description', newDesc.trim())
       form.append('gender', newGender)
       form.append('language', newLanguage)
+      form.append('locale', detectInitialLocale())
 
       const res = await fetch(`${API}/api/voice-clones`, {
         method: 'POST', headers: authHeaders(), body: form,
       })
-      if (!res.ok) throw new Error('Failed')
-      message.success('创建成功，请上传参考音频')
+      if (!res.ok) throw new Error(t('errors.unknown'))
+      message.success(t('voice.referenceAudio'))
       setCreateOpen(false)
       setNewName(''); setNewDesc('')
       fetchData()
     } catch {
-      message.error('创建失败')
+      message.error(t('errors.unknown'))
     } finally {
       setCreating(false)
     }
@@ -95,12 +103,12 @@ export default function VoiceClonePage() {
       })
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.detail || 'Upload failed')
+        throw new Error(t('images.uploadFailed'))
       }
-      message.success('音频上传成功')
+      message.success(t('voice.uploadAudio'))
       fetchData()
     } catch (e: unknown) {
-      message.error(e instanceof Error ? e.message : '上传失败')
+      message.error(e instanceof Error ? e.message : t('images.uploadFailed'))
     }
     return false
   }
@@ -114,15 +122,15 @@ export default function VoiceClonePage() {
       const result = await res.json()
       if (!res.ok || !result.ok) {
         // Show the specific error from backend
-        const errMsg = result.message || result.detail || '克隆失败'
+        const errMsg = result.code ? t(`errors.${result.code}`, { defaultValue: t('errors.unknown') }) : t('errors.unknown')
         message.error(errMsg, 5)
         fetchData()
         return
       }
-      message.success('克隆完成')
+      message.success(t('voice.clone'))
       fetchData()
     } catch (e: unknown) {
-      message.error(e instanceof Error ? e.message : '克隆失败')
+      message.error(e instanceof Error ? e.message : t('errors.unknown'))
     } finally {
       setCloneLoading(null)
     }
@@ -136,12 +144,12 @@ export default function VoiceClonePage() {
       })
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.detail || 'Failed')
+        throw new Error(t('errors.unknown'))
       }
-      message.success(publish ? '已发布' : '已下架')
+      message.success(publish ? t('voice.publish') : t('voice.unpublish'))
       fetchData()
     } catch (e: unknown) {
-      message.error(e instanceof Error ? e.message : '操作失败')
+      message.error(e instanceof Error ? e.message : t('errors.unknown'))
     }
   }
 
@@ -150,11 +158,11 @@ export default function VoiceClonePage() {
       const res = await fetch(`${API}/api/voice-clones/${id}`, {
         method: 'DELETE', headers: authHeaders(),
       })
-      if (!res.ok) throw new Error('Failed')
-      message.success('已禁用')
+      if (!res.ok) throw new Error(t('errors.unknown'))
+      message.success(t('voice.disable'))
       fetchData()
     } catch {
-      message.error('操作失败')
+      message.error(t('errors.unknown'))
     }
   }
 
@@ -164,11 +172,11 @@ export default function VoiceClonePage() {
 
   const columns: ColumnsType<CloneProfile> = [
     { title: 'ID', dataIndex: 'id', width: 60 },
-    { title: '名称', dataIndex: 'name', width: 120 },
-    { title: '性别', dataIndex: 'gender', width: 60, render: (v) => v === 'female' ? '女' : '男' },
-    { title: '语言', dataIndex: 'language', width: 60 },
+    { title: t('voice.name'), dataIndex: 'name', width: 120 },
+    { title: t('voice.gender'), dataIndex: 'gender', width: 60, render: (v) => v === 'female' ? t('voice.genderFemale') : t('voice.genderMale') },
+    { title: t('voice.language'), dataIndex: 'language', width: 60 },
     {
-      title: '状态', dataIndex: 'status', width: 80,
+      title: t('voice.status'), dataIndex: 'status', width: 80,
       render: (v, record) => (
         <Tooltip title={record.error_message || undefined}>
           <Tag color={statusColors[v] || 'default'}>
@@ -179,11 +187,11 @@ export default function VoiceClonePage() {
       ),
     },
     {
-      title: '已发布', dataIndex: 'is_published', width: 70,
-      render: (v) => v ? <Tag color="green">是</Tag> : <Tag>否</Tag>,
+      title: t('voice.published'), dataIndex: 'is_published', width: 70,
+      render: (v) => v ? <Tag color="green">{t('status.yes')}</Tag> : <Tag>{t('status.no')}</Tag>,
     },
     {
-      title: '操作', width: 300,
+      title: t('actions.submit'), width: 300,
       render: (_, record) => (
         <Space size="small">
           {record.status === 'draft' && (
@@ -192,7 +200,7 @@ export default function VoiceClonePage() {
               showUploadList={false}
               beforeUpload={(file) => handleUpload(record.id, file as File)}
             >
-              <Button size="small" icon={<UploadOutlined />}>上传音频</Button>
+              <Button size="small" icon={<UploadOutlined />}>{t('voice.uploadAudio')}</Button>
             </Upload>
           )}
           {record.status === 'draft' && (
@@ -202,12 +210,12 @@ export default function VoiceClonePage() {
               onClick={() => handleClone(record.id)}
               loading={cloneLoading === record.id}
             >
-              克隆
+              {t('voice.clone')}
             </Button>
           )}
           {record.status === 'failed' && record.error_message?.includes('尚未接入') && (
-            <Tooltip title="MiMo VoiceClone API 尚未接入，无法执行克隆">
-              <Button size="small" disabled>克隆（未接入）</Button>
+            <Tooltip title={t('voice.notIntegrated')}>
+              <Button size="small" disabled>{t('voice.cloneUnavailable')}</Button>
             </Tooltip>
           )}
           {record.status === 'ready' && !record.is_published && (
@@ -216,7 +224,7 @@ export default function VoiceClonePage() {
               icon={<CheckCircleOutlined />}
               onClick={() => handlePublish(record.id, true)}
             >
-              发布
+              {t('voice.publish')}
             </Button>
           )}
           {record.is_published && (
@@ -225,10 +233,10 @@ export default function VoiceClonePage() {
               icon={<CloseCircleOutlined />}
               onClick={() => handlePublish(record.id, false)}
             >
-              下架
+              {t('voice.unpublish')}
             </Button>
           )}
-          <Popconfirm title="确认禁用？" onConfirm={() => handleDelete(record.id)}>
+          <Popconfirm title={t('voice.confirmDisable')} onConfirm={() => handleDelete(record.id)}>
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -241,28 +249,28 @@ export default function VoiceClonePage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>
           <SoundOutlined style={{ marginRight: 8 }} />
-          声音克隆管理
+          {t('voice.title')}
         </Title>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-          新建克隆音色
+          {t('voice.create')}
         </Button>
       </div>
 
       <Alert
-        message="声音克隆接口状态"
+        message={t('voice.apiStatus')}
         description={
           <>
             <Text>
-              MiMo VoiceClone API 尚未正式接入。当前功能支持：
+              {t('voice.notIntegrated')}
             </Text>
             <ul style={{ margin: '8px 0 0 0', paddingLeft: 20 }}>
-              <li>上传参考音频（WAV/MP3，校验真实文件头）</li>
-              <li>创建和管理音色草稿</li>
-              <li>点击"克隆"将尝试调用 API，若未接入会返回明确错误</li>
-              <li><Text strong>未成功克隆的音色无法发布到主站</Text></li>
+              <li>{t('voice.referenceAudio')}</li>
+              <li>{t('voice.manageDrafts')}</li>
+              <li>{t('voice.clone')} — {t('voice.notIntegrated')}</li>
+              <li><Text strong>{t('voice.notPublished')}</Text></li>
             </ul>
             <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-              普通主站用户不可上传声音样本。所有克隆音色必须经后台审核发布后才可在主站使用。
+              {t('voice.adminReview')}
             </Text>
           </>
         }
@@ -283,7 +291,7 @@ export default function VoiceClonePage() {
       </Card>
 
       <Modal
-        title="新建克隆音色"
+        title={t('voice.createTitle')}
         open={createOpen}
         onOk={handleCreate}
         onCancel={() => setCreateOpen(false)}
@@ -291,44 +299,45 @@ export default function VoiceClonePage() {
       >
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <div>
-            <Text>名称 *</Text>
+            <Text>{t('voice.name')} *</Text>
             <Input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="例如：温柔女声-小雪"
+              placeholder={t('voice.namePlaceholder')}
             />
           </div>
           <div>
-            <Text>描述</Text>
+            <Text>{t('voice.description')}</Text>
             <TextArea
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
-              placeholder="音色描述"
+              placeholder={t('voice.descriptionPlaceholder')}
               rows={2}
             />
           </div>
           <div style={{ display: 'flex', gap: 16 }}>
             <div style={{ flex: 1 }}>
-              <Text>性别</Text>
+              <Text>{t('voice.gender')}</Text>
               <Select
                 value={newGender}
                 onChange={setNewGender}
                 style={{ width: '100%' }}
                 options={[
-                  { value: 'female', label: '女' },
-                  { value: 'male', label: '男' },
+                  { value: 'female', label: t('voice.genderFemale') },
+                  { value: 'male', label: t('voice.genderMale') },
                 ]}
               />
             </div>
             <div style={{ flex: 1 }}>
-              <Text>语言</Text>
+              <Text>{t('voice.language')}</Text>
               <Select
                 value={newLanguage}
                 onChange={setNewLanguage}
                 style={{ width: '100%' }}
                 options={[
-                  { value: 'zh', label: '中文' },
-                  { value: 'en', label: 'English' },
+                  { value: 'zh', label: t('voice.zh') },
+                  { value: 'en', label: t('voice.en') },
+                  { value: 'ja', label: t('voice.ja') },
                 ]}
               />
             </div>

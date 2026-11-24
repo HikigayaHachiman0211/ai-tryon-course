@@ -3,6 +3,10 @@ import { Clock, Loader2, Sparkles, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getHistory } from '../api';
 import type { HistoryEntry } from '../types';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
+import { formatDateTime, formatRelative } from '../i18n/formatters';
+import { DEFAULT_LOCALE, normalizeLocale } from '../i18n/locale';
 
 interface HistoryDrawerProps {
   open: boolean;
@@ -11,9 +15,33 @@ interface HistoryDrawerProps {
 }
 
 export function HistoryDrawer({ open, onClose, onSelect }: HistoryDrawerProps) {
+  const { t } = useTranslation(['history', 'common']);
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isMobileSheet, setIsMobileSheet] = useState(() => (
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(max-width: 768px)').matches
+      : false
+  ));
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(max-width: 768px)');
+    const sync = () => setIsMobileSheet(mq.matches);
+    sync();
+    mq.addEventListener?.('change', sync);
+    return () => mq.removeEventListener?.('change', sync);
+  }, []);
+
+  useEffect(() => {
+    if (!open || typeof document === 'undefined') return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
@@ -22,16 +50,24 @@ export function HistoryDrawer({ open, onClose, onSelect }: HistoryDrawerProps) {
       const response = await getHistory(50);
       setEntries(response.items);
     } catch {
-      setError('加载历史记录失败');
+      setError(t('history:loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (open) {
       void loadHistory();
     }
+  }, [open, loadHistory]);
+
+  useEffect(() => {
+    const handleLocaleChange = () => {
+      if (open) void loadHistory();
+    };
+    window.addEventListener('localechange', handleLocaleChange);
+    return () => window.removeEventListener('localechange', handleLocaleChange);
   }, [open, loadHistory]);
 
   const formatTime = (iso: string) => {
@@ -40,24 +76,25 @@ export function HistoryDrawer({ open, onClose, onSelect }: HistoryDrawerProps) {
       const now = new Date();
       const diffMs = now.getTime() - date.getTime();
       const diffMin = Math.floor(diffMs / 60_000);
+      const locale = normalizeLocale(i18n.resolvedLanguage) ?? DEFAULT_LOCALE;
 
-      if (diffMin < 1) return '刚刚';
-      if (diffMin < 60) return `${diffMin} 分钟前`;
+      if (diffMin < 1) return t('history:relative.now');
+      if (diffMin < 60) return formatRelative(-diffMin, 'minute', locale);
 
       const diffHour = Math.floor(diffMin / 60);
-      if (diffHour < 24) return `${diffHour} 小时前`;
+      if (diffHour < 24) return formatRelative(-diffHour, 'hour', locale);
 
       const diffDay = Math.floor(diffHour / 24);
-      if (diffDay < 7) return `${diffDay} 天前`;
+      if (diffDay < 7) return formatRelative(-diffDay, 'day', locale);
 
-      return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+      return formatDateTime(date, locale, { month: 'short', day: 'numeric' });
     } catch {
       return iso;
     }
   };
 
   const typeLabel = (type: string) =>
-    type === 'recommend' ? '智能推荐' : '自定义搭配';
+    type === 'recommend' ? t('history:type.recommend') : t('history:type.styleLab');
 
   const typeBadgeClass = (type: string) =>
     type === 'recommend' ? 'history-badge-recommend' : 'history-badge-lab';
@@ -78,17 +115,17 @@ export function HistoryDrawer({ open, onClose, onSelect }: HistoryDrawerProps) {
           {/* Drawer */}
           <motion.aside
             className="history-drawer"
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
+            initial={isMobileSheet ? { y: '100%' } : { x: '100%' }}
+            animate={isMobileSheet ? { y: 0 } : { x: 0 }}
+            exit={isMobileSheet ? { y: '100%' } : { x: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
           >
             <div className="history-drawer-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Clock size={18} color="var(--accent-blue-text)" />
-                <h2 style={{ fontSize: 18, fontWeight: 600 }}>历史记录</h2>
+                <h2 style={{ fontSize: 18, fontWeight: 600 }}>{t('history:title')}</h2>
               </div>
-              <button className="history-close-btn" onClick={onClose} type="button">
+              <button className="history-close-btn" onClick={onClose} type="button" aria-label={t('history:close')} title={t('history:close')}>
                 <X size={18} />
               </button>
             </div>
@@ -97,7 +134,7 @@ export function HistoryDrawer({ open, onClose, onSelect }: HistoryDrawerProps) {
               {loading && (
                 <div className="history-empty-state">
                   <Loader2 className="animate-spin" size={24} color="var(--text-tertiary)" />
-                  <div style={{ marginTop: 12 }}>加载中…</div>
+                  <div style={{ marginTop: 12 }}>{t('history:loading')}</div>
                 </div>
               )}
 
@@ -110,9 +147,9 @@ export function HistoryDrawer({ open, onClose, onSelect }: HistoryDrawerProps) {
               {!loading && !error && entries.length === 0 && (
                 <div className="history-empty-state">
                   <Sparkles size={28} style={{ opacity: 0.4, marginBottom: 12 }} />
-                  <div>还没有记录</div>
+                  <div>{t('history:empty')}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6 }}>
-                    完成一次推荐或搭配分析后，记录会自动出现在这里。
+                    {t('history:emptyHint')}
                   </div>
                 </div>
               )}
@@ -131,7 +168,7 @@ export function HistoryDrawer({ open, onClose, onSelect }: HistoryDrawerProps) {
                         {entry.thumbnail_url ? (
                           <img
                             src={entry.thumbnail_url}
-                            alt="缩略图"
+                            alt={t('history:thumbnailAlt')}
                             className="history-thumb-img"
                             onError={(e) => {
                               e.currentTarget.style.display = 'none';
@@ -161,10 +198,10 @@ export function HistoryDrawer({ open, onClose, onSelect }: HistoryDrawerProps) {
 
                         <div style={{ display: 'flex', gap: 12, marginTop: 6, fontSize: 11, color: 'var(--text-tertiary)' }}>
                           {entry.item_count > 0 && (
-                            <span>{entry.item_count} 件</span>
+                            <span>{t('history:count', { count: entry.item_count })}</span>
                           )}
                           {entry.total_score !== null && (
-                            <span>评分 {entry.total_score.toFixed(1)}</span>
+                            <span>{t('history:score', { score: entry.total_score.toFixed(1) })}</span>
                           )}
                         </div>
                       </div>

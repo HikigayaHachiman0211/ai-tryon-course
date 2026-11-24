@@ -1,0 +1,13 @@
+{
+  "title": "推荐历史",
+  "close": "关闭",
+  "loading": "加载中…",
+  "empty": "还没有记录",
+  "emptyHint": "完成一次推荐或搭配分析后，记录会自动出现在这里。",
+  "type": {"recommend": "智能推荐", "styleLab": "自定义搭配"},
+  "count": "{{count}} 件",
+  "score": "评分 {{score}}",
+  "thumbnailAlt": "历史记录缩略图",
+  "loadFailed": "加载历史记录失败",
+  "relative": {"now": "刚刚", "minutes": "{{count}} 分钟前", "hours": "{{count}} 小时前", "days": "{{count}} 天前"}
+}

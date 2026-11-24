@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "title": "AIダウンジャケット推薦プラットフォーム",
+    "description": "AIによるダウンジャケット推薦、スタイリング分析、バーチャル試着。"
+  },
+  "navigation": {
+    "brand": "AIダウンジャケット推薦プラットフォーム",
+    "tryOn": "バーチャル試着",
+    "recommend": "スマート推薦",
+    "styleLab": "スタイルラボ",
+    "history": "履歴",
+    "admin": "管理コンソール"
+  },
+  "common": {
+    "language": "言語",
+    "loading": "読み込み中...",
+    "retry": "再試行",
+    "close": "閉じる",
+    "cancel": "キャンセル",
+    "localeSwitchFailed": "言語リソースを読み込めませんでした。もう一度お試しください。",
+    "tryOnReturned": "試着ワークベンチからおすすめページに戻りました。",
+    "tryOnSwitchRequested": "別の商品を選べるよう、試着ワークベンチからメインサイトへの切り替えを依頼されました。",
+    "validationColor": "まずカラーの好みを入力してください。",
+    "validationGender": "性別を選択してください。",
+    "catalogLoadFailed": "商品カタログを読み込めませんでした。",
+    "selectProduct": "まず中央からダウンジャケットを選択してください。",
+    "completeProfile": "カラーの好みと性別を入力してください。",
+    "analysisFailed": "コーデ分析に失敗しました。しばらくしてから再試行してください。",
+    "tryOnUnavailable": "試着ワークベンチの URL が設定されていません。",
+    "popupBlocked": "ブラウザが試着ワークベンチのポップアップをブロックしました。許可して再試行してください。",
+    "tryOnOpenedWithPhoto": "「{{title}}」の試着ワークベンチを開き、全身写真と商品画像を同期しました。",
+    "tryOnOpenedWithoutPhoto": "「{{title}}」の試着ワークベンチを開きました。商品画像は同期済みです。試着サイトで全身写真をアップロードしてください。",
+    "tryOnOpenedRequestPhoto": "「{{title}}」の試着ワークベンチを開きました。試着サイトで全身写真をアップロードして続行してください。",
+    "unknownError": "問題が発生しました。しばらくしてから再試行してください。",
+    "debugTools": "デバッグツール",
+    "errorCodes": "エラーコード",
+    "recentErrors": "最近のエラー"
+    ,"youSaid": "あなた：",
+    "conversationHistory": "会話履歴",
+    "editTranscript": "認識結果を編集してから送信できます…"
+  }
+}

@@ -1,0 +1,15 @@
+<view class="tabbar-root">
+  <view class="tabbar-inner">
+    <view
+      wx:for="{{list}}"
+      wx:key="key"
+      class="tabbar-item {{selected === index ? 'tabbar-item-active' : ''}}"
+      data-index="{{index}}"
+      bindtap="onSwitchTab"
+    >
+      <text class="tabbar-glyph">{{item.glyph}}</text>
+      <text class="tabbar-label">{{item.label}}</text>
+      <view wx:if="{{selected === index}}" class="tabbar-dot"></view>
+    </view>
+  </view>
+</view>

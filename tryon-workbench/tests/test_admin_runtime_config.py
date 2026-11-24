@@ -27,7 +27,7 @@ class RuntimeStatusTests(unittest.TestCase):
             "resolve_tryon_runtime_config",
             return_value={
                 "enabled": True,
-                "api_key": "unit-test-placeholder",  # pragma: allowlist secret
+                "api_key": "test-key",
                 "flash_model": "flash-model",
                 "pro_model": "pro-model",
                 "source": "admin_db",

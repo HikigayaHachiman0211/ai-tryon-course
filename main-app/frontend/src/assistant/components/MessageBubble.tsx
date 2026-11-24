@@ -3,6 +3,7 @@
 import React from 'react';
 import { Volume2, Loader2, Square } from 'lucide-react';
 import type { AssistantChatMessage } from '../assistantTypes';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   message: AssistantChatMessage;
@@ -12,13 +13,14 @@ interface Props {
 }
 
 export const MessageBubble: React.FC<Props> = ({ message, isLoading, isPlaying, onPlayTTS }) => {
+  const { t } = useTranslation('assistant');
   const hasText = Boolean(message.content?.trim());
   const isUser = message.role === 'user';
 
   const getButtonTitle = () => {
-    if (isLoading) return '正在生成语音';
-    if (isPlaying) return '停止播报';
-    return '播报这条消息';
+    if (isLoading) return t('ttsGenerating');
+    if (isPlaying) return t('ttsStop');
+    return t('play');
   };
 
   const getButtonIcon = () => {
@@ -50,11 +52,12 @@ export const MessageBubble: React.FC<Props> = ({ message, isLoading, isPlaying, 
         }}
       >
         {/* Message text */}
-        <div style={{ paddingRight: hasText ? 24 : 0 }}>{message.content}</div>
+        <div style={{ paddingRight: hasText ? 38 : 0 }}>{message.content}</div>
 
         {/* TTS button */}
         {hasText && (
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onPlayTTS(message.id, message.content);
@@ -65,11 +68,11 @@ export const MessageBubble: React.FC<Props> = ({ message, isLoading, isPlaying, 
             aria-pressed={isPlaying}
             style={{
               position: 'absolute',
-              top: 6,
-              right: isUser ? 6 : 6,
-              width: 22,
-              height: 22,
-              borderRadius: 6,
+              top: 4,
+              right: 4,
+              width: 34,
+              height: 34,
+              borderRadius: 8,
               background: isPlaying
                 ? 'rgba(0, 113, 227, 0.3)'
                 : isLoading
@@ -84,7 +87,7 @@ export const MessageBubble: React.FC<Props> = ({ message, isLoading, isPlaying, 
                 ? '#0071e3'
                 : isLoading
                 ? '#F59E0B'
-                : 'rgba(255,255,255,0.4)',
+                : 'rgba(255,255,255,0.5)',
               transition: 'all 0.2s',
               padding: 0,
               lineHeight: 1,

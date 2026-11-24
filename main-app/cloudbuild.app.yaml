@@ -1,3 +1,6 @@
+# UNSAFE RELEASE PIPELINE: this legacy config deploys directly. Use
+# cloudbuild.app.buildonly.yaml for immutable image builds and the approved
+# no-traffic release procedure in the implementation guide.
 steps:
   - name: python:3.11-slim
     entrypoint: sh

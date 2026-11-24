@@ -1,4 +1,13 @@
+import { detectInitialLocale, normalizeLocale, type AppLocale } from '../i18n/locale'
+
 const DEFAULT_ADMIN_LOCAL_URL = 'http://127.0.0.1:8081';
+
+export const withLocaleQuery = (rawUrl: string, locale: AppLocale): string => {
+  if (!rawUrl) return ''
+  const parsed = new URL(rawUrl, typeof window !== 'undefined' ? window.location.origin : undefined)
+  parsed.searchParams.set('lang', locale)
+  return parsed.toString()
+}
 
 export const sanitizeExternalUrl = (rawUrl: string | undefined, fallback: string) => {
   const value = (rawUrl || '').trim();
@@ -33,7 +42,10 @@ export const sanitizeExternalUrl = (rawUrl: string | undefined, fallback: string
   }
 };
 
-export const getAdminUrl = () => sanitizeExternalUrl(
-  import.meta.env.VITE_ADMIN_BASE_URL,
-  import.meta.env.DEV ? DEFAULT_ADMIN_LOCAL_URL : '',
-);
+export const getAdminUrl = (locale: AppLocale = detectInitialLocale()) => {
+  const baseUrl = sanitizeExternalUrl(
+    import.meta.env.VITE_ADMIN_BASE_URL,
+    import.meta.env.DEV ? DEFAULT_ADMIN_LOCAL_URL : '',
+  )
+  return withLocaleQuery(baseUrl, normalizeLocale(locale) ?? 'zh-CN')
+}

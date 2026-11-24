@@ -1,0 +1,192 @@
+<view class="page-shell">
+  <lang-switcher showShortcuts="{{false}}" bind:localechange="onLocaleChange" />
+
+  <view class="section-hero">
+    <view class="hero-title">{{texts.title}}</view>
+    <view class="hero-copy">{{texts.subtitle}}</view>
+  </view>
+
+  <view wx:if="{{!product}}" class="card center-empty">
+    <text class="muted-text empty-msg">{{texts.noProduct}}</text>
+    <button class="btn-primary" bindtap="onGoCatalog">{{texts.goCatalog}}</button>
+  </view>
+
+  <block wx:else>
+    <view class="card target-card">
+      <view class="target-row">
+        <image src="{{productImageUrl}}" mode="aspectFill" class="target-thumb" />
+        <view class="flex-1">
+          <text class="target-title">{{displayTitle}}</text>
+          <text class="target-price">¥{{product.price}}</text>
+          <view class="tag-row">
+            <text wx:if="{{displayStyle}}" class="tag">{{displayStyle}}</text>
+            <text wx:if="{{displayColor}}" class="tag">{{displayColor}}</text>
+            <text wx:if="{{product.platform}}" class="tag tag-blue">{{product.platform}}</text>
+          </view>
+        </view>
+      </view>
+      <text wx:if="{{displayFit}}" class="fit-caption">{{displayFit}}</text>
+    </view>
+
+    <view class="profile-toggle-row" bindtap="onToggleProfile">
+      <text class="toggle-label">{{profileOpen ? texts.hideProfile : texts.editProfile}}</text>
+      <text class="toggle-arrow">{{profileOpen ? '▲' : '▼'}}</text>
+    </view>
+
+    <view wx:if="{{profileOpen}}">
+      <model-picker
+        previewUrl="{{photoPreview}}"
+        sampleModelId="{{sampleModelId}}"
+        locale="{{locale}}"
+        bind:change="onPhotoChange"
+        bind:clear="onPhotoClear"
+      />
+
+      <view class="card">
+        <view class="field-group">
+          <view class="field-label-row">
+            <text class="field-label">{{texts.colorLabel}}</text>
+            <text class="required-badge">{{texts.colorRequired}}</text>
+          </view>
+          <input
+            class="dark-input"
+            value="{{formData.color_preference}}"
+            placeholder="{{texts.colorPlaceholder}}"
+            placeholder-class="input-placeholder"
+            data-field="color_preference"
+            bindinput="onInputField"
+          />
+          <view class="chip-wrap">
+            <view
+              wx:for="{{colors}}"
+              wx:key="value"
+              class="chip {{formData.color_preference === item.value ? 'chip-active' : ''}}"
+              data-field="color_preference"
+              data-value="{{item.value}}"
+              bindtap="onPickChip"
+            >
+              <view class="color-swatch" style="background: {{item.swatch}};"></view>
+              <text>{{item.label}}</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="field-group">
+          <view class="field-label-row">
+            <text class="field-label">{{texts.genderLabel}}</text>
+            <text class="required-badge">{{texts.colorRequired}}</text>
+          </view>
+          <view class="gender-grid">
+            <view
+              wx:for="{{genders}}"
+              wx:key="value"
+              class="gender-pill {{formData.gender === item.value ? 'gender-pill-active' : ''}}"
+              data-field="gender"
+              data-value="{{item.value}}"
+              bindtap="onPickChip"
+            >
+              {{item.label}}
+            </view>
+          </view>
+        </view>
+
+        <view class="dual-row">
+          <view class="flex-1">
+            <view class="field-label-row"><text class="field-label">{{texts.priceMin}}</text></view>
+            <input type="digit" class="dark-input" value="{{formData.price_min !== undefined ? formData.price_min : ''}}" placeholder="0" placeholder-class="input-placeholder" data-field="price_min" bindinput="onInputField" />
+          </view>
+          <view class="flex-1">
+            <view class="field-label-row"><text class="field-label">{{texts.priceMax}}</text></view>
+            <input type="digit" class="dark-input" value="{{formData.price_max !== undefined ? formData.price_max : ''}}" placeholder="{{texts.priceUnlimited}}" placeholder-class="input-placeholder" data-field="price_max" bindinput="onInputField" />
+          </view>
+        </view>
+
+        <view class="dual-row">
+          <view class="flex-1">
+            <view class="field-label-row"><text class="field-label">{{texts.mbtiLabel}}</text></view>
+            <picker mode="selector" range="{{mbtiRange}}" value="{{mbtiIndex}}" bindchange="onPickMbti">
+              <view class="dark-picker">
+                <text>{{mbtiRange[mbtiIndex]}}</text>
+                <text>▾</text>
+              </view>
+            </picker>
+          </view>
+          <view class="flex-1">
+            <view class="field-label-row"><text class="field-label">{{texts.sizeLabel}}</text></view>
+            <picker mode="selector" range="{{sizeRange}}" value="{{sizeIndex}}" bindchange="onPickSize">
+              <view class="dark-picker">
+                <text>{{sizeRange[sizeIndex]}}</text>
+                <text>▾</text>
+              </view>
+            </picker>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{errorMsg}}" class="error-banner">{{errorMsg}}</view>
+
+    <button class="btn-primary run-btn" disabled="{{loading}}" loading="{{loading}}" bindtap="onRunAnalysis">
+      {{loading ? texts.analyzing : texts.runAnalyze}}
+    </button>
+
+    <view wx:if="{{analysisResult}}" class="result-wrap">
+      <view class="card score-hero">
+        <text class="score-label">{{texts.matchScore}}</text>
+        <view class="score-number-row">
+          <text class="score-big">{{analysisResult.analysis.total_score}}</text>
+          <text class="score-unit">{{texts.scoreUnit}}</text>
+        </view>
+        <text class="reason-copy">{{analysisResult.analysis.reason}}</text>
+      </view>
+
+      <view class="card">
+        <view class="card-title-row">
+          <text class="card-title">{{texts.inferenceTitle}}</text>
+        </view>
+        <view class="inference-grid">
+          <view class="inference-cell">
+            <text class="cell-label">{{texts.resolvedSize}}</text>
+            <text class="cell-val">{{analysisResult.inference.display ? analysisResult.inference.display.size : analysisResult.inference.resolved_size}}</text>
+          </view>
+          <view class="inference-cell">
+            <text class="cell-label">{{texts.resolvedStyle}}</text>
+            <text class="cell-val">{{analysisResult.inference.display ? analysisResult.inference.display.style : analysisResult.inference.resolved_style}}</text>
+          </view>
+          <view class="inference-cell">
+            <text class="cell-label">{{texts.bodyShape}}</text>
+            <text class="cell-val">{{analysisResult.inference.display ? analysisResult.inference.display.bodyShape : analysisResult.inference.body_shape}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="card">
+        <radar-chart data="{{analysisResult.analysis.radar_chart}}" locale="{{locale}}" />
+        <score-breakdown breakdown="{{analysisResult.analysis.score_breakdown}}" locale="{{locale}}" />
+      </view>
+
+      <view wx:if="{{analysisResult.analysis.styling_advice.length}}" class="card">
+        <view class="card-title-row">
+          <text class="card-title">{{texts.adviceTitle}}</text>
+        </view>
+        <view wx:for="{{analysisResult.analysis.styling_advice}}" wx:key="*this" class="advice-item">
+          <text class="advice-bullet">✦</text>
+          <text class="advice-text">{{item}}</text>
+        </view>
+      </view>
+
+      <view wx:if="{{notes.length}}" class="card">
+        <view class="card-title-row">
+          <text class="card-title">{{texts.notesTitle}}</text>
+        </view>
+        <view wx:for="{{notes}}" wx:key="*this" class="note-item">
+          <text class="note-text">{{item}}</text>
+        </view>
+      </view>
+    </view>
+
+    <button class="btn-primary tryon-cta" bindtap="onTryOnThis">{{texts.tryOnThis}}</button>
+  </block>
+
+  <view class="safe-bottom-spacer"></view>
+</view>

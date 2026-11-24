@@ -13,6 +13,9 @@ from typing import Any
 from fastapi import Request, status
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from app.i18n.locale import DEFAULT_LOCALE, resolve_locale
+from app.i18n.messages import error_message, troubleshooting_message
+
 
 @dataclass(frozen=True)
 class ErrorCodeDefinition:
@@ -86,12 +89,14 @@ class AppError(Exception):
         message: str,
         status_code: int,
         details: Any | None = None,
+        message_params: dict[str, object] | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.status_code = status_code
         self.details = details
+        self.message_params = message_params or {}
 
 
 def get_request_id(request: Request) -> str:
@@ -104,8 +109,21 @@ def get_request_id(request: Request) -> str:
     return request_id
 
 
-def get_error_catalog() -> list[dict[str, Any]]:
-    return [asdict(item) for item in ERROR_CODE_CATALOG]
+def get_request_locale(request: Request) -> str:
+    return resolve_locale(
+        request.query_params.get("locale") or request.query_params.get("lang"),
+        request.headers.get("accept-language"),
+    )
+
+
+def get_error_catalog(locale: str = DEFAULT_LOCALE) -> list[dict[str, Any]]:
+    result = []
+    for item in ERROR_CODE_CATALOG:
+        row = asdict(item)
+        row["description"] = error_message(item.code, locale)
+        row["troubleshooting"] = troubleshooting_message(item.code, locale)
+        result.append(row)
+    return result
 
 
 def get_recent_errors(limit: int = 50) -> list[dict[str, Any]]:
@@ -118,6 +136,7 @@ def build_error_payload(
     message: str,
     request_id: str,
     details: Any | None = None,
+    locale: str = DEFAULT_LOCALE,
 ) -> dict[str, Any]:
     payload = {
         "success": False,
@@ -125,6 +144,7 @@ def build_error_payload(
             "code": code,
             "message": message,
             "request_id": request_id,
+            "locale": locale,
         },
     }
     if details is not None:
@@ -250,31 +270,36 @@ def debug_page_response(base_url: str) -> HTMLResponse:
 
 
 def app_error_response(request: Request, exc: AppError) -> JSONResponse:
+    locale = get_request_locale(request)
+    localized_message = error_message(exc.code, locale, **exc.message_params)
     record_error_event(
         request=request,
         code=exc.code,
         status_code=exc.status_code,
-        message=exc.message,
+        message=localized_message,
         details=exc.details,
     )
     return JSONResponse(
         status_code=exc.status_code,
         content=build_error_payload(
             code=exc.code,
-            message=exc.message,
+            message=localized_message,
             request_id=get_request_id(request),
             details=exc.details,
+            locale=locale,
         ),
     )
 
 
 def unexpected_error_response(request: Request, exc: Exception) -> JSONResponse:
     stack_trace = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    locale = get_request_locale(request)
+    localized_message = error_message("SYS-000", locale)
     record_error_event(
         request=request,
         code="SYS-000",
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        message="服务器内部异常",
+        message=localized_message,
         details={"exception_type": type(exc).__name__},
         stack_trace=stack_trace,
     )
@@ -282,8 +307,9 @@ def unexpected_error_response(request: Request, exc: Exception) -> JSONResponse:
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=build_error_payload(
             code="SYS-000",
-            message="服务器内部异常",
+            message=localized_message,
             request_id=get_request_id(request),
             details={"exception_type": type(exc).__name__},
+            locale=locale,
         ),
     )

@@ -1,0 +1,6 @@
+{
+  "errors": {"SYS-000":"未捕获的服务端异常。","SYS-001":"请求参数无效。","SYS-002":"请求无法接受。","REC-001":"价格区间无效。","REC-002":"图像分析服务失败，已使用规则推断。","DBG-001":"调试页面已禁用。","LAB-001":"找不到所选商品。","UNKNOWN":"发生未知错误，请稍后重试。","VALIDATION_ERROR":"提交的数据无效，请检查后重试。","PRODUCT_NOT_FOUND":"找不到所选商品。","CATALOG_UNAVAILABLE":"商品目录暂时不可用。","AI_CONFIG_MISSING":"AI服务尚未配置完成。","ASR_FAILED":"语音识别失败，请改用文字输入。","TTS_FAILED":"语音播报失败，文字回复仍可查看。","RATE_LIMITED":"请求过于频繁，请稍后重试。","INVALID_LANGUAGE":"不支持所选语音语言。","UNSUPPORTED_FORMAT":"不支持此音频格式。","EMPTY_TEXT":"播报文本为空。","ASR_CONFIG_MISSING":"语音识别暂不可用，请改用文字输入。","TTS_CONFIG_MISSING":"语音播报暂不可用，文字回复仍可查看。","INVALID_FORMAT":"不支持此音频格式。","FILE_TOO_LARGE":"音频文件过大。","INVALID_AUDIO":"音频文件无效。"},
+  "troubleshooting": {"default":"请稍后重试；如问题持续，请提供请求编号。","SYS-000":"请稍后重试；如问题持续，请提供请求编号。","REC-001":"请确认最低价格不高于最高价格。","LAB-001":"请从最新商品列表中重新选择商品。"},
+  "assistant": {"welcome":"你好！我是你的羽绒服 AI 导购助手。告诉我你的穿搭需求吧。","fallback":"暂时无法完成这个请求，请稍后重试。","greeting":"你好！今天想挑选什么样的羽绒服？"},
+  "history": {"recommend":"推荐 {{count}} 件 · 尺码 {{size}} · {{style}}","styleLab":"{{title}} · 评分 {{score}}","legacy":"历史记录 #{{id}}"}
+}

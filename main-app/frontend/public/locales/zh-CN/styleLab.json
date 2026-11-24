@@ -1,0 +1,7 @@
+{
+  "hero": {"eyebrow": "自定义搭配实验室", "title": "我来自己搭配", "description": "左侧保留你的全身图与偏好信息，中间从数据库里挑选任意羽绒服，右侧查看 AI 对这套搭配的多维评分、穿搭建议与 MBTI 风格分析。", "back": "返回智能推荐", "usageTitle": "使用方式", "usage": "先在中间选择一件羽绒服，再点击右侧的“分析这套搭配”。如果你修改了颜色、MBTI、尺码或照片，分析结果会自动失效，需要重新分析一次。"},
+  "catalog": {"title": "羽绒服库", "description": "搜索并选择数据库中的羽绒服进行自定义搭配。", "loaded": "已加载 {{loaded}} / {{total}}", "mode": {"forYou": "更适合你", "allAdults": "全部成人款"}, "platform": {"all": "全部库", "jd": "京东库", "taobao": "淘宝库"}, "brand": "品牌", "platformLabel": "平台", "searchPlaceholder": "搜索品牌、款式、颜色或功能，例如：白色 户外 三防", "genderFallback": "当前筛选条件下没有更多符合性别偏好的商品，已显示全部成人款供你手动挑选。", "empty": "当前条件下没有可浏览的羽绒服。", "loadMore": "加载更多羽绒服"},
+  "analysis": {"title": "AI 搭配分析", "description": "为你分析当前自选单品与个人条件的匹配度。", "selected": "已选择 1 件单品", "empty": "先从中间挑一件羽绒服，再开始分析你的自定义搭配。", "analyze": "分析这套搭配", "analyzing": "分析中...", "tryOn": "尝试试穿", "noResult": "当前已保留你的全身图和资料。点击上方按钮后，右侧会给出多维评分、穿搭建议和基于 MBTI 的风格分析。", "score": "综合得分", "size": "推荐尺码", "style": "建议款式", "summary": "AI 分析摘要", "dimensions": "多维评分", "advice": "穿搭建议"},
+  "score": {"matchScore": "匹配分数", "dimension": {"color": "颜色适配度", "size": "身材适配度", "style": "款式适配度", "brand": "品牌偏好度", "personality": "性格适配度"}},
+  "profile": {"eyebrow": "用户画像", "title": "用户画像", "description": "这里继承主页面的用户图与偏好信息。你可以继续更换照片或微调参数，右侧分析会基于最新资料重新计算。"}
+}

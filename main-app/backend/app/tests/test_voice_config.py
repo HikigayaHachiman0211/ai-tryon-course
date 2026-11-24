@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 
 _backend_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 _admin_backend_root = os.path.abspath(os.path.join(_backend_root, "..", "admin", "backend"))
@@ -32,13 +33,25 @@ def _read_admin_file(relative_path: str) -> str:
 
 
 def _run_python(code: str) -> tuple[int, str, str]:
-    """Run Python code in the backend directory as a subprocess."""
-    result = subprocess.run(
-        [sys.executable, "-c", code],
-        capture_output=True, text=True,
-        cwd=_backend_root,
-        timeout=30,
-    )
+    """Run imports in isolation from local dotenv, databases and cloud credentials."""
+    with tempfile.TemporaryDirectory(prefix="voice-config-test-") as scratch:
+        environment = {key: os.environ[key] for key in ("PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT") if key in os.environ}
+        environment.update({
+            "PYTHONPATH": _backend_root,
+            "PYTHONIOENCODING": "utf-8",
+            "DATABASE_URL": "sqlite:///:memory:",
+            "OBJECT_STORAGE_PROVIDER": "local",
+            "TEMP": scratch,
+            "TMP": scratch,
+            "TMPDIR": scratch,
+            "USERPROFILE": scratch,
+        })
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True, text=True,
+            cwd=scratch, env=environment,
+            timeout=30,
+        )
     return result.returncode, result.stdout, result.stderr
 
 

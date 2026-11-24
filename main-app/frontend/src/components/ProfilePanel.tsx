@@ -1,4 +1,5 @@
 import { UploadCloud } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { RecommendationRequest } from '../types';
 import {
   MBTI_OPTIONS,
@@ -47,6 +48,13 @@ export function ProfilePanel({
   description,
   footer,
 }: ProfilePanelProps) {
+  const { t } = useTranslation(['recommend', 'common']);
+  const colorSuggestions = [
+    { value: '黑色', labelKey: 'profile.color.black' },
+    { value: '白色', labelKey: 'profile.color.white' },
+    { value: '藏青', labelKey: 'profile.color.navy' },
+  ];
+
   return (
     <section className="profile-panel-shell">
       <div className="section-hero">
@@ -75,36 +83,36 @@ export function ProfilePanel({
           <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={onPhotoUpload} />
           {photoPreview ? (
             <div className="photo-preview-frame">
-              <img src={photoPreview} alt="用户上传预览" className="photo-preview-image" />
+              <img src={photoPreview} alt={t('profile.photoPreviewAlt')} className="photo-preview-image" />
               <div style={{ position: 'absolute', bottom: 12, right: 12, background: 'rgba(0,0,0,0.6)', padding: '6px 12px', borderRadius: 8, backdropFilter: 'blur(10px)', fontSize: 12 }}>
-                点击更换照片
+                {t('profile.changePhoto')}
               </div>
             </div>
           ) : (
             <>
               <UploadCloud size={32} color="var(--text-tertiary)" style={{ marginBottom: 12 }} />
-              <div style={{ fontWeight: 500, marginBottom: 4 }}>拖拽或点击上传全身照</div>
-              <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>选填，但建议上传以提升推荐与分析准确度</div>
+              <div style={{ fontWeight: 500, marginBottom: 4 }}>{t('profile.uploadPhoto')}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{t('profile.uploadPhotoHint')}</div>
             </>
           )}
         </div>
 
         <div className="bento-item bento-col-span-2" style={{ padding: 16 }}>
-          <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 12 }}>或选择一位示例模特：</div>
+          <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 12 }}>{t('profile.sampleModel.choose')}</div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
             <button
               type="button"
               onClick={() => onSampleModelGenderChange('male')}
-              style={{ padding: '5px 14px', borderRadius: 980, border: sampleModelGender === 'male' ? '1px solid #0071e3' : '1px solid var(--border-subtle)', background: sampleModelGender === 'male' ? '#0071e3' : 'transparent', color: sampleModelGender === 'male' ? '#fff' : 'var(--text-secondary)', fontSize: 13, cursor: 'pointer', transition: 'all 0.2s ease' }}
+              style={{ padding: '8px 16px', minHeight: 44, borderRadius: 980, border: sampleModelGender === 'male' ? '1px solid #0071e3' : '1px solid var(--border-subtle)', background: sampleModelGender === 'male' ? '#0071e3' : 'transparent', color: sampleModelGender === 'male' ? '#fff' : 'var(--text-secondary)', fontSize: 13, cursor: 'pointer', transition: 'all 0.2s ease' }}
             >
-              男性模特
+              {t('profile.sampleModel.male')}
             </button>
             <button
               type="button"
               onClick={() => onSampleModelGenderChange('female')}
-              style={{ padding: '5px 14px', borderRadius: 980, border: sampleModelGender === 'female' ? '1px solid #0071e3' : '1px solid var(--border-subtle)', background: sampleModelGender === 'female' ? '#0071e3' : 'transparent', color: sampleModelGender === 'female' ? '#fff' : 'var(--text-secondary)', fontSize: 13, cursor: 'pointer', transition: 'all 0.2s ease' }}
+              style={{ padding: '8px 16px', minHeight: 44, borderRadius: 980, border: sampleModelGender === 'female' ? '1px solid #0071e3' : '1px solid var(--border-subtle)', background: sampleModelGender === 'female' ? '#0071e3' : 'transparent', color: sampleModelGender === 'female' ? '#fff' : 'var(--text-secondary)', fontSize: 13, cursor: 'pointer', transition: 'all 0.2s ease' }}
             >
-              女性模特
+              {t('profile.sampleModel.female')}
             </button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: 10 }}>
@@ -135,96 +143,96 @@ export function ProfilePanel({
         </div>
 
         <div className="bento-item">
-          <label className="label">颜色偏好 *</label>
+          <label className="label">{t('profile.color.label')} *</label>
           <input
             type="text"
             name="color_preference"
             className="modern-input"
-            placeholder="例如 黑色、米白、雾蓝"
+            placeholder={t('profile.color.placeholder')}
             value={formData.color_preference}
             onChange={onInputChange}
           />
-          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-            {['黑色', '白色', '藏青'].map((color) => (
+          <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+            {colorSuggestions.map((color) => (
               <div
-                key={color}
-                onClick={() => onColorSelect(color)}
-                style={{ fontSize: 11, background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: 4, cursor: 'pointer' }}
+                key={color.value}
+                onClick={() => onColorSelect(color.value)}
+                className="suggestion-chip"
               >
-                {color}
+                {t(color.labelKey)}
               </div>
             ))}
           </div>
 
-          <label className="label" style={{ marginTop: 16 }}>品牌偏好</label>
+          <label className="label" style={{ marginTop: 16 }}>{t('profile.brand.label')}</label>
           <input
             type="text"
             name="brand_preference"
             className="modern-input"
-            placeholder="例如 阿迪达斯、骆驼，支持多个品牌"
+            placeholder={t('profile.brand.placeholder')}
             value={formData.brand_preference || ''}
             onChange={onInputChange}
           />
           <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
             {BRAND_SUGGESTIONS.map((brand) => (
               <div
-                key={brand}
-                onClick={() => onBrandSelect(brand)}
-                style={{ fontSize: 11, background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: 4, cursor: 'pointer' }}
+                key={brand.value}
+                onClick={() => onBrandSelect(brand.value)}
+                className="suggestion-chip"
               >
-                {brand}
+                {t(brand.labelKey)}
               </div>
             ))}
           </div>
         </div>
 
         <div className="bento-item">
-          <label className="label">性别 *</label>
+          <label className="label">{t('profile.gender.label')} *</label>
           <select name="gender" className="modern-input" value={formData.gender || ''} onChange={onInputChange} style={{ marginBottom: 16 }}>
-            <option value="">请选择</option>
+            <option value="">{t('profile.select')}</option>
             {GENDER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
+              <option key={option.value} value={option.value}>{t(option.labelKey)}</option>
             ))}
           </select>
 
-          <label className="label">MBTI 人格</label>
+          <label className="label">{t('profile.mbti.label')}</label>
           <select name="mbti" className="modern-input" value={formData.mbti || ''} onChange={onInputChange}>
-            <option value="">请选择（选填）</option>
+            <option value="">{t('profile.optionalSelect')}</option>
             {MBTI_OPTIONS.map((mbti) => (
               <option key={mbti} value={mbti}>{mbti}</option>
             ))}
           </select>
         </div>
 
-        <div className="bento-item bento-col-span-2" style={{ display: 'flex', gap: 16 }}>
-          <div style={{ flex: 1 }}>
-            <label className="label">最低价格（¥）</label>
-            <input type="number" name="price_min" className="modern-input" placeholder="0" value={formData.price_min ?? ''} onChange={onInputChange} />
+        <div className="bento-item bento-col-span-2 price-range-grid">
+          <div style={{ minWidth: 0 }}>
+            <label className="label">{t('profile.price.min')}</label>
+            <input type="number" inputMode="numeric" name="price_min" className="modern-input" placeholder="0" value={formData.price_min ?? ''} onChange={onInputChange} />
           </div>
-          <div style={{ flex: 1 }}>
-            <label className="label">最高价格（¥）</label>
-            <input type="number" name="price_max" className="modern-input" placeholder="不限" value={formData.price_max ?? ''} onChange={onInputChange} />
+          <div style={{ minWidth: 0 }}>
+            <label className="label">{t('profile.price.max')}</label>
+            <input type="number" inputMode="numeric" name="price_max" className="modern-input" placeholder={t('profile.price.unlimited')} value={formData.price_max ?? ''} onChange={onInputChange} />
           </div>
         </div>
 
         <div className="bento-item bento-col-span-2">
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <label className="label">尺码</label>
-            <span style={{ fontSize: 11, color: 'var(--accent-blue-text)' }}>✨ AI 可结合照片辅助识别</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '4px 8px', flexWrap: 'wrap' }}>
+            <label className="label">{t('profile.size.label')}</label>
+            <span style={{ fontSize: 11, color: 'var(--accent-blue-text)' }}>✨ {t('profile.aiSizeHint')}</span>
           </div>
-          <input type="text" name="size" className="modern-input" placeholder="例如 M、L，或留空" value={formData.size || ''} onChange={onInputChange} style={{ marginBottom: 16 }} />
+          <input type="text" name="size" className="modern-input" placeholder={t('profile.size.placeholder')} value={formData.size || ''} onChange={onInputChange} style={{ marginBottom: 16 }} />
 
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <label className="label">款式偏好</label>
-            <span style={{ fontSize: 11, color: 'var(--accent-blue-text)' }}>✨ AI 可智能补全</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '4px 8px', flexWrap: 'wrap' }}>
+            <label className="label">{t('profile.style.label')}</label>
+            <span style={{ fontSize: 11, color: 'var(--accent-blue-text)' }}>✨ {t('profile.aiStyleHint')}</span>
           </div>
-          <input type="text" name="style_preference" className="modern-input" placeholder="例如 极简通勤、工装风" value={formData.style_preference || ''} onChange={onInputChange} />
+          <input type="text" name="style_preference" className="modern-input" placeholder={t('profile.style.placeholder')} value={formData.style_preference || ''} onChange={onInputChange} />
         </div>
 
         <div className="bento-item bento-col-span-2" style={{ background: 'rgba(56, 189, 248, 0.02)', borderColor: 'rgba(56, 189, 248, 0.1)', display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px' }}>
           <span style={{ fontSize: 14, color: 'var(--accent-blue-text)' }}>⚙️</span>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
-            AI 引擎由管理员后台统一配置。
+            {t('profile.aiConfigHint')}
           </p>
         </div>
 

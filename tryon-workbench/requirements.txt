@@ -1,5 +1,11 @@
 fastapi
+alibabacloud-oss-v2==1.4.1
+alibabacloud-credentials==1.0.12
+azure-identity==1.19.0
+azure-storage-blob==12.25.1
+azure-storage-queue==12.12.0
 uvicorn
+websockets==16.0
 python-multipart
 google-genai
 pillow

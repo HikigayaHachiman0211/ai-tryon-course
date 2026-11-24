@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ttsSynthesize, buildTTSUrl } from './voiceApi';
 import { loadVoiceSettings } from './voiceSettingsStorage';
+import { useTranslation } from 'react-i18next';
 
 export interface UseTTSPlaybackOptions {
   sessionId: string;
@@ -22,6 +23,7 @@ export interface UseTTSPlaybackReturn {
 }
 
 export function useTTSPlayback(options: UseTTSPlaybackOptions): UseTTSPlaybackReturn {
+  const { t } = useTranslation('voice');
   const { sessionId, onPlayStart, onPlayEnd, onError } = options;
   const [isPlaying, setIsPlaying] = useState(false);
   const [pendingPlayUrl, setPendingPlayUrl] = useState<string | null>(null);
@@ -90,7 +92,7 @@ export function useTTSPlayback(options: UseTTSPlaybackOptions): UseTTSPlaybackRe
       if (!mountedRef.current || seqRef.current !== mySeq) return;
 
       if (!result.success || !result.audio_url) {
-        const errMsg = result.error?.message || '语音播报暂不可用，文字回复仍可查看。';
+        const errMsg = result.error?.message || t('errors.network');
         onError?.(errMsg);
         return;
       }
@@ -108,18 +110,18 @@ export function useTTSPlayback(options: UseTTSPlaybackOptions): UseTTSPlaybackRe
       };
 
       audio.onended = () => {
-        stopInternal();
         if (mountedRef.current && seqRef.current === mySeq) {
+          stopInternal();
           setIsPlaying(false);
           onPlayEnd?.();
         }
       };
 
       audio.onerror = () => {
-        stopInternal();
         if (mountedRef.current && seqRef.current === mySeq) {
+          stopInternal();
           setIsPlaying(false);
-          onError?.('音频播放失败。');
+          onError?.(t('errors.network'));
           onPlayEnd?.();
         }
       };
@@ -127,21 +129,21 @@ export function useTTSPlayback(options: UseTTSPlaybackOptions): UseTTSPlaybackRe
       try {
         await audio.play();
       } catch {
-        // Autoplay blocked by browser — show "click to play" button
+        // Autoplay blocked by browser — show "click to play" button cleanly without false network error
         if (mountedRef.current && seqRef.current === mySeq) {
           setPendingPlayUrl(fullUrl);
-          onError?.('浏览器拦截了自动播放，点击按钮播放语音。');
+          onPlayEnd?.();
         }
         return;
       }
     } catch {
-      stopInternal();
       if (mountedRef.current && seqRef.current === mySeq) {
+        stopInternal();
         setIsPlaying(false);
-        onError?.('语音播报暂不可用，文字回复仍可查看。');
+        onError?.(t('errors.network'));
       }
     }
-  }, [sessionId, isPlaying, stopInternal, onPlayStart, onPlayEnd, onError]);
+  }, [sessionId, isPlaying, stopInternal, onPlayStart, onPlayEnd, onError, t]);
 
   const playPending = useCallback(() => {
     if (!pendingPlayUrl) return;
@@ -159,18 +161,16 @@ export function useTTSPlayback(options: UseTTSPlaybackOptions): UseTTSPlaybackRe
       if (mountedRef.current && seqRef.current === mySeq) { setIsPlaying(true); onPlayStart?.(); }
     };
     audio.onended = () => {
-      stopInternal();
-      if (mountedRef.current && seqRef.current === mySeq) { setIsPlaying(false); onPlayEnd?.(); }
+      if (mountedRef.current && seqRef.current === mySeq) { stopInternal(); setIsPlaying(false); onPlayEnd?.(); }
     };
     audio.onerror = () => {
-      stopInternal();
-      if (mountedRef.current && seqRef.current === mySeq) { setIsPlaying(false); onError?.('音频播放失败。'); onPlayEnd?.(); }
+      if (mountedRef.current && seqRef.current === mySeq) { stopInternal(); setIsPlaying(false); onError?.(t('errors.network')); onPlayEnd?.(); }
     };
 
     audio.play().catch(() => {
-      if (mountedRef.current && seqRef.current === mySeq) { onError?.('音频播放失败。'); }
+      if (mountedRef.current && seqRef.current === mySeq) { onError?.(t('errors.network')); }
     });
-  }, [pendingPlayUrl, stopInternal, onPlayStart, onPlayEnd, onError]);
+  }, [pendingPlayUrl, stopInternal, onPlayStart, onPlayEnd, onError, t]);
 
   return { isPlaying, pendingPlayUrl, speak, stop, playPending };
 }

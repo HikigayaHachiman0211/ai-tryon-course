@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
+import { useTranslation } from 'react-i18next';
 import type { RadarData } from '../types';
 
 interface RadarChartProps {
@@ -7,29 +8,31 @@ interface RadarChartProps {
 }
 
 export const RadarChart: React.FC<RadarChartProps> = ({ data }) => {
+  const { t } = useTranslation(['styleLab', 'common']);
   const option = useMemo(() => {
-    // Fill in default values if less than 4 (color, size, style, personality)
     const indicators = [
-      { name: '颜色适配度', max: 100 },
-      { name: '身材适配度', max: 100 },
-      { name: '款式适配度', max: 100 },
-      { name: '品牌偏好度', max: 100 },
-      { name: '性格适配度', max: 100 }
+      { code: 'color', name: t('score.dimension.color'), max: 100 },
+      { code: 'size', name: t('score.dimension.size'), max: 100 },
+      { code: 'style', name: t('score.dimension.style'), max: 100 },
+      { code: 'brand', name: t('score.dimension.brand'), max: 100 },
+      { code: 'personality', name: t('score.dimension.personality'), max: 100 },
     ];
 
     const values = indicators.map(ind => {
-      const found = data.find(d => d.dimension === ind.name);
+      const found = data.find(d => d.code === ind.code || d.dimension === ind.name);
       return found ? found.score : 60; // default score if missing
     });
 
     return {
       radar: {
         indicator: indicators,
-        radius: '60%',
+        radius: '52%',
         splitNumber: 4,
         axisName: {
           color: 'rgba(255, 255, 255, 0.7)',
-          fontSize: 11,
+          fontSize: 10,
+          overflow: 'truncate',
+          width: 70,
         },
         splitLine: {
           lineStyle: {
@@ -53,7 +56,7 @@ export const RadarChart: React.FC<RadarChartProps> = ({ data }) => {
           data: [
             {
               value: values,
-              name: '匹配分数',
+              name: t('score.matchScore'),
               areaStyle: {
                 color: 'rgba(0, 113, 227, 0.18)'
               },
@@ -71,6 +74,7 @@ export const RadarChart: React.FC<RadarChartProps> = ({ data }) => {
       ],
       tooltip: {
         trigger: 'item',
+        confine: true,
         backgroundColor: 'rgba(29, 29, 31, 0.94)',
         borderColor: 'rgba(255,255,255,0.08)',
         textStyle: {
@@ -78,7 +82,7 @@ export const RadarChart: React.FC<RadarChartProps> = ({ data }) => {
         }
       }
     };
-  }, [data]);
+  }, [data, t]);
 
   return (
     <ReactECharts

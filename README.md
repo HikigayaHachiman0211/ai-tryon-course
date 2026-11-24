@@ -1,72 +1,55 @@
-# AI 羽绒服推荐与虚拟试衣平台
+# AI 羽绒服推荐与虚拟试穿平台
 
-这是课程项目的可公开备份，包含羽绒服智能推荐主站、AI 导购、站长后台和虚拟试衣工作台。仓库中的代码可以在本地启动；需要联网模型能力时，请使用自己的 API Key 或 Google Cloud 项目配置。
+这是一个课程项目。选好颜色、尺码和预算后，可以查看羽绒服推荐、了解每件衣服为何适合自己，再把商品和照片带进试穿工作台。平台包含 Web 主站、试穿工作台、站长后台和原生微信小程序。
 
-## 已公开化处理的内容
+## v1.1.0 新增功能
 
-- 未包含 `.env`、API Key、JWT 密钥、数据库口令、Service Account 或私钥文件。
-- 未包含本地 SQLite/PostgreSQL 数据、用户上传照片、试穿结果、历史记录或日志。
-- 未包含真实云项目 ID、Cloud Run 地址、Cloud SQL 实例名、GCS 桶名或本机绝对路径。
-- 原真人示例照片已删除，替换为无真实身份、无面部特征的通用人台图。
-- 原始商品全集未公开，仓库提供 8 条合成商品数据，保证目录初始化和演示流程可运行。
-- `node_modules`、虚拟环境、缓存和构建产物均由 `.gitignore` 排除。
+| 功能 | 可以做什么 |
+| --- | --- |
+| 中英日三语 | 在主站、工作台、后台和小程序切换简体中文、English 或日本語。支持切换商品、推荐解释、历史记录和错误提示的展示语言。 |
+| 微信小程序 | 在微信端完成推荐、商品筛选、Style Lab 单品分析和图片试穿。还可以看历史、使用文字与语音导购，以及把试穿图交给视频生成。 |
+| 图片试穿 | 选择 Gemini/Vertex AI 或已配置的 ToTokens 等兼容渠道。界面按当前模型展示画幅、分辨率、质量等可用选项。 |
+| 试穿视频 | 把试穿图或可用图片作为参考交给 01Router，选择转身、行走、面料特写等动作。支持按模型查看参数和报价、恢复异步任务、播放及下载。 |
+| 实时试穿 | 在 Web 工作台用摄像头预览试穿效果。支持 Decart Lucy、Xmax 和 Reactor 配置，后台可管理访问权限、会话时长、预算和紧急停止。 |
+| 后台与部署 | 后台统一管理提示词、模型与试穿渠道。提供 Docker、GCP 构建配置、Azure VM/Container Apps 和阿里云 ECS 部署模板。 |
 
-示例值只用于说明格式，不是可用凭据。请勿把生产密钥写进源码、命令历史或提交记录。
-
-## 功能组成
-
-- 主站推荐：按性别、颜色、尺码、款式、价格等条件生成推荐，并展示评分解释。
-- AI 导购：从自然语言提取偏好，支持自动填表、生成推荐和规则回退。
-- 商品目录：支持搜索、筛选、推荐历史和商品详情。
-- 站长后台：管理商品、Prompt、模型 Provider、功能路由、试穿任务和系统状态。
-- 虚拟试衣：接收主站商品与用户图片，调用配置的 Gemini 图像模型生成试穿结果。
+功能入口、模型配置和版本差异见 [v1.1.0 更新日志](CHANGELOG.md)。
 
 ## 目录结构
 
-```text
-.
-├── main-app/
-│   ├── database.json             # 合成商品目录
-│   ├── backend/                  # 主站 FastAPI 后端
-│   ├── frontend/                 # 主站 React + Vite 前端
-│   └── admin/
-│       ├── backend/              # 管理后台 FastAPI 后端
-│       └── frontend/             # 管理后台 React 前端
-├── tryon-workbench/
-│   ├── database.json             # 合成商品目录副本
-│   ├── main.py                   # 试衣 FastAPI 服务
-│   └── static/                   # 试衣页面与通用人台素材
-├── DESIGN.md
-├── PROJECT_OVERVIEW.md
-├── SECURITY.md
-└── README.md
+| 目录 | 用途 |
+| --- | --- |
+| `main-app/frontend/` | React 主站，包括推荐、商品目录、Style Lab 和 AI 导购 |
+| `main-app/backend/` | FastAPI 推荐、商品、历史和语音接口 |
+| `main-app/admin/` | React 与 FastAPI 站长后台 |
+| `tryon-workbench/` | FastAPI 工作台，包括图片、视频与实时试穿 |
+| `miniprogram/` | TypeScript、WXML、WXSS 微信小程序 |
+| `deploy/` | Azure 与阿里云的部署配置 |
+| `scripts/` | 目录资源生成、语言校验与打包工具 |
+
+## 本地启动
+
+推荐 Python 3.11 和 Node.js 22.12 或更新的 22.x。以下命令使用 PowerShell，每组命令从仓库根目录在独立窗口执行。
+
+先安装 Python 依赖，并为 8 件演示商品生成两个服务使用的目录文件。
+
+```powershell
+python -m venv .venv-local
+.\.venv-local\Scripts\python.exe -m pip install -r main-app/backend/requirements.txt -r main-app/admin/backend/requirements.txt -r tryon-workbench/requirements.txt
+.\.venv-local\Scripts\python.exe main-app/backend/scripts/build_catalog_read_model.py
+.\.venv-local\Scripts\python.exe scripts/i18n/sync_workbench_catalog.py
 ```
 
-## 环境要求
-
-- Python 3.10 或更高版本（推荐 3.11）
-- Node.js 18 或更高版本
-- npm
-- 可选：Docker、Google Cloud SDK
-
-以下命令以 PowerShell 为例，均从仓库根目录执行。
-
-## 1. 启动主站后端
+### 1. 主站后端
 
 ```powershell
 Set-Location main-app/backend
-python -m venv .venv-local
-.\.venv-local\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+..\..\.venv-local\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-访问 `http://127.0.0.1:8000/health` 检查状态。首次启动会根据 `main-app/database.json` 创建本地 SQLite 商品库。
+首次启动会用合成目录初始化 SQLite。可以访问 [主站健康检查](http://127.0.0.1:8000/health)。
 
-## 2. 启动主站前端
-
-新开一个 PowerShell：
+### 2. 主站前端
 
 ```powershell
 Set-Location main-app/frontend
@@ -75,61 +58,32 @@ npm ci
 npm run dev -- --host 127.0.0.1 --port 3000
 ```
 
-访问 `http://127.0.0.1:3000`。开发模式默认连接 `http://127.0.0.1:8000`、`http://127.0.0.1:8080/static/index.html` 和 `http://127.0.0.1:8081`。
+打开 [推荐主站](http://127.0.0.1:3000)。
 
-## 3. 启动虚拟试衣工作台
-
-不配置模型密钥也能启动页面和商品浏览；生成试穿图前必须配置自己的 Gemini/Vertex AI 凭据。
+### 3. 虚拟试穿工作台
 
 ```powershell
 Set-Location tryon-workbench
-python -m venv .venv-local
-.\.venv-local\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-
-# 二选一：Gemini API Key，或 Google Cloud Application Default Credentials
-$env:GEMINI_API_KEY="<your-own-api-key>"
-# $env:GCP_PROJECT_ID="<your-gcp-project-id>"
-
-python -m uvicorn main:app --host 127.0.0.1 --port 8080
+Copy-Item .env.example .env
+npm ci
+npm run build
+..\.venv-local\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8080
 ```
 
-访问 `http://127.0.0.1:8080/static/index.html`，健康检查为 `http://127.0.0.1:8080/health`。
+打开 [试穿工作台](http://127.0.0.1:8080/static/index.html)。页面和演示目录可以本地浏览。图片生成、视频和实时效果需要各自的供应商配置。单独使用 Gemini 图片试穿时，可在工作台的 `.env` 中设置自己的 `GEMINI_API_KEY`。
 
-## 4. 启动站长后台
+### 4. 站长后台
 
-后台没有提交默认密码。先复制配置模板，再填写你自己的值：
+先在 `main-app/admin/backend/` 将 `.env.example` 复制为 `.env`。设置自己的 `ADMIN_INIT_PASSWORD`（至少 12 字符）、`JWT_SECRET_KEY` 和 `INGEST_SECRET_KEY`（各至少 32 字符）。为后台保存模型密钥时，也要设置 `FERNET_SECRET_KEY`，并将相同值配置到读取该后台模型配置的主站和工作台。
 
 ```powershell
 Set-Location main-app/admin/backend
 Copy-Item .env.example .env
-
-# 可用以下命令生成随机 JWT/服务间密钥：
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-
-# 安装并启动后端
-python -m venv .venv-local
-.\.venv-local\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8081
+# 复制后先在 .env 中填入上面的值，再启动服务。
+..\..\..\.venv-local\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8081
 ```
 
-请至少在 `.env` 中设置：
-
-- `JWT_SECRET_KEY`：不少于 32 个字符。
-- `ADMIN_INIT_PASSWORD`：不少于 12 个字符；这是首次创建管理员时使用的密码。
-- `INGEST_SECRET_KEY`：不少于 32 个字符，并与主站、试衣服务保持一致。
-- `FERNET_SECRET_KEY`：用于加密后台保存的模型 API Key。
-
-Fernet 密钥可在安装后台依赖后生成：
-
-```powershell
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-```
-
-再启动后台前端：
+可用 `python -c "import secrets; print(secrets.token_urlsafe(48))"` 生成随机应用密钥。Fernet 密钥可用 `from cryptography.fernet import Fernet` 后调用 `Fernet.generate_key()` 生成。主站和工作台向后台上报时使用同一个 `INGEST_SECRET_KEY`。
 
 ```powershell
 Set-Location main-app/admin/frontend
@@ -137,56 +91,16 @@ npm ci
 npm run dev -- --host 127.0.0.1 --port 3001
 ```
 
-访问 `http://127.0.0.1:3001`，使用你在 `.env` 中设置的管理员用户名和密码登录。
+打开 [站长后台](http://127.0.0.1:3001)。初次登录后可在 **AI 模型设置** 配置供应商、模型、功能路由和密钥。模型不可用时，商品推荐可以使用规则推荐。
 
-## AI Provider 配置
+### 5. 微信小程序
 
-启动后台后进入 `/ai-models`，填写自己的 Provider、Base URL、模型名和 API Key。API Key 会通过 `FERNET_SECRET_KEY` 加密后写入后台数据库。主站与试衣服务按以下顺序读取配置：
+在微信开发者工具中导入 `miniprogram/`。如果按上面的端口启动，在小程序 **设置** 选择 **本地手动端口（8000 / 8080）**。真机需要自己的小程序 AppID、可访问的 HTTPS 域名和相应的合法域名配置。参见 [小程序接入说明](miniprogram/README.md)。
 
-1. `AI_CONFIG_DATABASE_URL`
-2. `DATABASE_URL`
-3. 本地开发数据库 `main-app/admin/backend/admin_local.db`
+## 配置与验证
 
-未配置模型或模型请求失败时，推荐主站会回退到规则推荐；虚拟试衣生成能力则会返回明确的未配置错误。
+- 图片试穿、视频和摄像头串流分别配置。详见 [ToTokens 图片试穿](tryon-workbench/TOTOKENS_SETUP.md)、[01Router 视频](tryon-workbench/VIDEO_GENERATION_SETUP.md)、[Decart 实时试穿](tryon-workbench/DECART_REALTIME_SETUP.md)、[Xmax 实时试穿](tryon-workbench/XMAX_REALTIME_SETUP.md)和 [Reactor 实时试穿](tryon-workbench/REACTOR_REALTIME_SETUP.md)。
+- 两个 Web 前端在各自目录运行 `npm test -- --run` 和 `npm run build`。工作台运行 `npm test`，小程序运行 `npm run verify`。三个 Python 服务在各自的服务目录运行 `python -m pytest -q`，先为虚拟环境安装 `pytest` 与对应服务的依赖。
+- 可用 `python scripts/i18n/check_catalog_coverage.py` 检查生成后的目录和语言资源。部署模板需要自己的域名、存储和数据库。生产构建应配置 `VITE_TRYON_BASE_URL` 与 `VITE_ADMIN_BASE_URL`。参见 [架构概览](PROJECT_OVERVIEW.md)、[Azure 模板](deploy/azure/README.md)和 [阿里云模板](deploy/aliyun/README.md)。
 
-## Docker 与云部署
-
-- 主站容器入口：`main-app/Dockerfile`
-- 后台 Compose：先把 `main-app/admin/.env.example` 复制为 `.env` 并填写必填项，再运行 `docker compose up --build`。
-- Cloud Build 文件只保留 substitution 变量。请在构建触发器或 Secret Manager 中注入真实值。
-- 生产前端必须显式设置 `VITE_TRYON_BASE_URL` 和 `VITE_ADMIN_BASE_URL`；代码中没有绑定任何现有线上服务。
-
-## 验证
-
-```powershell
-# 主站后端
-Set-Location main-app/backend
-python -m pip install -r requirements-test.txt
-python -m pytest -q
-
-# 主站前端
-Set-Location ../frontend
-npm ci
-npm run build
-
-# 后台后端
-Set-Location ../admin/backend
-python -m pip install pytest
-python -m pytest -q
-
-# 后台前端
-Set-Location ../frontend
-npm ci
-npm run build
-
-# 试衣服务
-Set-Location ../../../tryon-workbench
-python -m pip install pytest
-python -m pytest -q
-```
-
-## 隐私与安全
-
-用户上传的全身照和生成结果属于敏感数据。公开部署前应设置访问控制、数据保留期限、删除机制、日志脱敏和隐私告知；不要直接沿用课程演示配置。完整注意事项见 [SECURITY.md](SECURITY.md)。
-
-本仓库用于课程学习和原型演示，不承诺生产级可用性，也不包含任何第三方服务额度或授权。
+公开版使用 8 条合成商品和 4 张通用人台。演示商品链接和图片为占位素材。真实云凭据、商品原始数据、真人照片和运行数据由部署者自行管理。上传和生成媒体的访问策略见 [SECURITY.md](SECURITY.md)。

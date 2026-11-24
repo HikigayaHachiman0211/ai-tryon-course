@@ -42,6 +42,7 @@ def task_stats(admin=Depends(get_current_admin), db=Depends(get_db)):
     total = db.query(func.count(TryonTask.id)).scalar() or 0
     completed = db.query(func.count(TryonTask.id)).filter(TryonTask.status == "completed").scalar() or 0
     failed = db.query(func.count(TryonTask.id)).filter(TryonTask.status == "failed").scalar() or 0
+    unknown = db.query(func.count(TryonTask.id)).filter(TryonTask.status == "unknown").scalar() or 0
     processing = db.query(func.count(TryonTask.id)).filter(TryonTask.status == "processing").scalar() or 0
     queued = db.query(func.count(TryonTask.id)).filter(TryonTask.status == "queued").scalar() or 0
 
@@ -85,12 +86,20 @@ def task_stats(admin=Depends(get_current_admin), db=Depends(get_db)):
         "total": total,
         "completed": completed,
         "failed": failed,
+        "unknown": unknown,
         "processing": processing,
         "queued": queued,
         "avg_duration_ms": round(avg_duration, 1),
         "error_distribution": [{"type": e[0], "count": e[1]} for e in error_dist],
         "success_trend": trend,
     }
+
+
+def _normalize_workbench_root(url: str) -> str:
+    raw = str(url or "").strip().rstrip("/")
+    if raw.endswith("/static/index.html"):
+        raw = raw[:-len("/static/index.html")].rstrip("/")
+    return raw
 
 
 @router.get("/{task_id}")
@@ -106,10 +115,27 @@ async def retry_task(task_id: str, admin=Depends(get_current_admin), db=Depends(
     t = db.get(TryonTask, task_id)
     if not t:
         raise HTTPException(404, "任务不存在")
-    if t.status != "failed":
-        raise HTTPException(400, "只能重试失败的任务")
+    if t.status not in {"failed", "unknown"}:
+        raise HTTPException(400, "只能重试 failed 或 unknown 状态的任务")
 
-    # Reset to queued
+    from app.config import get_settings
+    settings = get_settings()
+    workbench_root = _normalize_workbench_root(settings.TRYON_WORKBENCH_URL)
+    if workbench_root:
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(
+                    f"{workbench_root}/api/retry",
+                    headers={"X-Ingest-Key": settings.INGEST_SECRET_KEY},
+                    json={"task_id": task_id, "allow_unknown_retry": True},
+                )
+        except Exception as exc:
+            raise HTTPException(502, f"工作台重试请求失败: {type(exc).__name__}")
+        if resp.status_code >= 400:
+            raise HTTPException(502, f"工作台拒绝重试 ({resp.status_code})")
+
+    # Update local admin index record only after workbench re-enqueue succeeds
     t.status = "queued"
     t.error_type = None
     t.error_detail = None
@@ -117,21 +143,7 @@ async def retry_task(task_id: str, admin=Depends(get_current_admin), db=Depends(
     t.duration_ms = None
     db.commit()
 
-    # Optionally call the tryon workbench API
-    from app.config import get_settings
-    settings = get_settings()
-    if settings.TRYON_WORKBENCH_URL:
-        try:
-            import httpx
-            async with httpx.AsyncClient(timeout=30) as client:
-                await client.post(
-                    f"{settings.TRYON_WORKBENCH_URL}/api/retry",
-                    json={"task_id": task_id},
-                )
-        except Exception:
-            pass  # Best effort
-
-    return {"detail": "已重新排队"}
+    return {"detail": "已重新排队", "task_id": task_id, "status": "queued"}
 
 
 def _serialize(t: TryonTask) -> dict:

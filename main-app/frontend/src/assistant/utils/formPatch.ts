@@ -16,15 +16,15 @@ const VALID_STYLES = new Set([
   '常规短外套', '短款', '轻薄款', '绗缝款（排骨款）', '面包服',
   '中长款大衣', '长款', '巴恩风/工装风', '派克大衣', '马甲',
 ]);
-const VALID_AI_PROVIDERS = new Set(['auto', 'gemini', 'deepseek', 'mimo']);
-const VALID_VISION_PROVIDERS = new Set(['mimo', 'gemini', 'auto']);
+const VALID_AI_PROVIDERS = new Set(['auto', 'gemini', 'deepseek', 'mimo', 'opencode_go']);
+const VALID_VISION_PROVIDERS = new Set(['mimo', 'gemini', 'deepseek', 'opencode_go', 'auto']);
 const VALID_MBTI = new Set([
   'INTJ', 'INTP', 'ENTJ', 'ENTP',
   'INFJ', 'INFP', 'ENFJ', 'ENFP',
   'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ',
   'ISTP', 'ISFP', 'ESTP', 'ESFP',
 ]);
-const VALID_MIMO_MODELS = new Set(['mimo-v2.5', 'mimo-v2.5-pro', 'mimo-v2-omni']);
+const VALID_MIMO_MODELS = new Set(['mimo-v2.6-flash', 'mimo-v2.6-pro', 'mimo-v2.6-pro-ultraspeed']);
 
 export function applyAssistantFormPatch(
   currentForm: Record<string, unknown>,
@@ -100,6 +100,10 @@ export function applyAssistantFormPatch(
 
   if (patch.deepseek_model && typeof patch.deepseek_model === 'string' && patch.deepseek_model.trim()) {
     next.deepseek_model = patch.deepseek_model.trim();
+  }
+
+  if (patch.opencode_go_model && typeof patch.opencode_go_model === 'string' && patch.opencode_go_model.trim()) {
+    next.opencode_go_model = patch.opencode_go_model.trim();
   }
 
   return next;

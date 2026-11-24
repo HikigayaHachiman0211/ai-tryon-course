@@ -1,0 +1,42 @@
+{
+  "header": "AIスタイリスト",
+  "welcome": "こんにちは。AIダウンジャケットスタイリストです。お好みのコーディネートを教えてください。",
+  "inputPlaceholder": "例：500元以内の黒いレディース細見えダウンジャケット...",
+  "thinking": "考えています…",
+  "send": "送信",
+  "clear": "会話を消去",
+  "close": "アシスタントを閉じる",
+  "windowSize": "パネルサイズ",
+  "voiceSettings": "音声設定",
+  "play": "このメッセージを読み上げる",
+  "playPending": "再生",
+  "ttsGenerating": "音声を生成中",
+  "ttsStop": "読み上げを停止",
+  "messageFailed": "メッセージを送信できませんでした。もう一度お試しください。",
+  "sendFailed": "メッセージを送信できません。接続を確認してください。",
+  "action": {
+    "extracted": "推薦条件を抽出しました",
+    "fill": "フォームに入力",
+    "fillAndSubmit": "入力して推薦を生成",
+    "cancel": "キャンセル"
+  },
+  "field": {
+    "gender": "性別",
+    "color_preference": "カラー",
+    "price_min": "最低価格",
+    "price_max": "最高価格",
+    "brand_preference": "ブランド",
+    "size": "サイズ",
+    "mbti": "MBTI",
+    "style_preference": "スタイル",
+    "ai_provider": "AIエンジン",
+    "vision_provider": "画像分析エンジン",
+    "mimo_model": "MiMoモデル",
+    "opencode_go_model": "OpenCode Goモデル"
+  },
+  "gender": {"male": "男性", "female": "女性"},
+  "provider": {"mimo": "Xiaomi MiMo", "gemini": "Gemini", "deepseek": "DeepSeek", "opencode_go": "OpenCode Go", "auto": "自動"},
+  "emptyValue": "-",
+  "price": "{{value}}元",
+  "sizePreset": {"compact": "小", "default": "標準", "large": "大", "wide": "ワイド", "custom": "カスタム"}
+}

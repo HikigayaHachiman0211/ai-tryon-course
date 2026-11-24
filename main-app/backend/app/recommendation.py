@@ -96,6 +96,7 @@ from app.profile_inference import (
     infer_style_heuristically,
     resolve_user_profile,
 )
+from app.i18n.catalog import localize_product_payload, localize_recommendation_result, localize_style_lab_result, product_key_for_product
 
 
 def build_brand_note(brand_preference: str | None, product: Product, brand_score: int | None) -> str | None:
@@ -184,10 +185,13 @@ def recommend_products(
     deepseek_model: str | None = None,
     mimo_api_key: str | None = None,
     mimo_model: str | None = None,
+    opencode_go_api_key: str | None = None,
+    opencode_go_model: str | None = None,
     ai_provider: str | None = None,
     vision_provider: str | None = None,
     price_min: float | None,
     price_max: float | None,
+    locale: str = "zh-CN",
 ) -> dict[str, Any]:
     normalized_gender = normalize_user_gender(gender)
     price_filtered_count = len(products)
@@ -205,12 +209,15 @@ def recommend_products(
         deepseek_model=deepseek_model,
         mimo_api_key=mimo_api_key,
         mimo_model=mimo_model,
+        opencode_go_api_key=opencode_go_api_key,
+        opencode_go_model=opencode_go_model,
         ai_provider=ai_provider,
         vision_provider=vision_provider,
+        locale=locale,
     )
 
     if not products:
-        return {
+        return localize_recommendation_result({
             "filters": {
                 "price_min": price_min,
                 "price_max": price_max,
@@ -224,7 +231,7 @@ def recommend_products(
             "inference": inference,
             "items": [],
             "message": "当前价位区间没有匹配商品。",
-        }
+        }, locale)
 
     preferred_brands = parse_brand_preferences(brand_preference)
     brand_candidate_pool, _ = filter_adult_products(products)
@@ -240,7 +247,7 @@ def recommend_products(
             products = fallback_brand_matches
             gender_fallback = True
     if not products:
-        return {
+        return localize_recommendation_result({
             "filters": {
                 "price_min": price_min,
                 "price_max": price_max,
@@ -254,7 +261,7 @@ def recommend_products(
             "inference": inference,
             "items": [],
             "message": "当前筛选条件下没有匹配所选性别的商品。",
-        }
+        }, locale)
 
     ranked_items: list[dict[str, Any]] = []
     for product in products:
@@ -274,6 +281,8 @@ def recommend_products(
         ranked_items.append(
             {
                 "id": product.id,
+                "product_key": product_key_for_product(product),
+                "canonical": {"image_path": product.image_path, "style_features": ensure_list(product.style_features)},
                 "title": product.title,
                 "price": product.price,
                 "image_url": build_public_image_url(product.image_path),
@@ -332,7 +341,7 @@ def recommend_products(
         item.pop("gender_match_priority", None)
         item.pop("brand_exact_priority", None)
         item.pop("brand_match_count", None)
-    return {
+    return localize_recommendation_result({
         "filters": {
             "price_min": price_min,
             "price_max": price_max,
@@ -345,33 +354,47 @@ def recommend_products(
         },
         "inference": inference,
         "items": top_items,
-    }
+    }, locale)
 
 
-def serialize_product_catalog_item(product: Product) -> dict[str, Any]:
+def serialize_product_catalog_item(product: Product, locale: str = "zh-CN") -> dict[str, Any]:
     product_gender = infer_product_gender(product.title)
-    return {
-        "id": product.id,
-        "title": product.title,
-        "price": product.price,
-        "image_url": build_public_image_url(product.image_path),
-        "brand": get_product_brand(product),
-        "platform": get_product_platform(product),
-        "product_url": resolve_product_url(product),
-        "style_type": product.style_type,
-        "color_family": product.color_family,
-        "body_fit": product.body_fit,
-        "style_features": get_visible_style_features(product),
-        "function_features": ensure_list(product.function_features),
-        "size_tags": ensure_list(product.size_tags),
-        "size_notes": product.size_notes,
-        "product_gender": product_gender,
-        "gender_label": get_gender_label(product_gender),
-        "is_child_product": is_child_product(product.title),
-    }
+    item = localize_product_payload(product, locale)
+    item["product_gender"] = product_gender
+    item["is_child_product"] = is_child_product(product.title)
+    return item
 
 
-def matches_product_query(product: Product, query: str | None) -> bool:
+_QUERY_ALIASES = {
+    "black": "黑色",
+    "white": "白色",
+    "off-white": "米白",
+    "navy": "藏青",
+    "blue": "蓝色",
+    "gray": "灰色",
+    "grey": "灰色",
+    "green": "绿色",
+    "red": "红色",
+    "short": "短款",
+    "cropped": "短款",
+    "lightweight": "轻薄款",
+    "long": "长款",
+    "parka": "派克大衣",
+    "vest": "马甲",
+    "waterproof": "防水",
+    "warm": "保暖",
+    "ブラック": "黑色",
+    "ホワイト": "白色",
+    "ネイビー": "藏青",
+    "ショート": "短款",
+    "ロング": "长款",
+    "パーカ": "派克大衣",
+    "ベスト": "马甲",
+    "防水": "防水",
+}
+
+
+def matches_product_query(product: Product, query: str | None, locale: str = "zh-CN") -> bool:
     if not query:
         return True
 
@@ -379,6 +402,7 @@ def matches_product_query(product: Product, query: str | None) -> bool:
     if not normalized_query:
         return True
 
+    read_model_text = getattr(product, "_search_text", {}).get(locale, "")
     haystack = " ".join(
         [
             product.title,
@@ -388,9 +412,13 @@ def matches_product_query(product: Product, query: str | None) -> bool:
             product.body_fit,
             *get_visible_style_features(product),
             *ensure_list(product.function_features),
+            read_model_text,
         ]
     ).lower()
-    return all(token in haystack for token in normalized_query.split())
+    return all(
+        token in haystack or _QUERY_ALIASES.get(token, "") in haystack
+        for token in normalized_query.split()
+    )
 
 
 def list_catalog_products(
@@ -402,6 +430,7 @@ def list_catalog_products(
     mode: str,
     offset: int,
     limit: int,
+    locale: str = "zh-CN",
 ) -> dict[str, Any]:
     normalized_gender = normalize_user_gender(gender)
     normalized_platform = normalize_platform_filter(platform)
@@ -424,7 +453,7 @@ def list_catalog_products(
             product for product in filtered_products if get_product_platform_key(product) == normalized_platform
         ]
 
-    filtered_products = [product for product in filtered_products if matches_product_query(product, query)]
+    filtered_products = [product for product in filtered_products if matches_product_query(product, query, locale)]
     filtered_products = sorted(
         filtered_products,
         key=lambda product: (
@@ -438,13 +467,14 @@ def list_catalog_products(
     safe_limit = max(1, min(limit, 120))
     paged_items = filtered_products[safe_offset : safe_offset + safe_limit]
     return {
-        "items": [serialize_product_catalog_item(product) for product in paged_items],
+        "items": [serialize_product_catalog_item(product, locale) for product in paged_items],
         "total": len(filtered_products),
         "offset": safe_offset,
         "limit": safe_limit,
         "mode": mode,
         "user_gender": normalized_gender,
         "gender_fallback": gender_fallback,
+        "locale": locale,
     }
 
 
@@ -563,10 +593,13 @@ def analyze_selected_product(
     deepseek_model: str | None = None,
     mimo_api_key: str | None = None,
     mimo_model: str | None = None,
+    opencode_go_api_key: str | None = None,
+    opencode_go_model: str | None = None,
     ai_provider: str | None = None,
     vision_provider: str | None = None,
     price_min: float | None,
     price_max: float | None,
+    locale: str = "zh-CN",
 ) -> dict[str, Any]:
     normalized_gender = normalize_user_gender(gender)
     inference = resolve_user_profile(
@@ -583,8 +616,11 @@ def analyze_selected_product(
         deepseek_model=deepseek_model,
         mimo_api_key=mimo_api_key,
         mimo_model=mimo_model,
+        opencode_go_api_key=opencode_go_api_key,
+        opencode_go_model=opencode_go_model,
         ai_provider=ai_provider,
         vision_provider=vision_provider,
+        locale=locale,
     )
 
     color_score = score_color(color_preference, product.color_family)
@@ -600,8 +636,8 @@ def analyze_selected_product(
         personality_score=personality_score,
     )
 
-    return {
-        "product": serialize_product_catalog_item(product),
+    return localize_style_lab_result({
+        "product": serialize_product_catalog_item(product, locale),
         "inference": inference,
         "analysis": {
             "total_score": total_score,
@@ -639,4 +675,4 @@ def analyze_selected_product(
             "gender_note": build_gender_note(product, normalized_gender),
             "personality_note": build_personality_note(mbti, product, personality_score),
         },
-    }
+    }, locale)

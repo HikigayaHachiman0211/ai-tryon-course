@@ -7,14 +7,16 @@ import re
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
+from pydantic import BaseModel, field_validator
 from sqlalchemy import func, or_
 
 from app.auth import get_current_admin
 from app.config import get_settings
 from app.database import Product, get_db
 from app.services import gcs
+from app.i18n.locale import request_locale
+from app.i18n.catalog import localized_product_display
 
 router = APIRouter(prefix="/api/admin/products", tags=["products"])
 
@@ -22,6 +24,7 @@ router = APIRouter(prefix="/api/admin/products", tags=["products"])
 class ProductUpdate(BaseModel):
     title: str | None = None
     price: float | None = None
+    image_path: str | None = None
     product_url: str | None = None
     style_type: str | None = None
     color_family: str | None = None
@@ -30,6 +33,13 @@ class ProductUpdate(BaseModel):
     function_features: list[str] | None = None
     size_tags: list[str] | None = None
     size_notes: str | None = None
+
+    @field_validator("image_path")
+    @classmethod
+    def validate_image_path(cls, value: str | None) -> str:
+        if value is None or not value.strip() or len(value) > 1024:
+            raise ValueError("image_path must be a non-empty path")
+        return value
 
 
 class ProductCreate(BaseModel):
@@ -57,6 +67,7 @@ def _validate_url(url: str | None):
 
 @router.get("")
 def list_products(
+    request: Request,
     page: int = 1,
     size: int = 20,
     keyword: str = "",
@@ -66,6 +77,7 @@ def list_products(
     price_min: float | None = None,
     price_max: float | None = None,
     link_status: str = "",
+    locale: str | None = None,
     admin=Depends(get_current_admin),
     db=Depends(get_db),
 ):
@@ -96,33 +108,39 @@ def list_products(
         "total": total,
         "page": page,
         "size": size,
-        "items": [_serialize(p) for p in items],
+        "locale": request_locale(request, explicit=locale),
+        "items": [_serialize(p, request_locale(request, explicit=locale)) for p in items],
     }
 
 
 @router.get("/missing-links")
 def missing_links(
+    request: Request,
     page: int = 1, size: int = 50,
+    locale: str | None = None,
     admin=Depends(get_current_admin), db=Depends(get_db),
 ):
     q = db.query(Product).filter(or_(Product.product_url.is_(None), Product.product_url == ""))
     total = q.count()
     items = q.offset((page - 1) * size).limit(size).all()
-    return {"total": total, "items": [_serialize(p) for p in items]}
+    target_locale = request_locale(request, explicit=locale)
+    return {"total": total, "locale": target_locale, "items": [_serialize(p, target_locale) for p in items]}
 
 
 @router.get("/{product_id}")
-def get_product(product_id: int, admin=Depends(get_current_admin), db=Depends(get_db)):
+def get_product(product_id: int, request: Request, locale: str | None = None, admin=Depends(get_current_admin), db=Depends(get_db)):
     p = db.get(Product, product_id)
     if not p:
         raise HTTPException(404, "商品不存在")
-    return _serialize(p)
+    return _serialize(p, request_locale(request, explicit=locale))
 
 
 @router.put("/{product_id}")
 def update_product(
     product_id: int,
     body: ProductUpdate,
+    request: Request,
+    locale: str | None = None,
     admin=Depends(get_current_admin),
     db=Depends(get_db),
 ):
@@ -135,17 +153,17 @@ def update_product(
         setattr(p, k, v)
     db.commit()
     db.refresh(p)
-    return _serialize(p)
+    return _serialize(p, request_locale(request, explicit=locale))
 
 
 @router.post("")
-def create_product(body: ProductCreate, admin=Depends(get_current_admin), db=Depends(get_db)):
+def create_product(body: ProductCreate, request: Request, locale: str | None = None, admin=Depends(get_current_admin), db=Depends(get_db)):
     _validate_url(body.product_url)
     p = Product(**body.model_dump())
     db.add(p)
     db.commit()
     db.refresh(p)
-    return _serialize(p)
+    return _serialize(p, request_locale(request, explicit=locale))
 
 
 @router.delete("/{product_id}")
@@ -353,21 +371,45 @@ def _build_image_url(image_path: str | None, base_url: str) -> str | None:
     return f"{base_url.rstrip('/')}/{quote(filename)}"
 
 
-def _serialize(p: Product) -> dict:
+def _serialize(p: Product, locale: str = "zh-CN") -> dict:
     settings = get_settings()
+    labels = {
+        "en": {
+            "户外运动": "Outdoor", "商务通勤": "Business", "日常休闲": "Casual", "时尚潮流": "Fashion", "轻薄便携": "Lightweight", "极寒防护": "Extreme cold", "亲子家庭": "Family",
+            "黑色": "Black", "白色": "White", "灰色": "Gray", "深蓝": "Navy", "浅蓝": "Light blue", "红色": "Red", "绿色": "Green", "棕色": "Brown", "卡其": "Khaki", "粉色": "Pink", "紫色": "Purple", "橙色": "Orange", "黄色": "Yellow", "米色": "Beige", "银色": "Silver", "金色": "Gold", "酒红": "Wine red",
+        },
+        "ja": {
+            "户外运动": "アウトドア", "商务通勤": "ビジネス", "日常休闲": "カジュアル", "时尚潮流": "ファッション", "轻薄便携": "軽量", "极寒防护": "極寒対応", "亲子家庭": "ファミリー",
+            "黑色": "黒", "白色": "白", "灰色": "グレー", "深蓝": "ネイビー", "浅蓝": "ライトブルー", "红色": "赤", "绿色": "緑", "棕色": "ブラウン", "卡其": "カーキ", "粉色": "ピンク", "紫色": "紫", "橙色": "オレンジ", "黄色": "黄", "米色": "ベージュ", "银色": "シルバー", "金色": "ゴールド", "酒红": "ワインレッド",
+        },
+    }.get(locale, {})
+    display = {
+        "title": p.title,
+        "style_type": labels.get(p.style_type, p.style_type),
+        "color_family": labels.get(p.color_family, p.color_family),
+        "body_fit": p.body_fit,
+        "style_features": [labels.get(item, item) for item in (p.style_features or [])],
+        "function_features": [labels.get(item, item) for item in (p.function_features or [])],
+        "size_tags": p.size_tags,
+        "size_notes": p.size_notes,
+    }
+    display = localized_product_display(p, locale) or display
     return {
         "id": p.id,
-        "title": p.title,
+        "locale": locale,
+        "canonical": {"title": p.title, "style_type": p.style_type, "color_family": p.color_family, "body_fit": p.body_fit, "style_features": p.style_features, "function_features": p.function_features, "size_tags": p.size_tags, "size_notes": p.size_notes},
+        "display": display,
+        "title": display["title"],
         "price": p.price,
         "image_path": p.image_path,
         "image_url": _build_image_url(p.image_path, settings.PUBLIC_IMAGE_BASE_URL),
-        "style_type": p.style_type,
-        "color_family": p.color_family,
-        "body_fit": p.body_fit,
-        "style_features": p.style_features,
-        "function_features": p.function_features,
-        "size_tags": p.size_tags,
-        "size_notes": p.size_notes,
+        "style_type": display["style_type"],
+        "color_family": display["color_family"],
+        "body_fit": display["body_fit"],
+        "style_features": display["style_features"],
+        "function_features": display["function_features"],
+        "size_tags": display["size_tags"],
+        "size_notes": display["size_notes"],
         "product_url": p.product_url,
         "annotation_status": getattr(p, "annotation_status", None),
         "annotation_confidence": getattr(p, "annotation_confidence", None),

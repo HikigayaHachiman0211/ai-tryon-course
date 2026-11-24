@@ -9,24 +9,12 @@ import type { RecommendFormPatch } from '../assistantTypes';
 import { RecommendActionCard } from '../components/RecommendActionCard';
 import { VoiceSettingsPanel } from './VoiceSettingsPanel';
 import { formatCallDuration } from './callUtils';
+import { useTranslation } from 'react-i18next';
 
 /* z-index for call panel — must match CSS variable in index.css */
 const Z_CALL_PANEL = 'var(--z-call-panel)'; // 910
 
-const STATE_LABELS: Record<string, string> = {
-  idle: '准备就绪',
-  requesting_permission: '请求麦克风权限...',
-  ready: '等待你说话',
-  listening: '正在录音',
-  recording: '正在录音',
-  recognizing: '正在识别',
-  thinking: '正在思考',
-  speaking: '正在播报',
-  paused: '已暂停',
-  muted: '已静音',
-  error: '出错',
-  ended: '通话已结束',
-};
+const STATE_KEYS = ['idle', 'requesting_permission', 'ready', 'listening', 'recording', 'recognizing', 'thinking', 'speaking', 'paused', 'muted', 'error', 'ended'] as const;
 
 interface Props {
   session: VoiceCallSessionState;
@@ -45,6 +33,7 @@ interface Props {
   onSendManualText?: (text: string) => void;
   onFillForm?: (patch: RecommendFormPatch) => void;
   onFillAndSubmit?: (patch: RecommendFormPatch) => void;
+  onDismissFormPatch?: () => void;
 }
 
 export const CallModePanel: React.FC<Props> = ({
@@ -62,7 +51,9 @@ export const CallModePanel: React.FC<Props> = ({
   onSendManualText,
   onFillForm,
   onFillAndSubmit,
+  onDismissFormPatch,
 }) => {
+  const { t } = useTranslation(['voice', 'common']);
   const [showSettings, setShowSettings] = useState(false);
   const [manualText, setManualText] = useState('');
 
@@ -89,7 +80,7 @@ export const CallModePanel: React.FC<Props> = ({
       flexDirection: 'column',
       background: 'rgba(12, 12, 14, 0.99)',
       zIndex: Z_CALL_PANEL,
-      borderRadius: 20,
+      borderRadius: 'inherit',
       overflow: 'hidden',
     }}>
       {/* Settings overlay */}
@@ -106,7 +97,7 @@ export const CallModePanel: React.FC<Props> = ({
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#F8FAFC' }}>📞 AI 电话导购</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#F8FAFC' }}>📞 {t('call.title')}</span>
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span style={{
@@ -134,7 +125,7 @@ export const CallModePanel: React.FC<Props> = ({
           background: isError ? '#EF4444' : isSpeaking ? '#0071e3' : isMuted ? '#F59E0B' : '#4ade80',
         }} />
         <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
-          {STATE_LABELS[session.state] || session.state}
+          {STATE_KEYS.includes(session.state) ? t(`status.${session.state}`) : session.state}
         </span>
       </div>
 
@@ -154,14 +145,15 @@ export const CallModePanel: React.FC<Props> = ({
             {session.errorMessage}
             {isError && (
               <button
+                type="button"
                 onClick={onRetry}
                 style={{
-                  marginLeft: 8, padding: '2px 8px', borderRadius: 6,
+                  marginLeft: 8, padding: '8px 14px', minHeight: 38, borderRadius: 8,
                   background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)',
-                  color: '#FCA5A5', fontSize: 11, cursor: 'pointer',
+                  color: '#FCA5A5', fontSize: 12, cursor: 'pointer',
                 }}
               >
-                重试
+                {t('action.retry')}
               </button>
             )}
           </div>
@@ -175,7 +167,7 @@ export const CallModePanel: React.FC<Props> = ({
             borderRadius: 12,
             marginBottom: 12,
           }}>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 4 }}>你说：</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 4 }}>{t('common:common.youSaid', { defaultValue: 'You said:' })}</div>
             <div style={{ fontSize: 14, color: '#F8FAFC', lineHeight: 1.5 }}>{session.currentTranscript}</div>
           </div>
         )}
@@ -188,7 +180,7 @@ export const CallModePanel: React.FC<Props> = ({
             borderRadius: 12,
             marginBottom: 12,
           }}>
-            <div style={{ fontSize: 11, color: 'rgba(0, 113, 227, 0.6)', marginBottom: 4 }}>AI：</div>
+            <div style={{ fontSize: 11, color: 'rgba(0, 113, 227, 0.6)', marginBottom: 4 }}>AI:</div>
             <div style={{ fontSize: 14, color: '#F8FAFC', lineHeight: 1.5 }}>{session.currentAssistantText}</div>
           </div>
         )}
@@ -200,7 +192,7 @@ export const CallModePanel: React.FC<Props> = ({
               patch={lastFormPatch}
               onFillForm={() => onFillForm(lastFormPatch)}
               onFillAndSubmit={() => onFillAndSubmit(lastFormPatch)}
-              onCancel={() => {}}
+              onCancel={() => onDismissFormPatch?.()}
             />
           </div>
         )}
@@ -208,12 +200,12 @@ export const CallModePanel: React.FC<Props> = ({
         {/* Turn history */}
         {session.turns.length > 0 && (
           <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginBottom: 8 }}>对话记录</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginBottom: 8 }}>{t('common:common.conversationHistory', { defaultValue: 'Conversation history' })}</div>
             {session.turns.slice(-5).map((turn) => (
               <div key={turn.id} style={{ marginBottom: 8 }}>
                 {turn.userText && (
                   <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 2 }}>
-                    你: {turn.userText}
+                    {t('common:common.youSaid', { defaultValue: 'You said:' })} {turn.userText}
                   </div>
                 )}
                 {turn.assistantText && (
@@ -235,6 +227,7 @@ export const CallModePanel: React.FC<Props> = ({
           }}>
             <input
               type="text"
+              enterKeyHint="send"
               value={manualText}
               onChange={(e) => setManualText(e.target.value)}
               onKeyDown={(e) => {
@@ -246,13 +239,15 @@ export const CallModePanel: React.FC<Props> = ({
                   }
                 }
               }}
-              placeholder="识别结果已填入，可编辑后发送..."
+              placeholder={t('common:common.editTranscript', { defaultValue: 'Edit the transcript before sending...' })}
               style={{
-                flex: 1, background: 'transparent', border: 'none',
-                color: '#F8FAFC', fontSize: 13, outline: 'none',
+                flex: 1, minWidth: 0, background: 'transparent', border: 'none',
+                color: '#F8FAFC', fontSize: 16, minHeight: 40, outline: 'none',
               }}
             />
             <button
+              type="button"
+              aria-label={t('assistant:send', { defaultValue: 'Send' })}
               onClick={() => {
                 const toSend = manualText.trim() || session.currentTranscript;
                 if (toSend) {
@@ -261,13 +256,13 @@ export const CallModePanel: React.FC<Props> = ({
                 }
               }}
               style={{
-                width: 32, height: 32, borderRadius: 8,
+                width: 44, height: 44, flexShrink: 0, borderRadius: 10,
                 background: (manualText.trim() || session.currentTranscript) ? '#0071e3' : 'rgba(255,255,255,0.04)',
                 border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 cursor: (manualText.trim() || session.currentTranscript) ? 'pointer' : 'default', color: '#fff',
               }}
             >
-              <Send size={14} />
+              <Send size={16} />
             </button>
           </div>
         )}
@@ -278,7 +273,7 @@ export const CallModePanel: React.FC<Props> = ({
             textAlign: 'center', padding: 24,
             color: 'rgba(255,255,255,0.4)', fontSize: 14,
           }}>
-            通话已结束，时长 {formatCallDuration(session.durationSeconds)}
+            {t('voice:duration', { duration: formatCallDuration(session.durationSeconds) })}
           </div>
         )}
 
@@ -287,7 +282,7 @@ export const CallModePanel: React.FC<Props> = ({
           fontSize: 11, color: 'rgba(255,255,255,0.2)',
           textAlign: 'center', padding: '12px 0',
         }}>
-          语音仅用于本次 AI 导购识别，不会保存在浏览器本地。
+          {t('call.privacy')}
         </div>
       </div>
 
@@ -325,22 +320,26 @@ export const CallModePanel: React.FC<Props> = ({
         {!isEnded && (
           <>
             <button
+              type="button"
               onClick={isMuted ? onUnmute : onMute}
-              title={isMuted ? '取消静音' : '静音'}
+              title={isMuted ? t('action.unmute') : t('action.mute')}
+              aria-label={isMuted ? t('action.unmute') : t('action.mute')}
               style={secondaryBtnStyle(isMuted)}
             >
               {isMuted ? <Volume2 size={16} /> : <VolumeX size={16} />}
             </button>
 
             {isSpeaking && (
-              <button onClick={onStopSpeaking} title="停止播报" style={secondaryBtnStyle(false)}>
+              <button type="button" onClick={onStopSpeaking} title={t('action.stop')} aria-label={t('action.stop')} style={secondaryBtnStyle(false)}>
                 ■
               </button>
             )}
 
             <button
+              type="button"
               onClick={() => setShowSettings(true)}
-              title="设置"
+              title={t('action.settings')}
+              aria-label={t('action.settings')}
               style={secondaryBtnStyle(false)}
             >
               <Settings size={16} />
@@ -350,10 +349,12 @@ export const CallModePanel: React.FC<Props> = ({
 
         {/* End call */}
         <button
+          type="button"
           onClick={onEndCall}
-          title="结束通话"
+          title={t('action.end')}
+          aria-label={t('action.end')}
           style={{
-            width: 40, height: 40, borderRadius: '50%',
+            width: 44, height: 44, borderRadius: '50%',
             background: 'rgba(239, 68, 68, 0.15)',
             border: '1px solid rgba(239, 68, 68, 0.3)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -365,8 +366,10 @@ export const CallModePanel: React.FC<Props> = ({
 
         {/* Back to chat */}
         <button
+          type="button"
           onClick={onBackToChat}
-          title="返回聊天"
+          title={t('action.back')}
+          aria-label={t('action.back')}
           style={secondaryBtnStyle(false)}
         >
           <ArrowLeft size={16} />
@@ -378,7 +381,7 @@ export const CallModePanel: React.FC<Props> = ({
 
 function secondaryBtnStyle(active: boolean): React.CSSProperties {
   return {
-    width: 40, height: 40, borderRadius: '50%',
+    width: 44, height: 44, borderRadius: '50%',
     background: active ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255,255,255,0.04)',
     border: active ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(255,255,255,0.08)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',

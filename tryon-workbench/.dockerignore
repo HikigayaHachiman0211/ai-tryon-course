@@ -10,19 +10,14 @@ __pycache__/
 # 环境配置
 .env
 .env.local
+.env.*
 *.env
 gcp-credentials.json
-*credentials*.json
-*service-account*.json
-*.pem
-*.key
-*.p12
-*.pfx
 
 # 虚拟环境
 venv/
 .venv/
-.venv*/
+.venv-*/
 ENV/
 
 # IDE
@@ -35,10 +30,14 @@ ENV/
 uploads/
 assets/
 history/
+!static/i18n/
+!read-model/
 
 # 缓存
 .cache/
-.pytest_cache/
+node_modules/
+.npm-cache/
+static/vendor/
 *.log
 
 # Git

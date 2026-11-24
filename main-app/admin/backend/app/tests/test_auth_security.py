@@ -100,7 +100,6 @@ class TestValidateProductionSettings:
         monkeypatch.setenv("ADMIN_INIT_PASSWORD", "SuperStr0ng!Pass#2026")
         monkeypatch.setenv("CORS_ALLOW_ORIGINS", "https://admin.example.com")
         monkeypatch.setenv("INGEST_SECRET_KEY", "strong-ingest-secret-xyz-2026-abc")
-        monkeypatch.setenv("FERNET_SECRET_KEY", "test-fernet-passphrase-used-only-in-unit-tests")
         _clear_settings_cache()
         try:
             from app.config import get_settings, validate_production_settings
@@ -117,7 +116,6 @@ class TestValidateProductionSettings:
         monkeypatch.setenv("ADMIN_INIT_PASSWORD", "SuperStr0ng!Pass#2026")
         monkeypatch.setenv("CORS_ALLOW_ORIGINS", "https://admin.example.com")
         monkeypatch.setenv("INGEST_SECRET_KEY", "strong-ingest-secret-xyz-2026-abc")
-        monkeypatch.setenv("FERNET_SECRET_KEY", "test-fernet-passphrase-used-only-in-unit-tests")
         _clear_settings_cache()
         try:
             from app.config import get_settings, validate_production_settings
@@ -204,10 +202,11 @@ class TestLifespanProductionGuard:
 # ---------------------------------------------------------------------------
 
 class TestInitDbProductionAdminSeed:
-    def test_default_password_in_production_skips_admin(self, monkeypatch, tmp_path):
+    def test_missing_password_in_production_skips_admin(self, monkeypatch, tmp_path):
         monkeypatch.setenv("K_SERVICE", "admin-svc")
         monkeypatch.delenv("APP_ENV", raising=False)
         monkeypatch.delenv("ENV", raising=False)
+        monkeypatch.delenv("ADMIN_INIT_PASSWORD", raising=False)
         monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/test_prod.db")
         _clear_settings_cache()
         _reset_db_state()
@@ -219,14 +218,16 @@ class TestInitDbProductionAdminSeed:
                 count = session.query(AdminUser).count()
             finally:
                 session.close()
-            assert count == 0, "Admin user must NOT be created with default password in production"
+            assert count == 0, "Admin user must not be created without a configured password"
         finally:
             _clear_settings_cache()
             _reset_db_state()
 
-    def test_dev_mode_without_password_skips_admin(self, monkeypatch, tmp_path):
+    @pytest.mark.parametrize("password, expected_count", [("", 0), ("unit-test-admin-password", 1)])
+    def test_dev_mode_seeds_admin_only_when_configured(self, monkeypatch, tmp_path, password, expected_count):
         monkeypatch.setenv("APP_ENV", "development")
         monkeypatch.delenv("K_SERVICE", raising=False)
+        monkeypatch.setenv("ADMIN_INIT_PASSWORD", password)
         monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/test_dev.db")
         _clear_settings_cache()
         _reset_db_state()
@@ -238,7 +239,7 @@ class TestInitDbProductionAdminSeed:
                 count = session.query(AdminUser).count()
             finally:
                 session.close()
-            assert count == 0, "Admin user must not be created without an explicit password"
+            assert count == expected_count
         finally:
             _clear_settings_cache()
             _reset_db_state()
@@ -360,3 +361,145 @@ class TestTokenValidation:
         token = create_access_token({"sub": "testuser"})
         with pytest.raises(JWTError):
             jwt.decode(token, "wrong-secret-key-that-is-definitely-long-enough-x", algorithms=["HS256"])
+
+
+# ---------------------------------------------------------------------------
+# Password recovery & change-password endpoints
+# ---------------------------------------------------------------------------
+
+class TestPasswordRecoveryEndpoints:
+    def _make_client(self, monkeypatch, tmp_path, *, recovery_key: str = ""):
+        monkeypatch.setenv("APP_ENV", "development")
+        monkeypatch.delenv("K_SERVICE", raising=False)
+        monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/test_recovery.db")
+        monkeypatch.setenv("ADMIN_INIT_USERNAME", "admin")
+        monkeypatch.setenv("ADMIN_INIT_PASSWORD", "unit-test-admin-password")
+        monkeypatch.setenv("ADMIN_RECOVERY_KEY", recovery_key)
+        _clear_settings_cache()
+        _reset_db_state()
+
+        from fastapi.testclient import TestClient
+        from app.database import init_db
+        from app.main import app as admin_app
+        from app.routers.auth import _recovery_failures
+
+        _recovery_failures.clear()
+        init_db()
+        return TestClient(admin_app), _recovery_failures
+
+    def test_recovery_options_and_reset_via_key_and_security_question(self, monkeypatch, tmp_path):
+        try:
+            client, failures = self._make_client(monkeypatch, tmp_path, recovery_key="rec-secret-xyz")
+
+            opts = client.get("/api/auth/recovery-options", params={"username": "admin"})
+            assert opts.status_code == 200
+            assert opts.json() == {
+                "has_security_question": False,
+                "security_question": None,
+                "has_recovery_key": True,
+            }
+
+            # Wrong recovery key -> 401
+            bad_reset = client.post(
+                "/api/auth/reset-password",
+                json={
+                    "username": "admin",
+                    "method": "recovery_key",
+                    "proof": "wrong-key",
+                    "new_password": "newpass123",
+                },
+            )
+            assert bad_reset.status_code == 401
+
+            # Correct recovery key -> 200 & login succeeds with new password
+            ok_reset = client.post(
+                "/api/auth/reset-password",
+                json={
+                    "username": "admin",
+                    "method": "recovery_key",
+                    "proof": "rec-secret-xyz",
+                    "new_password": "newpass123",
+                },
+            )
+            assert ok_reset.status_code == 200
+            login_res = client.post("/api/auth/login", json={"username": "admin", "password": "newpass123"})
+            assert login_res.status_code == 200
+            token = login_res.json()["access_token"]
+
+            # Configure security question after login
+            q_res = client.post(
+                "/api/auth/recovery-question",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "current_password": "newpass123",
+                    "security_question": "Favorite color?",
+                    "security_answer": "BlueSky",
+                },
+            )
+            assert q_res.status_code == 200
+            assert q_res.json()["security_question"] == "Favorite color?"
+
+            opts2 = client.get("/api/auth/recovery-options", params={"username": "admin"})
+            assert opts2.json()["has_security_question"] is True
+            assert opts2.json()["security_question"] == "Favorite color?"
+
+            # Reset via security question back to unit-test-admin-password
+            sq_reset = client.post(
+                "/api/auth/reset-password",
+                json={
+                    "username": "admin",
+                    "method": "security_question",
+                    "proof": "BlueSky",
+                    "new_password": "unit-test-admin-password",
+                },
+            )
+            assert sq_reset.status_code == 200
+            assert client.post("/api/auth/login", json={"username": "admin", "password": "unit-test-admin-password"}).status_code == 200
+
+            # Rate-limit on repeated failures
+            failures.clear()
+            for _ in range(5):
+                r = client.post(
+                    "/api/auth/reset-password",
+                    json={
+                        "username": "admin",
+                        "method": "security_question",
+                        "proof": "wrong-answer",
+                        "new_password": "otherpass",
+                    },
+                )
+                assert r.status_code == 401
+            blocked = client.post(
+                "/api/auth/reset-password",
+                json={
+                    "username": "admin",
+                    "method": "security_question",
+                    "proof": "BlueSky",
+                    "new_password": "otherpass",
+                },
+            )
+            assert blocked.status_code == 429
+            assert blocked.json()["code"] == "AUTH_TOO_MANY_ATTEMPTS"
+        finally:
+            _clear_settings_cache()
+            _reset_db_state()
+
+    def test_change_password_accepts_current_and_old_password_fields(self, monkeypatch, tmp_path):
+        try:
+            client, _ = self._make_client(monkeypatch, tmp_path)
+            token = client.post("/api/auth/login", json={"username": "admin", "password": "unit-test-admin-password"}).json()["access_token"]
+            res = client.post(
+                "/api/auth/change-password",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"current_password": "unit-test-admin-password", "new_password": "changed123"},
+            )
+            assert res.status_code == 200
+            res2 = client.post(
+                "/api/auth/change-password",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"old_password": "changed123", "new_password": "unit-test-admin-password"},
+            )
+            assert res2.status_code == 200
+        finally:
+            _clear_settings_cache()
+            _reset_db_state()

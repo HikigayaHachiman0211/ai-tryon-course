@@ -11,6 +11,7 @@ from app.profile_providers import (
     call_gemini_profile,
     call_gemini_text_profile,
     call_mimo_profile,
+    call_opencode_go_profile,
 )
 from app.recommendation_rules import normalize_body_shape, normalize_style_preference
 
@@ -86,8 +87,11 @@ def resolve_user_profile(
     deepseek_model: str | None = None,
     mimo_api_key: str | None = None,
     mimo_model: str | None = None,
+    opencode_go_api_key: str | None = None,
+    opencode_go_model: str | None = None,
     ai_provider: str | None = None,
     vision_provider: str | None = None,
+    locale: str = "zh-CN",
 ) -> dict[str, Any]:
     resolved_size = normalize_size(size)
     resolved_style = normalize_style_preference(style_preference)
@@ -123,6 +127,8 @@ def resolve_user_profile(
             req_key, req_model = gemini_api_key, gemini_model
         elif pk == "deepseek":
             req_key, req_model = deepseek_api_key, deepseek_model
+        elif pk == "opencode_go":
+            req_key, req_model = opencode_go_api_key, opencode_go_model
         return resolve_provider_config(
             pk, request_api_key=req_key, request_model=req_model, feature_key=fk
         )
@@ -147,6 +153,7 @@ def resolve_user_profile(
                 base_url=cfg.get("base_url"),
                 auth_type=cfg.get("auth_type"),
                 auth_header_name=cfg.get("auth_header_name"),
+                locale=locale,
             )
         if pk == "gemini":
             if use_image:
@@ -154,20 +161,33 @@ def resolve_user_profile(
                     image_bytes=image_bytes, mime_type=mime_type,
                     api_key=api_key, gender=gender, mbti=mbti,
                     color_preference=color_preference, size=size,
-                    style_preference=style_preference, model=model,
+                    style_preference=style_preference, model=model, locale=locale,
                 )
             # Text-only Gemini — no image, use text generateContent
             return call_gemini_text_profile(
                 api_key=api_key, gender=gender, mbti=mbti,
                 color_preference=color_preference, size=size,
-                style_preference=style_preference, model=model,
+                style_preference=style_preference, model=model, locale=locale,
             )
         if pk == "deepseek":
             return call_deepseek_profile(
                 api_key=api_key, gender=gender, mbti=mbti,
                 color_preference=color_preference, size=size,
                 style_preference=style_preference, model=model,
+                image_bytes=image_bytes if use_image else None,
+                mime_type=mime_type if use_image else None,
                 base_url=cfg.get("base_url"),
+                locale=locale,
+            )
+        if pk == "opencode_go":
+            return call_opencode_go_profile(
+                api_key=api_key, gender=gender, mbti=mbti,
+                color_preference=color_preference, size=size,
+                style_preference=style_preference, model=model,
+                image_bytes=image_bytes if use_image else None,
+                mime_type=mime_type if use_image else None,
+                base_url=cfg.get("base_url"),
+                locale=locale,
             )
         return None
 

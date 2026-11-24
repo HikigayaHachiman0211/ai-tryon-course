@@ -20,13 +20,15 @@ class VoicePublicConfig(BaseModel):
         "冰糖", "茉莉", "苏打", "白桦", "Mia", "Chloe", "Milo", "Dean",
     ])
     published_clone_voices: list[dict[str, str]] = Field(default_factory=list)
-    asr_languages: list[str] = Field(default_factory=lambda: ["zh", "en", "auto"])
+    asr_languages: list[str] = Field(default_factory=lambda: ["zh", "en", "ja", "auto"])
     max_record_seconds: int = 15
     hard_max_record_seconds: int = 55
     max_audio_base64_mb: int = 10
     supported_audio_formats: list[str] = Field(default_factory=lambda: ["wav", "mp3"])
     default_language: str = "zh"
     max_tts_text_length: int = 300
+    locale: str = "zh-CN"
+    available_voice_catalog: list[dict[str, str]] = Field(default_factory=list)
 
 
 class ASRResponse(BaseModel):
@@ -39,6 +41,8 @@ class ASRResponse(BaseModel):
     duration_ms: int | None = None
     latency_ms: int | None = None
     error: dict[str, str] | None = None
+    locale: str = "zh-CN"
+    speech_language: str | None = None
 
 
 class TTSRequest(BaseModel):
@@ -51,6 +55,8 @@ class TTSRequest(BaseModel):
     clone_voice_id: str | None = None
     tone_preset: str | None = None
     volume: float | None = 1.0
+    locale: str | None = None
+    speech_language: str | None = None
 
 
 class TTSResponse(BaseModel):
@@ -62,6 +68,7 @@ class TTSResponse(BaseModel):
     provider: str = "mimo"
     model: str = "mimo-v2.5-tts"
     error: dict[str, str] | None = None
+    locale: str = "zh-CN"
 
 
 class VoiceCatalogItem(BaseModel):
@@ -73,3 +80,5 @@ class VoiceCatalogItem(BaseModel):
     description: str | None = None
     gender: str | None = None
     language: str | None = None
+    display_name: str | None = None
+    display_description: str | None = None

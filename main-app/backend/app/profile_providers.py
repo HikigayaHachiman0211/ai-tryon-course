@@ -8,27 +8,35 @@ from typing import Any
 import httpx
 
 from app.ai_runtime_config import build_auth_headers
+from app.deepseek_models import (
+    DEFAULT_DEEPSEEK_MODEL as _DEFAULT_DEEPSEEK_MODEL,
+    DEEPSEEK_TEXT_MODELS,
+    is_deepseek_vision_capable,
+    normalize_deepseek_model,
+)
 from app.llm_parsing import extract_json_object as _extract_json_object
+from app.mimo_models import DEFAULT_MIMO_MODEL as DEFAULT_MIMO_TEXT_MODEL, MIMO_TEXT_MODELS, normalize_mimo_model
+from app.opencode_go import (
+    DEFAULT_OPENCODE_GO_BASE_URL,
+    DEFAULT_OPENCODE_GO_MODEL,
+    call_opencode_go_sync,
+    is_opencode_go_vision_capable,
+)
 from app.prompt_loader import load_active_prompt
 
 
 DEFAULT_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite-preview")
 
-DEFAULT_DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
-DEEPSEEK_MODELS = [
-    "deepseek-v4-flash",
-    "deepseek-v4-pro",
-    "deepseek-chat",
-    "deepseek-reasoner",
-]
+DEFAULT_DEEPSEEK_MODEL = normalize_deepseek_model(os.getenv("DEEPSEEK_MODEL", _DEFAULT_DEEPSEEK_MODEL))
+DEEPSEEK_MODELS = list(DEEPSEEK_TEXT_MODELS)
 DEEPSEEK_API_BASE = "https://api.deepseek.com"
 
 DEFAULT_MIMO_API_BASE = "https://api.xiaomimimo.com/v1"
-DEFAULT_MIMO_MODEL = os.getenv("MIMO_MODEL", "mimo-v2.5")
+DEFAULT_MIMO_MODEL = normalize_mimo_model(os.getenv("MIMO_MODEL", DEFAULT_MIMO_TEXT_MODEL).strip())
 MIMO_API_BASE = os.getenv("MIMO_API_BASE", DEFAULT_MIMO_API_BASE).rstrip("/")
 MIMO_API_KEY = os.getenv("MIMO_API_KEY", "")
 MIMO_AUTH_HEADER = os.getenv("MIMO_AUTH_HEADER", "api-key").strip().lower()
-MIMO_MODELS = ["mimo-v2.5", "mimo-v2.5-pro", "mimo-v2-omni"]
+MIMO_MODELS = list(MIMO_TEXT_MODELS)
 
 
 def _sanitize_error_for_log(exc: Exception) -> str:
@@ -109,7 +117,7 @@ def normalize_vision_provider(value: str | None) -> str | None:
     if not value:
         return None
     provider = value.strip().lower()
-    return provider if provider in {"mimo", "gemini", "auto"} else None
+    return provider if provider in {"mimo", "gemini", "deepseek", "opencode_go", "auto"} else None
 
 
 def strip_json_block(text: str) -> dict[str, Any] | None:
@@ -127,6 +135,7 @@ def call_gemini_profile(
     size: str | None,
     style_preference: str | None,
     model: str,
+    locale: str = "zh-CN",
 ) -> dict[str, Any] | None:
     prompt = f"""
 你是服装搭配分析助手。请结合全身照、用户颜色偏好、MBTI 和已知条件，输出一个 JSON 对象，不要输出 markdown。
@@ -150,6 +159,8 @@ def call_gemini_profile(
 - 如果用户已提供尺码或款式偏好，也要结合图像做校验，但仍返回完整 JSON。
 - 如果无法可靠判断，请写 unknown 或 未知。
 """.strip()
+    language_name = {"zh-CN": "Simplified Chinese", "en": "English", "ja": "Japanese"}.get(locale, "Simplified Chinese")
+    prompt += f"\n\nNON-OVERRIDABLE CONTRACT: Write the reasoning in {language_name}; preserve canonical enum values and JSON keys."
 
     payload = {
         "contents": [
@@ -202,6 +213,7 @@ def call_gemini_text_profile(
     size: str | None,
     style_preference: str | None,
     model: str,
+    locale: str = "zh-CN",
 ) -> dict[str, Any] | None:
     """Gemini text-only profile inference (no image). Uses generateContent without inline_data."""
     prompt = f"""你是服装搭配分析助手。请根据用户提供的信息，推断体型特征和推荐方案，输出一个 JSON 对象。
@@ -225,6 +237,8 @@ def call_gemini_text_profile(
 - 综合所有已知条件进行推断。
 - 如果信息不足无法可靠判断，请写 unknown 或 未知。
 """.strip()
+    language_name = {"zh-CN": "Simplified Chinese", "en": "English", "ja": "Japanese"}.get(locale, "Simplified Chinese")
+    prompt += f"\n\nNON-OVERRIDABLE CONTRACT: Write the reasoning in {language_name}; preserve canonical enum values and JSON keys."
 
     payload = {
         "contents": [
@@ -260,18 +274,28 @@ def call_gemini_text_profile(
     return strip_json_block("\n".join(texts))
 
 
-def call_deepseek_profile(
+def _build_profile_prompt(
     *,
-    api_key: str,
     gender: str | None,
     mbti: str | None,
     color_preference: str,
     size: str | None,
     style_preference: str | None,
-    model: str,
-    base_url: str | None = None,
-) -> dict[str, Any] | None:
-    prompt = f"""你是服装搭配分析助手。请根据用户提供的信息，推断体型特征和推荐方案，输出一个 JSON 对象。
+    has_image: bool,
+    locale: str = "zh-CN",
+) -> str:
+    """Build unified structured JSON prompt for profile inference (text or multimodal)."""
+    intro = (
+        "请根据照片和以下用户偏好，分析身型特征并推荐羽绒服方案，输出严格 JSON。"
+        if has_image
+        else "你是服装搭配分析助手。请根据用户提供的信息，推断体型特征和推荐方案，输出一个 JSON 对象。"
+    )
+    extra_rule = (
+        "- 结合照片中的人物身型、穿着风格与已知条件综合分析。\n- 如果照片或信息不足无法可靠判断，请写 unknown 或 未知。"
+        if has_image
+        else "- 综合所有已知条件进行推断。\n- 如果信息不足无法可靠判断，请写 unknown 或 未知。"
+    )
+    prompt = f"""{intro}
 
 已知条件：
 - 颜色偏好: {color_preference}
@@ -289,21 +313,66 @@ def call_deepseek_profile(
 }}
 
 要求：
-- 综合所有已知条件进行推断。
-- 如果信息不足无法可靠判断，请写 unknown 或 未知。
+{extra_rule}
 """.strip()
+    language_name = {"zh-CN": "Simplified Chinese", "en": "English", "ja": "Japanese"}.get(locale, "Simplified Chinese")
+    return prompt + f"\n\nNON-OVERRIDABLE CONTRACT: Write the reasoning in {language_name}; preserve canonical enum values and JSON keys."
 
+
+def call_deepseek_profile(
+    *,
+    api_key: str,
+    gender: str | None,
+    mbti: str | None,
+    color_preference: str,
+    size: str | None,
+    style_preference: str | None,
+    model: str,
+    image_bytes: bytes | None = None,
+    mime_type: str | None = None,
+    base_url: str | None = None,
+    locale: str = "zh-CN",
+) -> dict[str, Any] | None:
+    resolved_model = normalize_deepseek_model(model)
+    if image_bytes and not is_deepseek_vision_capable(resolved_model):
+        resolved_model = _DEFAULT_DEEPSEEK_MODEL
+
+    prompt = _build_profile_prompt(
+        gender=gender,
+        mbti=mbti,
+        color_preference=color_preference,
+        size=size,
+        style_preference=style_preference,
+        has_image=bool(image_bytes),
+        locale=locale,
+    )
+
+    if image_bytes:
+        encoded = base64.b64encode(image_bytes).decode("utf-8")
+        effective_mime = mime_type or "image/jpeg"
+        user_content: Any = [
+            {"type": "image_url", "image_url": {"url": f"data:{effective_mime};base64,{encoded}"}},
+            {"type": "text", "text": prompt},
+        ]
+    else:
+        user_content = prompt
+
+    system_msg = (
+        "你是专业的冬季羽绒服搭配分析助手。请根据用户信息和照片输出严格 JSON，不要输出多余解释。"
+        if image_bytes
+        else "你是一个专业的冬季羽绒服搭配分析助手，根据用户信息输出 JSON 格式的推荐结果。"
+    )
     messages = [
-        {"role": "system", "content": "你是一个专业的冬季羽绒服搭配分析助手，根据用户信息输出 JSON 格式的推荐结果。"},
-        {"role": "user", "content": prompt},
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": user_content},
     ]
 
     payload = {
-        "model": model,
+        "model": resolved_model,
         "messages": messages,
         "response_format": {"type": "json_object"},
         "temperature": 0.2,
-        "max_tokens": 512,
+        "max_tokens": 1024 if image_bytes else 512,
         "stream": False,
     }
 
@@ -315,7 +384,7 @@ def call_deepseek_profile(
             "Authorization": f"Bearer {api_key}",
         },
         json=payload,
-        timeout=30.0,
+        timeout=60.0 if image_bytes else 30.0,
     )
     response.raise_for_status()
     response_json = response.json()
@@ -324,10 +393,62 @@ def call_deepseek_profile(
     if not choices:
         return None
 
-    content = choices[0].get("message", {}).get("content", "")
+    message = choices[0].get("message", {})
+    content = message.get("content") or message.get("reasoning_content") or ""
     if not content:
         return None
 
+    return strip_json_block(content)
+
+
+def call_opencode_go_profile(
+    *,
+    api_key: str,
+    gender: str | None,
+    mbti: str | None,
+    color_preference: str,
+    size: str | None,
+    style_preference: str | None,
+    model: str | None = None,
+    image_bytes: bytes | None = None,
+    mime_type: str | None = None,
+    base_url: str | None = None,
+    locale: str = "zh-CN",
+) -> dict[str, Any] | None:
+    """Profile inference via OpenCode Go (text or multimodal across native protocols)."""
+    resolved_model = (model or DEFAULT_OPENCODE_GO_MODEL).strip() or DEFAULT_OPENCODE_GO_MODEL
+    if image_bytes and not is_opencode_go_vision_capable(resolved_model):
+        resolved_model = DEFAULT_OPENCODE_GO_MODEL
+
+    prompt = _build_profile_prompt(
+        gender=gender,
+        mbti=mbti,
+        color_preference=color_preference,
+        size=size,
+        style_preference=style_preference,
+        has_image=bool(image_bytes),
+        locale=locale,
+    )
+    system_msg = (
+        "你是专业的冬季羽绒服搭配分析助手。请根据用户信息和照片输出严格 JSON，不要输出多余解释。"
+        if image_bytes
+        else "你是一个专业的冬季羽绒服搭配分析助手，根据用户信息输出 JSON 格式的推荐结果。"
+    )
+    content = call_opencode_go_sync(
+        api_key=api_key,
+        model=resolved_model,
+        messages=[{"role": "user", "content": prompt}],
+        base_url=base_url or DEFAULT_OPENCODE_GO_BASE_URL,
+        system_prompt=system_msg,
+        image_bytes=image_bytes,
+        mime_type=mime_type,
+        temperature=0.2,
+        max_tokens=1500,
+        json_mode=True,
+        timeout=60.0 if image_bytes else 45.0,
+    )
+    if not content:
+        return None
     return strip_json_block(content)
 
 
@@ -346,6 +467,7 @@ def call_mimo_profile(
     base_url: str | None = None,
     auth_type: str | None = None,
     auth_header_name: str | None = None,
+    locale: str = "zh-CN",
 ) -> dict[str, Any] | None:
     api_base = (base_url or MIMO_API_BASE or DEFAULT_MIMO_API_BASE).rstrip("/")
     if not api_base:
@@ -354,10 +476,9 @@ def call_mimo_profile(
     if not effective_key:
         return None
 
-    # Normalize model: default mimo-v2.5, allow mimo-v2-omni
-    normalized_model = (model or DEFAULT_MIMO_MODEL or "mimo-v2.5").strip()
+    normalized_model = normalize_mimo_model((model or DEFAULT_MIMO_MODEL or DEFAULT_MIMO_TEXT_MODEL).strip())
     if normalized_model not in MIMO_MODELS:
-        normalized_model = "mimo-v2.5"
+        normalized_model = DEFAULT_MIMO_TEXT_MODEL
 
     # Use prompt_override if provided, otherwise load from DB or use defaults
     system_msg = "你是专业的冬季羽绒服搭配分析助手。请根据用户信息和照片输出严格 JSON，不要输出多余解释。"
@@ -415,8 +536,11 @@ def call_mimo_profile(
         multimodal_prompt = prompt_override
     else:
         # Try loading from DB prompt management, fall back to defaults
-        text_prompt = load_active_prompt("mimo_image_profile_analysis", _DEFAULT_TEXT_PROMPT, _prompt_vars)
-        multimodal_prompt = load_active_prompt("mimo_image_profile_analysis", _DEFAULT_MULTIMODAL_PROMPT, _prompt_vars)
+        text_prompt = load_active_prompt("mimo_image_profile_analysis", _DEFAULT_TEXT_PROMPT, _prompt_vars, locale=locale)
+        multimodal_prompt = load_active_prompt("mimo_image_profile_analysis", _DEFAULT_MULTIMODAL_PROMPT, _prompt_vars, locale=locale)
+    language_name = {"zh-CN": "Simplified Chinese", "en": "English", "ja": "Japanese"}.get(locale, "Simplified Chinese")
+    text_prompt += f"\n\nNON-OVERRIDABLE CONTRACT: Write reasoning in {language_name}; preserve canonical enum values and JSON keys."
+    multimodal_prompt += f"\n\nNON-OVERRIDABLE CONTRACT: Write reasoning in {language_name}; preserve canonical enum values and JSON keys."
 
     if image_bytes:
         encoded = base64.b64encode(image_bytes).decode("utf-8")
@@ -438,7 +562,7 @@ def call_mimo_profile(
         "model": normalized_model,
         "messages": messages,
         "temperature": 0.2,
-        # MiMo v2.5 may spend several hundred tokens in reasoning_content before
+        # MiMo can spend several hundred tokens in reasoning_content before
         # emitting the final JSON in message.content. 512 tokens often truncates
         # before content is produced, which looks like an empty model response.
         "max_completion_tokens": 4096,

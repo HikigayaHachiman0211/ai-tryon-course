@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, Settings, Sparkles, Trash2, Maximize2 } from 'lucide-react';
+import { Loader2, Settings, Sparkles, Trash2, Maximize2, X } from 'lucide-react';
 import type { RecommendFormPatch } from '../assistantTypes';
 import { useAssistantChat } from '../hooks/useAssistantChat';
 import { MessageList } from './MessageList';
@@ -19,7 +19,8 @@ import { loadVoiceSettings, saveVoiceSettings } from '../voice/voiceSettingsStor
 import { asrRecognize } from '../voice/voiceApi';
 import { getSessionId } from '../utils/session';
 import type { AssistantVoiceState } from '../voice/voiceTypes';
-import { useResizablePanel, type PanelSizePreset } from '../hooks/useResizablePanel';
+import { useResizablePanel, type PanelSizePreset, type UseResizablePanelReturn } from '../hooks/useResizablePanel';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   currentView: string;
@@ -28,14 +29,16 @@ interface Props {
   onSubmitRecommend: () => void;
   onFillAndSubmit: (patch: RecommendFormPatch) => void;
   onClose: () => void;
+  panel?: UseResizablePanelReturn;
+  isMobile?: boolean;
 }
 
 const SIZE_PRESET_LABELS: Record<PanelSizePreset, string> = {
-  compact: '小',
-  default: '默认',
-  large: '大',
-  wide: '宽屏',
-  custom: '自定义',
+  compact: 'sizePreset.compact',
+  default: 'sizePreset.default',
+  large: 'sizePreset.large',
+  wide: 'sizePreset.wide',
+  custom: 'sizePreset.custom',
 };
 
 export const ChatPanel: React.FC<Props> = ({
@@ -44,7 +47,10 @@ export const ChatPanel: React.FC<Props> = ({
   onFormPatch,
   onFillAndSubmit,
   onClose,
+  panel: externalPanel,
+  isMobile = false,
 }) => {
+  const { t } = useTranslation(['assistant', 'voice']);
   const { messages, loading, error, sendMessage, clearMessages } = useAssistantChat(currentView, currentForm);
   const { config: voiceConfig } = useAssistantVoiceConfig();
 
@@ -61,7 +67,8 @@ export const ChatPanel: React.FC<Props> = ({
   const lastSpokenIdRef = useRef<string>('');
 
   // Resizable panel
-  const panel = useResizablePanel();
+  const internalPanel = useResizablePanel();
+  const panel = externalPanel ?? internalPanel;
 
   // Per-message TTS
   const messageTTS = useMessageTTS(getSessionId());
@@ -104,11 +111,11 @@ export const ChatPanel: React.FC<Props> = ({
           setVoiceState('idle');
         } else {
           setVoiceState('error');
-          setTtsError(result.error?.message || '语音识别暂不可用，请改用文字输入。');
+          setTtsError(result.error?.message || t('voice:errors.asrUnavailable'));
         }
       } catch {
         setVoiceState('error');
-        setTtsError('网络请求失败，请稍后重试。');
+        setTtsError(t('voice:errors.network'));
       }
     },
     onError: (msg) => {
@@ -226,6 +233,7 @@ export const ChatPanel: React.FC<Props> = ({
         }}
         onFillForm={handleFillForm}
         onFillAndSubmit={handleFillAndSubmit}
+        onDismissFormPatch={() => setLastFormPatch(null)}
         onSendManualText={(text) => void callSession.sendManualTranscript(text)}
       />
     );
@@ -238,7 +246,7 @@ export const ChatPanel: React.FC<Props> = ({
       height: '100%',
       width: '100%',
       background: 'rgba(18, 18, 20, 0.98)',
-      borderRadius: 20,
+      borderRadius: isMobile ? '20px 20px 0 0' : 20,
       overflow: 'hidden',
       position: 'relative',
     }}>
@@ -250,16 +258,17 @@ export const ChatPanel: React.FC<Props> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '14px 16px',
+        gap: 8,
+        padding: isMobile ? '12px 14px' : '14px 16px',
         borderBottom: '1px solid rgba(255,255,255,0.06)',
         background: 'rgba(0,0,0,0.3)',
         flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Sparkles size={16} color="#0071e3" />
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#F8FAFC' }}>AI 导购</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <Sparkles size={16} color="#0071e3" style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#F8FAFC', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t('header')}</span>
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
           {/* Call button */}
           <CallButton
             isInCall={false}
@@ -285,103 +294,115 @@ export const ChatPanel: React.FC<Props> = ({
             onStop={tts.stop}
           />
 
-          {/* Size presets */}
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowSizePresets(!showSizePresets)}
-              title="窗口尺寸"
-              style={{
-                width: 28, height: 28, borderRadius: 8,
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', color: 'rgba(255,255,255,0.5)',
-              }}
-            >
-              <Maximize2 size={14} />
-            </button>
-            {showSizePresets && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: 4,
-                background: 'rgba(28, 28, 30, 0.98)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 12,
-                padding: 6,
-                zIndex: 999,
-                minWidth: 120,
-                boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-              }}>
-                {(Object.keys(SIZE_PRESET_LABELS) as PanelSizePreset[])
-                  .filter(k => k !== 'custom')
-                  .map((preset) => (
-                    <button
-                      key={preset}
-                      onClick={() => {
-                        panel.setPreset(preset);
-                        setShowSizePresets(false);
-                      }}
-                      style={{
-                        display: 'block',
-                        width: '100%',
-                        padding: '6px 12px',
-                        borderRadius: 8,
-                        border: 'none',
-                        background: panel.preset === preset ? 'rgba(0, 113, 227, 0.2)' : 'transparent',
-                        color: panel.preset === preset ? '#0071e3' : 'rgba(255,255,255,0.7)',
-                        fontSize: 12,
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                      }}
-                    >
-                      {SIZE_PRESET_LABELS[preset]}
-                    </button>
-                  ))}
-              </div>
-            )}
-          </div>
+          {/* Size presets (desktop only) */}
+          {!isMobile && (
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => setShowSizePresets(!showSizePresets)}
+                title={t('windowSize')}
+                aria-label={t('windowSize')}
+                style={{
+                  width: 36, height: 36, borderRadius: 8,
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', color: 'rgba(255,255,255,0.5)',
+                }}
+              >
+                <Maximize2 size={14} />
+              </button>
+              {showSizePresets && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: 4,
+                  background: 'rgba(28, 28, 30, 0.98)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 12,
+                  padding: 6,
+                  zIndex: 999,
+                  minWidth: 120,
+                  boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+                }}>
+                  {(Object.keys(SIZE_PRESET_LABELS) as PanelSizePreset[])
+                    .filter(k => k !== 'custom')
+                    .map((preset) => (
+                      <button
+                        type="button"
+                        key={preset}
+                        onClick={() => {
+                          panel.setPreset(preset);
+                          setShowSizePresets(false);
+                        }}
+                        style={{
+                          display: 'block',
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: 8,
+                          border: 'none',
+                          background: panel.preset === preset ? 'rgba(0, 113, 227, 0.2)' : 'transparent',
+                          color: panel.preset === preset ? '#0071e3' : 'rgba(255,255,255,0.7)',
+                          fontSize: 12,
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                        }}
+                      >
+                        {t(SIZE_PRESET_LABELS[preset])}
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Voice settings */}
           <button
+            type="button"
             onClick={() => setShowVoiceSettings(true)}
-            title="语音设置"
+            title={t('voiceSettings')}
+            aria-label={t('voiceSettings')}
             style={{
-              width: 28, height: 28, borderRadius: 8,
+              width: 36, height: 36, borderRadius: 8,
               background: 'rgba(255,255,255,0.04)',
               border: '1px solid rgba(255,255,255,0.08)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', color: 'rgba(255,255,255,0.5)',
+              cursor: 'pointer', color: 'rgba(255,255,255,0.6)',
             }}
           >
-            <Settings size={14} />
+            <Settings size={15} />
           </button>
 
           <button
+            type="button"
             onClick={clearMessages}
-            title="清空对话"
+            title={t('clear')}
+            aria-label={t('clear')}
             style={{
-              width: 28, height: 28, borderRadius: 8,
+              width: 36, height: 36, borderRadius: 8,
               background: 'rgba(255,255,255,0.04)',
               border: '1px solid rgba(255,255,255,0.08)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', color: 'rgba(255,255,255,0.5)',
+              cursor: 'pointer', color: 'rgba(255,255,255,0.6)',
             }}
           >
-            <Trash2 size={14} />
+            <Trash2 size={15} />
           </button>
           <button
+            type="button"
             onClick={handleClosePanel}
+            title={t('close')}
+            aria-label={t('close')}
             style={{
-              width: 28, height: 28, borderRadius: 8,
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid rgba(255,255,255,0.08)',
+              width: 36, height: 36, borderRadius: 8,
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.1)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', color: 'rgba(255,255,255,0.5)', fontSize: 16,
+              cursor: 'pointer', color: 'rgba(255,255,255,0.75)',
             }}
           >
-            x
+            <X size={16} />
           </button>
         </div>
       </div>
@@ -395,8 +416,8 @@ export const ChatPanel: React.FC<Props> = ({
       {/* Loading indicator */}
       {loading && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px 8px', color: 'rgba(255,255,255,0.4)', fontSize: 12, flexShrink: 0 }}>
-          <Loader2 size={14} className="animate-spin" />
-          思考中...
+            <Loader2 size={14} className="animate-spin" />
+          {t('thinking')}
         </div>
       )}
 
@@ -409,31 +430,42 @@ export const ChatPanel: React.FC<Props> = ({
 
       {/* TTS / voice error + autoplay blocked play button */}
       {(ttsError || tts.pendingPlayUrl) && (
-        <div style={{ padding: '0 16px 8px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ padding: '0 16px 8px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flexShrink: 0 }}>
           {ttsError && (
-            <span style={{ color: '#F59E0B', fontSize: 12, flex: 1 }}>{ttsError}</span>
+            <span style={{ color: '#F59E0B', fontSize: 12, flex: 1, minWidth: 0 }}>{ttsError}</span>
           )}
           {tts.pendingPlayUrl && (
             <button
+              type="button"
               onClick={tts.playPending}
               style={{
-                padding: '4px 12px', borderRadius: 8, fontSize: 12,
+                padding: '8px 14px', minHeight: 36, borderRadius: 8, fontSize: 12,
                 background: 'rgba(0, 113, 227, 0.15)', border: '1px solid rgba(0, 113, 227, 0.3)',
                 color: '#0071e3', cursor: 'pointer', whiteSpace: 'nowrap',
               }}
             >
-              ▶ 点击播放
+              ▶ {t('playPending')}
             </button>
           )}
           {ttsError && (
             <button
+              type="button"
+              aria-label={t('close')}
               onClick={() => setTtsError(null)}
               style={{
-                background: 'none', border: 'none',
-                color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 11,
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 8,
+                minWidth: 36,
+                minHeight: 36,
+                color: 'rgba(255,255,255,0.6)',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              ✕
+              <X size={14} />
             </button>
           )}
         </div>
@@ -446,7 +478,7 @@ export const ChatPanel: React.FC<Props> = ({
             patch={lastAssistantWithAction.action.form_patch}
             onFillForm={() => handleFillForm(lastAssistantWithAction.action!.form_patch!)}
             onFillAndSubmit={() => handleFillAndSubmit(lastAssistantWithAction.action!.form_patch!)}
-            onCancel={() => {/* no-op */}}
+            onCancel={() => setLastFormPatch(null)}
           />
         </div>
       )}
@@ -455,7 +487,7 @@ export const ChatPanel: React.FC<Props> = ({
       <div style={{
         display: 'flex',
         gap: 8,
-        padding: '12px 16px',
+        padding: isMobile ? '10px 12px calc(12px + env(safe-area-inset-bottom, 0px))' : '12px 16px',
         borderTop: '1px solid rgba(255,255,255,0.06)',
         background: 'rgba(0,0,0,0.2)',
         alignItems: 'center',
@@ -502,22 +534,26 @@ export const ChatPanel: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Resize handles */}
-      <div {...panel.getResizeHandleProps('right')} />
-      <div {...panel.getResizeHandleProps('bottom')} />
-      <div {...panel.getResizeHandleProps('bottom-right')}>
-        <div style={{
-          position: 'absolute',
-          bottom: 2,
-          right: 2,
-          width: 10,
-          height: 10,
-          borderRight: '2px solid rgba(255,255,255,0.2)',
-          borderBottom: '2px solid rgba(255,255,255,0.2)',
-          borderRadius: '0 0 2px 0',
-          pointerEvents: 'none',
-        }} />
-      </div>
+      {/* Resize handles (desktop only) */}
+      {!isMobile && (
+        <>
+          <div {...panel.getResizeHandleProps('right')} />
+          <div {...panel.getResizeHandleProps('bottom')} />
+          <div {...panel.getResizeHandleProps('bottom-right')}>
+            <div style={{
+              position: 'absolute',
+              bottom: 2,
+              right: 2,
+              width: 10,
+              height: 10,
+              borderRight: '2px solid rgba(255,255,255,0.2)',
+              borderBottom: '2px solid rgba(255,255,255,0.2)',
+              borderRadius: '0 0 2px 0',
+              pointerEvents: 'none',
+            }} />
+          </div>
+        </>
+      )}
     </div>
   );
 };

@@ -1,0 +1,488 @@
+<view class="page-shell">
+  <lang-switcher bind:localechange="onLocaleChange" />
+
+  <view class="mode-switch">
+    <view
+      class="mode-tab {{mode === 'image' ? 'mode-tab-active' : ''}}"
+      data-mode="image"
+      bindtap="onSwitchMode"
+    >
+      {{texts.modeImage}}
+    </view>
+    <view
+      class="mode-tab {{mode === 'video' ? 'mode-tab-active' : ''}}"
+      data-mode="video"
+      bindtap="onSwitchMode"
+    >
+      {{texts.modeVideo}}
+    </view>
+  </view>
+
+  <!-- ==================== IMAGE TRY-ON MODE ==================== -->
+  <block wx:if="{{mode === 'image'}}">
+    <view class="status-strip {{runtimeStatus && runtimeStatus.tryon_enabled && runtimeStatus.configured ? 'status-ok' : 'status-warn'}}">
+      <view class="status-dot {{runtimeStatus && runtimeStatus.tryon_enabled && runtimeStatus.configured ? 'dot-ok' : 'dot-warn'}}"></view>
+      <text class="status-text">
+        {{runtimeStatus && runtimeStatus.tryon_enabled && runtimeStatus.configured ? texts.statusConnected : texts.statusUnavailable}}
+      </text>
+      <text wx:if="{{rateSummary}}" class="rate-text">{{rateSummary}}</text>
+    </view>
+
+    <view wx:if="{{handoffTitle}}" class="card-subtle handoff-banner">
+      <text class="handoff-title">{{handoffTitle}}</text>
+      <text wx:if="{{handoffMeta}}" class="handoff-meta">{{handoffMeta}}</text>
+    </view>
+
+    <view class="dual-slots">
+      <!-- Model Slot -->
+      <view class="card slot-card">
+        <text class="slot-title">{{texts.modelCardTitle}}</text>
+        <view class="slot-preview-box">
+          <image wx:if="{{modelPreview}}" src="{{modelPreview}}" mode="aspectFill" class="slot-img" />
+          <text wx:else class="slot-empty-text">{{texts.modelEmpty}}</text>
+          <view wx:if="{{importingModel}}" class="slot-loading-mask">
+            <text>{{texts.loading}}</text>
+          </view>
+        </view>
+        <view class="slot-actions">
+          <button class="btn-secondary slot-btn" bindtap="onChooseLocalModel">{{texts.modelUpload}}</button>
+          <button class="btn-ghost slot-btn" bindtap="onOpenSampleModal">{{texts.modelSample}}</button>
+        </view>
+      </view>
+
+      <!-- Garment Slot -->
+      <view class="card slot-card">
+        <text class="slot-title">{{texts.garmentCardTitle}}</text>
+        <view class="slot-preview-box">
+          <image wx:if="{{garmentPreview}}" src="{{garmentPreview}}" mode="aspectFill" class="slot-img" />
+          <text wx:else class="slot-empty-text">{{texts.garmentEmpty}}</text>
+          <view wx:if="{{importingGarment}}" class="slot-loading-mask">
+            <text>{{texts.loading}}</text>
+          </view>
+        </view>
+        <view class="slot-actions">
+          <button class="btn-secondary slot-btn" bindtap="onChooseLocalGarment">{{texts.garmentUpload}}</button>
+          <button class="btn-ghost slot-btn" bindtap="onOpenCatalogModal">{{texts.garmentCatalog}}</button>
+        </view>
+      </view>
+    </view>
+
+    <!-- Controls Card -->
+    <view class="card">
+      <view class="card-title-row">
+        <text class="card-title">{{texts.controlsTitle}}</text>
+      </view>
+
+      <view wx:if="{{providerNames.length}}" class="control-row">
+        <view class="field-label-row"><text class="field-label">{{texts.providerLabel}}</text></view>
+        <picker mode="selector" range="{{providerNames}}" value="{{providerIndex}}" bindchange="onPickProvider">
+          <view class="dark-picker">
+            <text>{{providerNames[providerIndex]}}</text>
+            <text>▾</text>
+          </view>
+        </picker>
+      </view>
+
+      <view wx:if="{{modelNames.length}}" class="control-row">
+        <view class="field-label-row"><text class="field-label">{{texts.modelLabel}}</text></view>
+        <picker mode="selector" range="{{modelNames}}" value="{{modelIndex}}" bindchange="onPickModel">
+          <view class="dark-picker">
+            <text>{{modelNames[modelIndex]}}</text>
+            <text>▾</text>
+          </view>
+        </picker>
+      </view>
+
+      <view wx:if="{{totokensProfileLabels.length}}" class="control-row">
+        <view class="field-label-row"><text class="field-label">{{texts.totokensProfileLabel}}</text></view>
+        <picker mode="selector" range="{{totokensProfileLabels}}" value="{{totokensProfileIndex}}" bindchange="onPickTotokensProfile">
+          <view class="dark-picker">
+            <text>{{totokensProfileLabels[totokensProfileIndex]}}</text>
+            <text>▾</text>
+          </view>
+        </picker>
+      </view>
+
+      <view class="control-row">
+        <view class="field-label-row">
+          <text class="field-label">{{texts.freedomLabel}}</text>
+          <text class="tag tag-blue">{{freedom}} / 10</text>
+        </view>
+        <slider
+          min="0"
+          max="10"
+          step="1"
+          value="{{freedom}}"
+          activeColor="#0071e3"
+          backgroundColor="rgba(255,255,255,0.16)"
+          block-size="20"
+          bindchange="onFreedomChange"
+        />
+        <text class="muted-text">{{texts.freedomHint}}</text>
+      </view>
+
+      <view class="adv-toggle" bindtap="onToggleAdvanced">
+        <text class="adv-toggle-text">{{texts.advancedToggle}}</text>
+        <text class="muted-text">{{advancedOpen ? '▲' : '▼'}}</text>
+      </view>
+
+      <view wx:if="{{advancedOpen}}" class="adv-body">
+        <view class="adv-grid">
+          <view class="flex-1">
+            <view class="field-label-row"><text class="field-label">{{texts.aspectRatioLabel}}</text></view>
+            <picker mode="selector" range="{{aspectRatioOptions}}" value="{{aspectRatioIndex}}" bindchange="onPickAspectRatio">
+              <view class="dark-picker">
+                <text>{{aspectRatioOptions[aspectRatioIndex]}}</text>
+                <text>▾</text>
+              </view>
+            </picker>
+          </view>
+
+          <view wx:if="{{supportsImageSize}}" class="flex-1">
+            <view class="field-label-row"><text class="field-label">{{texts.imageSizeLabel}}</text></view>
+            <picker mode="selector" range="{{imageSizeOptions}}" value="{{imageSizeIndex}}" bindchange="onPickImageSize">
+              <view class="dark-picker">
+                <text>{{imageSizeOptions[imageSizeIndex]}}</text>
+                <text>▾</text>
+              </view>
+            </picker>
+          </view>
+
+          <view wx:if="{{supportsQuality}}" class="flex-1">
+            <view class="field-label-row"><text class="field-label">{{texts.qualityLabel}}</text></view>
+            <picker mode="selector" range="{{qualityOptions}}" value="{{qualityIndex}}" bindchange="onPickQuality">
+              <view class="dark-picker">
+                <text>{{qualityOptions[qualityIndex]}}</text>
+                <text>▾</text>
+              </view>
+            </picker>
+          </view>
+        </view>
+
+        <view class="control-row">
+          <view class="field-label-row"><text class="field-label">{{texts.garmentTypeLabel}}</text></view>
+          <picker mode="selector" range="{{garmentTypeLabels}}" value="{{garmentTypeIndex}}" bindchange="onPickGarmentType">
+            <view class="dark-picker">
+              <text>{{garmentTypeLabels[garmentTypeIndex]}}</text>
+              <text>▾</text>
+            </view>
+          </picker>
+        </view>
+
+        <view class="control-row">
+          <view class="field-label-row"><text class="field-label">{{texts.promptModeLabel}}</text></view>
+          <view class="chip-wrap">
+            <view
+              class="chip {{promptMode === 'append' ? 'chip-active' : ''}}"
+              data-mode="append"
+              bindtap="onSelectPromptMode"
+            >{{texts.promptAppend}}</view>
+            <view
+              class="chip {{promptMode === 'replace' ? 'chip-active' : ''}}"
+              data-mode="replace"
+              bindtap="onSelectPromptMode"
+            >{{texts.promptReplace}}</view>
+          </view>
+        </view>
+
+        <view>
+          <view class="field-label-row"><text class="field-label">{{texts.customPromptLabel}}</text></view>
+          <textarea
+            class="dark-textarea"
+            value="{{customPrompt}}"
+            placeholder="{{texts.customPromptPlaceholder}}"
+            placeholder-class="input-placeholder"
+            bindinput="onCustomPromptInput"
+          />
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{tryonError}}" class="error-banner">{{tryonError}}</view>
+
+    <button class="btn-primary submit-tryon-btn" disabled="{{submittingTryon}}" loading="{{submittingTryon}}" bindtap="onSubmitTryOn">
+      {{submittingTryon ? texts.submitting : texts.submitBtn}}
+    </button>
+
+    <!-- Task Progress -->
+    <view wx:if="{{submittingTryon || taskLogs.length}}" class="card">
+      <view class="card-title-row">
+        <text class="card-title">{{taskMessage || taskStatus}}</text>
+        <text class="tag tag-blue">{{taskProgress}}%</text>
+      </view>
+      <view class="progress-track">
+        <view class="progress-fill" style="width: {{taskProgress}}%;"></view>
+      </view>
+      <view wx:if="{{taskLogs.length}}" class="logs-box">
+        <text class="logs-heading">{{texts.logsTitle}}</text>
+        <text wx:for="{{taskLogs}}" wx:key="*this" class="log-line">{{item}}</text>
+      </view>
+    </view>
+
+    <!-- Completed Try-On Result -->
+    <view wx:if="{{resultDisplayUrl}}" class="card result-card">
+      <view class="card-title-row">
+        <text class="card-title">{{texts.resultTitle}}</text>
+      </view>
+
+      <view class="chip-wrap view-tabs">
+        <view
+          class="chip {{resultViewMode === 'result' ? 'chip-active' : ''}}"
+          data-view="result"
+          bindtap="onSelectResultView"
+        >{{texts.viewResult}}</view>
+        <view
+          class="chip {{resultViewMode === 'model' ? 'chip-active' : ''}}"
+          data-view="model"
+          bindtap="onSelectResultView"
+        >{{texts.viewModel}}</view>
+        <view
+          class="chip {{resultViewMode === 'garment' ? 'chip-active' : ''}}"
+          data-view="garment"
+          bindtap="onSelectResultView"
+        >{{texts.viewGarment}}</view>
+      </view>
+
+      <image
+        src="{{resultViewMode === 'model' ? modelPreview : (resultViewMode === 'garment' ? garmentPreview : resultDisplayUrl)}}"
+        mode="aspectFit"
+        class="result-stage-img"
+        bindtap="onPreviewResult"
+      />
+
+      <view class="result-actions">
+        <button class="btn-secondary flex-1" bindtap="onSaveTryOnAlbum">{{texts.saveAlbum}}</button>
+        <button class="btn-ghost flex-1" bindtap="onSubmitTryOn">{{texts.regenerate}}</button>
+      </view>
+      <button class="btn-primary animate-video-btn" bindtap="onAnimateResultToVideo">{{texts.toVideoBtn}}</button>
+    </view>
+  </block>
+
+  <!-- ==================== DYNAMIC VIDEO MODE ==================== -->
+  <block wx:else>
+    <view wx:if="{{videoConfig && (!videoConfig.enabled || !videoConfig.configured)}}" class="warn-banner">
+      {{texts.videoNotConfigured}}
+    </view>
+    <view wx:elif="{{videoConfig && videoConfig.sandbox}}" class="warn-banner">
+      {{texts.videoSandbox}}
+    </view>
+
+    <view class="card">
+      <view class="card-title-row">
+        <text class="card-title">{{texts.videoSourceTitle}}</text>
+      </view>
+      <view class="video-source-actions">
+        <button class="btn-secondary flex-1" bindtap="onUseLatestTryOnForVideo">{{texts.videoUseLatestTryon}}</button>
+        <button class="btn-ghost flex-1" bindtap="onUploadLocalVideoSource">{{texts.videoUploadSource}}</button>
+      </view>
+      <input
+        class="dark-input"
+        value="{{videoSourceInput}}"
+        placeholder="{{texts.videoSourcePlaceholder}}"
+        placeholder-class="input-placeholder"
+        bindinput="onInputVideoSource"
+      />
+      <image wx:if="{{videoSourcePreview}}" src="{{videoSourcePreview}}" mode="aspectFit" class="video-source-thumb" />
+    </view>
+
+    <view class="card">
+      <view class="card-title-row">
+        <text class="card-title">{{texts.videoModelTitle}}</text>
+      </view>
+      <view wx:if="{{videoModelLabels.length}}" class="control-row">
+        <view class="field-label-row"><text class="field-label">{{texts.videoModelLabel}}</text></view>
+        <picker mode="selector" range="{{videoModelLabels}}" value="{{videoModelIndex}}" bindchange="onPickVideoModel">
+          <view class="dark-picker">
+            <text>{{videoModelLabels[videoModelIndex]}}</text>
+            <text>▾</text>
+          </view>
+        </picker>
+      </view>
+
+      <view wx:if="{{videoProviderList.length}}" class="control-row">
+        <view class="field-label-row"><text class="field-label">{{texts.videoProviderLabel}}</text></view>
+        <picker mode="selector" range="{{videoProviderList}}" value="{{videoProviderIndex}}" bindchange="onPickVideoProvider">
+          <view class="dark-picker">
+            <text>{{videoProviderList[videoProviderIndex]}}</text>
+            <text>▾</text>
+          </view>
+        </picker>
+      </view>
+
+      <view class="chip-wrap">
+        <view class="chip" data-preset="turn" bindtap="onApplyVideoPreset">{{texts.videoPresetTurn}}</view>
+        <view class="chip" data-preset="walk" bindtap="onApplyVideoPreset">{{texts.videoPresetWalk}}</view>
+        <view class="chip" data-preset="detail" bindtap="onApplyVideoPreset">{{texts.videoPresetDetail}}</view>
+        <view class="chip" data-preset="studio" bindtap="onApplyVideoPreset">{{texts.videoPresetStudio}}</view>
+      </view>
+    </view>
+
+    <view wx:if="{{videoParamViews.length}}" class="card">
+      <view class="card-title-row">
+        <text class="card-title">{{texts.videoParamsTitle}}</text>
+      </view>
+      <view wx:for="{{videoParamViews}}" wx:key="name" class="control-row">
+        <view class="field-label-row">
+          <text class="field-label">{{item.name}}</text>
+          <text wx:if="{{item.required}}" class="required-badge">*</text>
+        </view>
+        <picker
+          wx:if="{{item.isSelect}}"
+          mode="selector"
+          range="{{item.displayOptions}}"
+          value="{{item.selectedIndex}}"
+          data-name="{{item.name}}"
+          bindchange="onVideoParamSelect"
+        >
+          <view class="dark-picker">
+            <text>{{item.displayOptions[item.selectedIndex]}}</text>
+            <text>▾</text>
+          </view>
+        </picker>
+        <textarea
+          wx:elif="{{item.isTextarea}}"
+          class="dark-textarea"
+          value="{{item.valueStr}}"
+          placeholder="{{item.placeholder}}"
+          placeholder-class="input-placeholder"
+          data-name="{{item.name}}"
+          bindinput="onVideoParamInput"
+        />
+        <input
+          wx:else
+          type="{{item.isNumber ? 'digit' : 'text'}}"
+          class="dark-input"
+          value="{{item.valueStr}}"
+          placeholder="{{item.placeholder}}"
+          placeholder-class="input-placeholder"
+          data-name="{{item.name}}"
+          bindinput="onVideoParamInput"
+        />
+      </view>
+    </view>
+
+    <view wx:if="{{videoError}}" class="error-banner">{{videoError}}</view>
+
+    <view wx:if="{{videoQuoteText}}" class="success-banner">{{videoQuoteText}}</view>
+    <view wx:else class="card-subtle quote-hint">
+      <text class="muted-text">{{texts.videoQuotePending}}</text>
+    </view>
+
+    <view class="video-btn-row">
+      <button class="btn-secondary flex-1" disabled="{{videoBusy}}" bindtap="onQuoteVideo">{{texts.videoQuoteBtn}}</button>
+      <button class="btn-primary flex-1" disabled="{{videoBusy || !videoConfig || !videoConfig.enabled || !videoConfig.configured}}" loading="{{videoBusy}}" bindtap="onSubmitVideo">
+        {{texts.videoSubmitBtn}}
+      </button>
+    </view>
+
+    <view wx:if="{{activeVideoTask}}" class="card video-result-card">
+      <view class="card-title-row">
+        <text class="card-title">{{texts.videoStatusTitle}}</text>
+        <text class="tag tag-blue">{{activeVideoTask.status}}</text>
+      </view>
+      <video
+        wx:if="{{activeVideoTask.playbackUrl}}"
+        src="{{activeVideoTask.playbackUrl}}"
+        controls
+        show-fullscreen-btn
+        class="video-player"
+      />
+      <view class="video-btn-row">
+        <button
+          wx:if="{{activeVideoTask.status === 'queued' || activeVideoTask.status === 'processing'}}"
+          class="btn-danger flex-1"
+          bindtap="onCancelVideo"
+        >{{texts.videoCancelBtn}}</button>
+        <button
+          wx:if="{{activeVideoTask.playbackUrl}}"
+          class="btn-secondary flex-1"
+          bindtap="onSaveVideoAlbum"
+        >{{texts.videoSaveAlbum}}</button>
+      </view>
+    </view>
+
+    <view wx:if="{{videoHistory.length}}" class="card">
+      <view class="card-title-row">
+        <text class="card-title">{{texts.videoHistoryTitle}}</text>
+      </view>
+      <view
+        wx:for="{{videoHistory}}"
+        wx:key="id"
+        class="card-subtle video-hist-item"
+        data-index="{{index}}"
+        bindtap="onSelectHistoryVideo"
+      >
+        <view class="flex-between">
+          <text class="hist-model">{{item.model}}</text>
+          <text class="tag tag-blue">{{item.status}}</text>
+        </view>
+        <text class="muted-text">{{item.createdAtText}}</text>
+      </view>
+    </view>
+  </block>
+
+  <!-- Sample Model Modal -->
+  <view wx:if="{{sampleModalOpen}}" class="modal-mask" bindtap="onCloseSampleModal">
+    <view class="modal-sheet" catchtap="">
+      <view class="card-title-row">
+        <text class="card-title">{{texts.pickSampleTitle}}</text>
+        <text class="close-link" bindtap="onCloseSampleModal">{{texts.close}}</text>
+      </view>
+      <scroll-view scroll-y class="modal-scroll">
+        <view class="sample-modal-grid">
+          <view
+            wx:for="{{sampleItems}}"
+            wx:key="id"
+            class="sample-modal-card"
+            data-index="{{index}}"
+            bindtap="onPickSampleModel"
+          >
+            <image src="{{item.thumbUrl}}" mode="aspectFill" class="sample-modal-img" />
+            <text class="sample-modal-name">{{item.name}}</text>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <!-- Catalog Garment Modal -->
+  <view wx:if="{{catalogModalOpen}}" class="modal-mask" bindtap="onCloseCatalogModal">
+    <view class="modal-sheet" catchtap="">
+      <view class="card-title-row">
+        <text class="card-title">{{texts.pickCatalogTitle}}</text>
+        <text class="close-link" bindtap="onCloseCatalogModal">{{texts.close}}</text>
+      </view>
+      <view class="modal-search-row">
+        <input
+          class="dark-input flex-1"
+          value="{{catalogQuery}}"
+          placeholder="{{texts.searchPlaceholder}}"
+          placeholder-class="input-placeholder"
+          bindinput="onCatalogQueryInput"
+          bindconfirm="onSearchCatalogConfirm"
+        />
+        <button class="btn-secondary modal-search-btn" bindtap="onSearchCatalogConfirm">{{texts.search}}</button>
+      </view>
+      <scroll-view scroll-y class="modal-scroll">
+        <view wx:if="{{catalogLoading}}" class="center-loading">
+          <text class="muted-text">{{texts.loading}}</text>
+        </view>
+        <view
+          wx:for="{{catalogItems}}"
+          wx:key="id"
+          class="card-subtle catalog-pick-row"
+          data-index="{{index}}"
+          bindtap="onPickCatalogGarment"
+        >
+          <image src="{{item.thumbUrl}}" mode="aspectFill" class="catalog-pick-img" lazy-load />
+          <view class="flex-1">
+            <text class="catalog-pick-title">{{item.display ? item.display.title : item.title}}</text>
+            <text class="catalog-pick-price">¥{{item.price}}</text>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <view class="safe-tab-spacer"></view>
+</view>

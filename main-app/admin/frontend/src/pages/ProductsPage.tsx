@@ -7,6 +7,9 @@ import {
 import { PlusOutlined, DeleteOutlined, SearchOutlined, UploadOutlined, LinkOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { listProducts, deleteProduct, batchDelete, importProducts, validateLinks } from '../api/products'
+import { useTranslation } from 'react-i18next'
+import { formatCurrency } from '../i18n/formatters'
+import type { AppLocale } from '../i18n/locale'
 
 const { Title } = Typography
 const { Option } = Select
@@ -24,6 +27,8 @@ interface Product {
 }
 
 export default function ProductsPage() {
+  const { t, i18n } = useTranslation('common')
+  const locale = (i18n.language === 'en' || i18n.language === 'ja' ? i18n.language : 'zh-CN') as AppLocale
   const [data, setData] = useState<Product[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -45,17 +50,17 @@ export default function ProductsPage() {
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { fetchData(1); setPage(1) }, [search, styleFilter])
+  useEffect(() => { fetchData(1); setPage(1) }, [search, styleFilter, i18n.resolvedLanguage])
 
   const handleDelete = async (id: number) => {
     await deleteProduct(id)
-    message.success('已删除')
+    message.success(t('products.deleted'))
     fetchData()
   }
 
   const handleBatchDelete = async () => {
     await batchDelete(selectedIds)
-    message.success(`已删除 ${selectedIds.length} 条`)
+    message.success(t('messages.deletedCount', { count: selectedIds.length }))
     setSelectedIds([])
     fetchData()
   }
@@ -64,73 +69,73 @@ export default function ProductsPage() {
     try {
       const jsonData = JSON.parse(importText)
       await importProducts(Array.isArray(jsonData) ? jsonData : [jsonData])
-      message.success('导入成功')
+      message.success(t('products.imported'))
       setImportModalOpen(false)
       setImportText('')
       fetchData()
     } catch {
-      message.error('JSON 格式错误')
+      message.error(t('products.invalidJson'))
     }
   }
 
   const handleValidateLinks = async () => {
     const ids = selectedIds.length > 0 ? selectedIds : data.map((d) => d.id)
     const res = await validateLinks(ids)
-    message.info(`验证完成: ${res.data.valid} 有效, ${res.data.invalid} 失效`)
+    message.info(t('products.validationComplete', { valid: res.data.valid, invalid: res.data.invalid }))
     fetchData()
   }
 
   const columns: ColumnsType<Product> = [
     {
-      title: '图片',
+      title: t('products.image'),
       dataIndex: 'image_url',
       width: 80,
       render: (url: string | null) => url ? <Image src={url} width={48} height={48} style={{ objectFit: 'cover', borderRadius: 4 }} /> : '-',
     },
     {
-      title: '商品名称',
+      title: t('products.name'),
       dataIndex: 'title',
       ellipsis: true,
       render: (text: string, record: Product) => (
         <a onClick={() => navigate(`/products/${record.id}`)}>{text}</a>
       ),
     },
-    { title: '价格', dataIndex: 'price', width: 100, render: (v: number) => `¥${v}` },
-    { title: '款式', dataIndex: 'style_type', width: 100 },
+    { title: t('products.price'), dataIndex: 'price', width: 100, render: (v: number) => formatCurrency(v, locale) },
+    { title: t('products.style'), dataIndex: 'style_type', width: 100 },
     {
-      title: '颜色',
+      title: t('products.color'),
       dataIndex: 'color_family',
       width: 100,
       render: (v: string) => v ? <Tag>{v}</Tag> : '-',
     },
     {
-      title: '标注状态',
+      title: t('products.reviewStatus'),
       dataIndex: 'annotation_status',
       width: 100,
       render: (v: string | null) => {
         const map: Record<string, string> = { verified: 'green', partial: 'orange', unreviewed: 'default' }
-        return <Tag color={map[v || 'unreviewed'] || 'default'}>{v || '未审核'}</Tag>
+        return <Tag color={map[v || 'unreviewed'] || 'default'}>{v ? t(`status.${v}`, { defaultValue: v }) : t('status.unreviewed')}</Tag>
       },
     },
     {
-      title: '置信度',
+      title: t('products.confidence'),
       dataIndex: 'annotation_confidence',
       width: 80,
       render: (v: number | null) => v != null ? `${(v * 100).toFixed(0)}%` : '-',
     },
     {
-      title: '链接',
+      title: t('products.link'),
       dataIndex: 'product_url',
       width: 60,
       render: (url: string | null) => url ? <a href={url} target="_blank" rel="noreferrer"><LinkOutlined /></a> : '-',
     },
     {
-      title: '操作',
+      title: t('actions.submit'),
       width: 120,
       render: (_: unknown, record: Product) => (
         <Space>
-          <Button size="small" onClick={() => navigate(`/products/${record.id}`)}>编辑</Button>
-          <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
+          <Button size="small" onClick={() => navigate(`/products/${record.id}`)}>{t('actions.edit')}</Button>
+          <Popconfirm title={t('products.confirmDelete')} onConfirm={() => handleDelete(record.id)}>
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -140,11 +145,12 @@ export default function ProductsPage() {
 
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 16 }}>商品管理</Title>
+      <Title level={4} style={{ marginBottom: 16 }}>{t('products.title')}</Title>
       <Card>
-        <Space wrap style={{ marginBottom: 16 }}>
+        <Space wrap style={{ marginBottom: 16, width: '100%' }}>
           <Input
-            placeholder="搜索商品名称..."
+            className="admin-toolbar-input"
+            placeholder={t('products.searchPlaceholder')}
             prefix={<SearchOutlined />}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -152,26 +158,30 @@ export default function ProductsPage() {
             allowClear
           />
           <Select
-            placeholder="款式筛选"
+            className="admin-toolbar-input"
+            placeholder={t('products.styleFilter')}
             value={styleFilter || undefined}
             onChange={(v) => setStyleFilter(v || '')}
             allowClear
             style={{ width: 150 }}
           >
-            {['户外运动', '商务通勤', '日常休闲', '时尚潮流', '轻薄便携', '极寒防护', '亲子家庭'].map((s) => (
-              <Option key={s} value={s}>{s}</Option>
+            {[
+              ['户外运动', 'options.styles.outdoor'], ['商务通勤', 'options.styles.business'], ['日常休闲', 'options.styles.casual'],
+              ['时尚潮流', 'options.styles.fashion'], ['轻薄便携', 'options.styles.light'], ['极寒防护', 'options.styles.cold'], ['亲子家庭', 'options.styles.family'],
+            ].map(([value, key]) => (
+              <Option key={value} value={value}>{t(key)}</Option>
             ))}
           </Select>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/products/new')}>
-            新增商品
+            {t('products.add')}
           </Button>
           <Button icon={<UploadOutlined />} onClick={() => setImportModalOpen(true)}>
-            JSON 导入
+            {t('products.importJson')}
           </Button>
-          <Button onClick={handleValidateLinks}>验证链接</Button>
+          <Button onClick={handleValidateLinks}>{t('products.validateLinks')}</Button>
           {selectedIds.length > 0 && (
-            <Popconfirm title={`确认删除 ${selectedIds.length} 条？`} onConfirm={handleBatchDelete}>
-              <Button danger>批量删除 ({selectedIds.length})</Button>
+            <Popconfirm title={t('products.confirmDeleteCount', { count: selectedIds.length })} onConfirm={handleBatchDelete}>
+              <Button danger>{t('products.batchDelete', { count: selectedIds.length })}</Button>
             </Popconfirm>
           )}
         </Space>
@@ -181,6 +191,7 @@ export default function ProductsPage() {
           columns={columns}
           dataSource={data}
           loading={loading}
+          scroll={{ x: 'max-content' }}
           rowSelection={{
             selectedRowKeys: selectedIds,
             onChange: (keys) => setSelectedIds(keys as number[]),
@@ -190,14 +201,14 @@ export default function ProductsPage() {
             pageSize: 20,
             total,
             onChange: (p) => { setPage(p); fetchData(p) },
-            showTotal: (t) => `共 ${t} 条`,
+            showTotal: (count) => t('pagination.total', { count }),
           }}
           size="middle"
         />
       </Card>
 
       <Modal
-        title="JSON 导入商品"
+        title={t('products.importTitle')}
         open={importModalOpen}
         onCancel={() => setImportModalOpen(false)}
         onOk={handleImport}
@@ -207,7 +218,7 @@ export default function ProductsPage() {
           rows={12}
           value={importText}
           onChange={(e) => setImportText(e.target.value)}
-          placeholder={'[\n  {"商品标题": "...", "价格": 299, "图片路径": "..."}\n]'}
+          placeholder={t('products.jsonPlaceholder')}
         />
       </Modal>
     </div>

@@ -1,0 +1,13 @@
+{
+  "title": "推薦履歴",
+  "close": "閉じる",
+  "loading": "読み込み中…",
+  "empty": "履歴はまだありません",
+  "emptyHint": "推薦やスタイリング分析を完了すると、ここに自動的に表示されます。",
+  "type": {"recommend": "スマート推薦", "styleLab": "カスタムスタイリング"},
+  "count": "{{count}}件",
+  "score": "スコア {{score}}",
+  "thumbnailAlt": "履歴のサムネイル",
+  "loadFailed": "履歴を読み込めませんでした",
+  "relative": {"now": "たった今", "minutes": "{{count}}分前", "hours": "{{count}}時間前", "days": "{{count}}日前"}
+}

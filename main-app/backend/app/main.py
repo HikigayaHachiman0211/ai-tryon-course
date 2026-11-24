@@ -1,29 +1,35 @@
 from __future__ import annotations
 
+import hmac
 import logging
 import mimetypes
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any, Literal
 from urllib.parse import unquote
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from starlette import status
 from sqlalchemy import select
+from pydantic import BaseModel
 
 from app.catalog_repository import get_catalog_product, get_catalog_products, get_catalog_source_label
 from app.catalog_seed import resolve_local_image_path
 from app.database import PROJECT_ROOT, Product, SessionLocal, count_products, ensure_database
-from app.errors import AppError, app_error_response, build_error_payload, debug_page_response, get_error_catalog, get_recent_errors, get_request_id, record_error_event, unexpected_error_response
-from app.history import MAX_HISTORY_ENTRIES, generate_result_id, get_history_detail, get_thumbnail_path, list_history, save_history
+from app.errors import AppError, app_error_response, build_error_payload, debug_page_response, get_error_catalog, get_recent_errors, get_request_id, get_request_locale, record_error_event, unexpected_error_response
+from app.history import MAX_HISTORY_ENTRIES, generate_result_id, get_history_detail, get_thumbnail_bytes, get_thumbnail_path, list_history, localize_history_result, save_history
 from app.history import _read_local_index, _write_local_index, _ensure_local_dirs
 from app.recommendation import analyze_selected_product, list_catalog_products, recommend_products
 from app import admin_report, gcs_storage
 from app.assistant.router import router as assistant_router
 from app.assistant.voice.voice_router import router as voice_router
+from app.i18n.locale import resolve_locale
+from app.i18n.catalog import localize_product_item, localize_recommendation_result, localize_style_lab_result
+from app.i18n.messages import error_message
 
 logger = logging.getLogger(__name__)
 mimetypes.add_type("image/webp", ".webp")
@@ -32,22 +38,26 @@ mimetypes.add_type("image/webp", ".webp")
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     catalog_products = get_catalog_products()
+    run_startup_db_init = os.getenv("RUN_STARTUP_DB_INIT", "true").strip().lower() not in {"0", "false", "no"}
     if catalog_products:
         logger.info(
             "Catalog read model active with %d products from %s; skipping startup database bootstrap.",
             len(catalog_products),
             get_catalog_source_label() or "seed source",
         )
-    else:
+    elif run_startup_db_init:
         ensure_database(seed_if_empty=True)
-    # Preload history index from GCS so cold-start containers have full history
+    else:
+        logger.info("RUN_STARTUP_DB_INIT=false; skipping startup database bootstrap.")
+    # Preload the configured object-storage history index so cold-start
+    # containers have full history without selecting a cloud provider here.
     _ensure_local_dirs()
     local_entries = _read_local_index()
     if not local_entries:
         gcs_entries = gcs_storage.load_history_index()
         if gcs_entries:
             _write_local_index(gcs_entries)
-            logger.info("Preloaded %d history entries from GCS", len(gcs_entries))
+            logger.info("Preloaded %d history entries from object storage", len(gcs_entries))
     yield
 
 
@@ -60,10 +70,37 @@ app = FastAPI(
 app.include_router(assistant_router)
 app.include_router(voice_router)
 
-default_debug_pages = "false" if os.getenv("K_SERVICE") else "true"
+
+class LocalizeResultRequest(BaseModel):
+    kind: Literal["recommend", "style-lab", "product"]
+    result: dict[str, Any]
+    locale: str | None = None
+
+
+@app.post("/api/localize-result")
+def localize_current_result(request: Request, payload: LocalizeResultRequest):
+    locale = resolve_locale(payload.locale, request.headers.get("accept-language"))
+    if payload.kind == "recommend":
+        return localize_recommendation_result(payload.result, locale)
+    if payload.kind == "style-lab":
+        return localize_style_lab_result(payload.result, locale)
+    return localize_product_item(payload.result, locale)
+
+default_debug_pages = (
+    "false"
+    if (
+        os.getenv("K_SERVICE")
+        or os.getenv("CONTAINER_APP_NAME")
+        or os.getenv("APP_ENV", "").strip().lower() in {"production", "prod"}
+    )
+    else "true"
+)
 debug_pages_enabled = os.getenv("ENABLE_DEBUG_PAGES", default_debug_pages).strip().lower() == "true"
 
 cors_origins = [origin.strip() for origin in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",") if origin.strip()]
+production_mode = os.getenv("APP_ENV", "").strip().lower() in {"production", "prod"}
+if production_mode and (not cors_origins or cors_origins == ["*"]):
+    raise RuntimeError("CORS_ALLOW_ORIGINS must contain exact origins in production")
 allow_all_origins = not cors_origins or cors_origins == ["*"]
 app.add_middleware(
     CORSMiddleware,
@@ -133,27 +170,31 @@ async def handle_app_error(request: Request, exc: AppError):
 @app.exception_handler(RequestValidationError)
 async def handle_validation_error(request: Request, exc: RequestValidationError):
     details = exc.errors()
+    locale = get_request_locale(request)
+    message = error_message("SYS-001", locale)
     record_error_event(
         request=request,
         code="SYS-001",
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        message="请求参数校验失败",
+        message=message,
         details=details,
     )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content=build_error_payload(
             code="SYS-001",
-            message="请求参数校验失败",
+            message=message,
             request_id=get_request_id(request),
             details=details,
+            locale=locale,
         ),
     )
 
 
 @app.exception_handler(HTTPException)
 async def handle_http_exception(request: Request, exc: HTTPException):
-    message = exc.detail if isinstance(exc.detail, str) else "HTTP 异常"
+    locale = get_request_locale(request)
+    message = error_message("SYS-002", locale)
     record_error_event(
         request=request,
         code="SYS-002",
@@ -168,6 +209,7 @@ async def handle_http_exception(request: Request, exc: HTTPException):
             message=message,
             request_id=get_request_id(request),
             details=exc.detail,
+            locale=locale,
         ),
     )
 
@@ -198,34 +240,20 @@ def health_deep() -> dict:
 
     try:
         with SessionLocal() as session:
-            checks["cloud_sql"] = {
+            checks["database"] = {
                 "ok": True,
                 "product_count": count_products(session),
             }
     except Exception as exc:
-        logger.warning("Main deep health Cloud SQL check failed: %s", exc)
-        checks["cloud_sql"] = {"ok": False, "error": exc.__class__.__name__}
+        logger.warning("Main deep health database check failed: %s", type(exc).__name__)
+        checks["database"] = {"ok": False, "error": exc.__class__.__name__}
 
     try:
-        bucket = gcs_storage._ensure_bucket()
-        if bucket is None:
-            checks["cloud_storage"] = {
-                "ok": False,
-                "bucket": gcs_storage.GCS_BUCKET_NAME,
-                "error": "bucket_unavailable",
-            }
-        else:
-            sample_count = sum(1 for _ in bucket.list_blobs(max_results=1))
-            checks["cloud_storage"] = {
-                "ok": True,
-                "bucket": gcs_storage.GCS_BUCKET_NAME,
-                "sample_count": sample_count,
-            }
+        checks["object_storage"] = gcs_storage.health_check()
     except Exception as exc:
-        logger.warning("Main deep health Cloud Storage check failed: %s", exc)
-        checks["cloud_storage"] = {
+        logger.warning("Main deep health object storage check failed: %s", type(exc).__name__)
+        checks["object_storage"] = {
             "ok": False,
-            "bucket": gcs_storage.GCS_BUCKET_NAME,
             "error": exc.__class__.__name__,
         }
 
@@ -269,14 +297,18 @@ def get_error_codes(request: Request) -> dict:
     ensure_debug_pages_enabled()
     return {
         "request_id": get_request_id(request),
-        "error_codes": get_error_catalog(),
+        "error_codes": get_error_catalog(get_request_locale(request)),
         "recent_errors": get_recent_errors(limit=50),
     }
 
 
 @app.get("/api/debug/errors/recent")
 def get_recent_error_events(request: Request, limit: int = 50) -> dict:
-    ensure_debug_pages_enabled()
+    provided_key = request.headers.get("X-Ingest-Key", "")
+    expected_key = admin_report.INGEST_SECRET_KEY
+    authorized_internal = bool(provided_key and expected_key and hmac.compare_digest(provided_key, expected_key))
+    if not authorized_internal:
+        ensure_debug_pages_enabled()
     limit = max(1, min(limit, 200))
     return {
         "request_id": get_request_id(request),
@@ -308,7 +340,9 @@ def debug_error_codes_page(request: Request):
 
 @app.get("/api/products")
 def get_products(
+    request: Request,
     query: str | None = None,
+    locale: str | None = Query(default=None),
     gender: str | None = None,
     platform: str | None = None,
     mode: str = "gender",
@@ -317,6 +351,7 @@ def get_products(
     price_min: float | None = None,
     price_max: float | None = None,
 ):
+    resolved_locale = resolve_locale(locale, request.headers.get("accept-language"))
     catalog_products = get_catalog_products()
     if catalog_products:
         products = filter_products_by_price(catalog_products, price_min, price_max)
@@ -330,6 +365,7 @@ def get_products(
         mode=mode,
         offset=offset,
         limit=limit,
+        locale=resolved_locale,
     )
 
 
@@ -352,9 +388,13 @@ def recommend(
     deepseek_model: str | None = Form(default=None, description="可覆盖默认 Deepseek 模型名"),
     mimo_api_key: str | None = Form(default=None, description="前端传入的 MiMo API Key"),
     mimo_model: str | None = Form(default=None, description="可覆盖默认 MiMo 模型名"),
-    ai_provider: str | None = Form(default=None, description="AI 引擎选择: auto / gemini / deepseek / mimo"),
-    vision_provider: str | None = Form(default=None, description="图像分析引擎: mimo / gemini / auto (默认由后台配置决定)"),
+    opencode_go_api_key: str | None = Form(default=None, description="前端传入的 OpenCode Go API Key"),
+    opencode_go_model: str | None = Form(default=None, description="可覆盖默认 OpenCode Go 模型名"),
+    ai_provider: str | None = Form(default=None, description="AI 引擎选择: auto / gemini / deepseek / mimo / opencode_go"),
+    vision_provider: str | None = Form(default=None, description="图像分析引擎: mimo / gemini / deepseek / opencode_go / auto (默认由后台配置决定)"),
+    locale: str | None = Form(default=None, description="界面语言，可选"),
 ):
+    resolved_locale = resolve_locale(locale, request.headers.get("accept-language"))
     if price_min is not None and price_max is not None and price_min > price_max:
         raise AppError(
             code="REC-001",
@@ -389,10 +429,13 @@ def recommend(
         deepseek_model=deepseek_model,
         mimo_api_key=mimo_api_key,
         mimo_model=mimo_model,
+        opencode_go_api_key=opencode_go_api_key,
+        opencode_go_model=opencode_go_model,
         ai_provider=ai_provider,
         vision_provider=vision_provider,
         price_min=price_min,
         price_max=price_max,
+        locale=resolved_locale,
     )
 
     # Upload user photo to GCS (best-effort) and inject URL into result
@@ -430,7 +473,7 @@ def recommend(
         ai_body_shape=inference.get("body_shape"),
         ai_suggested_style=inference.get("resolved_style"),
         ai_reasoning=inference.get("reasoning"),
-        used_fallback=inference.get("rule_fallback_used", not inference.get("gemini_used", False) and not inference.get("mimo_used", False)),
+        used_fallback=inference.get("rule_fallback_used", inference.get("ai_provider", "none") == "none"),
     )
 
     return result
@@ -456,9 +499,13 @@ def analyze_style_lab(
     deepseek_model: str | None = Form(default=None, description="可覆盖默认 Deepseek 模型名"),
     mimo_api_key: str | None = Form(default=None, description="前端传入的 MiMo API Key"),
     mimo_model: str | None = Form(default=None, description="可覆盖默认 MiMo 模型名"),
-    ai_provider: str | None = Form(default=None, description="AI 引擎选择: auto / gemini / deepseek / mimo"),
-    vision_provider: str | None = Form(default=None, description="图像分析引擎: mimo / gemini / auto (默认由后台配置决定)"),
+    opencode_go_api_key: str | None = Form(default=None, description="前端传入的 OpenCode Go API Key"),
+    opencode_go_model: str | None = Form(default=None, description="可覆盖默认 OpenCode Go 模型名"),
+    ai_provider: str | None = Form(default=None, description="AI 引擎选择: auto / gemini / deepseek / mimo / opencode_go"),
+    vision_provider: str | None = Form(default=None, description="图像分析引擎: mimo / gemini / deepseek / opencode_go / auto (默认由后台配置决定)"),
+    locale: str | None = Form(default=None, description="界面语言，可选"),
 ):
+    resolved_locale = resolve_locale(locale, request.headers.get("accept-language"))
     product = get_catalog_product(product_id)
     if product is None:
         product = load_database_product(product_id)
@@ -496,10 +543,13 @@ def analyze_style_lab(
         deepseek_model=deepseek_model,
         mimo_api_key=mimo_api_key,
         mimo_model=mimo_model,
+        opencode_go_api_key=opencode_go_api_key,
+        opencode_go_model=opencode_go_model,
         ai_provider=ai_provider,
         vision_provider=vision_provider,
         price_min=price_min,
         price_max=price_max,
+        locale=resolved_locale,
     )
 
     # Upload user photo to GCS (best-effort) and inject URL into result
@@ -539,14 +589,16 @@ def get_product_image(image_path: str):
 
 
 @app.get("/api/history")
-def get_history(limit: int = 50):
+def get_history(request: Request, locale: str | None = Query(default=None), limit: int = 50):
+    resolved_locale = resolve_locale(locale, request.headers.get("accept-language"))
     limit = max(1, min(limit, MAX_HISTORY_ENTRIES))
-    entries = list_history(limit=limit)
-    return {"items": entries, "total": len(entries)}
+    entries = list_history(limit=limit, locale=resolved_locale)
+    return {"items": entries, "total": len(entries), "locale": resolved_locale}
 
 
 @app.get("/api/history/{result_id}")
-def get_history_entry(result_id: str):
+def get_history_entry(request: Request, result_id: str, locale: str | None = Query(default=None)):
+    resolved_locale = resolve_locale(locale, request.headers.get("accept-language"))
     detail = get_history_detail(result_id)
     if detail is None:
         raise AppError(
@@ -555,21 +607,61 @@ def get_history_entry(result_id: str):
             status_code=status.HTTP_404_NOT_FOUND,
             details={"result_id": result_id},
         )
-    return detail
+    return localize_history_result(detail, resolved_locale)
 
 
 @app.get("/api/history/{result_id}/thumbnail")
 def get_history_thumbnail(result_id: str):
-    thumbnail_path = get_thumbnail_path(result_id)
-    if thumbnail_path is None:
+    thumb_bytes = get_thumbnail_bytes(result_id)
+    if not thumb_bytes:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thumbnail not found")
-    return FileResponse(thumbnail_path, media_type="image/png")
+    return Response(content=thumb_bytes, media_type="image/png", headers={"Cache-Control": "private, max-age=300"})
+
+
+@app.get("/api/media/user-photos/{photo_name}")
+def get_private_user_photo(request: Request, photo_name: str, st: str | None = Query(default=None)):
+    provided_key = request.headers.get("X-Ingest-Key", "")
+    expected_key = admin_report.INGEST_SECRET_KEY
+    internal_ok = bool(provided_key and expected_key and hmac.compare_digest(provided_key, expected_key))
+    if not internal_ok and not gcs_storage.verify_signed_user_photo_token(photo_name, st):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    loaded = gcs_storage.get_user_photo(photo_name)
+    if loaded is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User photo not found")
+    data, content_type = loaded
+    return Response(content=data, media_type=content_type, headers={"Cache-Control": "private, max-age=300"})
+
+
+@app.get("/sample-models/{gender}/{filename}")
+def get_sample_model_image(gender: str, filename: str):
+    if gender not in {"male", "female"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid gender")
+    safe_name = Path(filename).name
+    if safe_name != filename or ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filename")
+
+    candidate_roots = [
+        frontend_dist_dir / "sample-models" / gender,
+        PROJECT_ROOT / "frontend" / "public" / "sample-models" / gender,
+    ]
+    for root in candidate_roots:
+        resolved_root = root.resolve()
+        candidate = (root / safe_name).resolve()
+        try:
+            candidate.relative_to(resolved_root)
+        except ValueError:
+            continue
+        if candidate.is_file():
+            media_type = mimetypes.guess_type(candidate.name)[0] or "application/octet-stream"
+            return FileResponse(candidate, media_type=media_type)
+
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sample model not found")
 
 
 @app.get("/{full_path:path}", include_in_schema=False)
 def serve_frontend_app(full_path: str, request: Request, background_tasks: BackgroundTasks):
     normalized_path = full_path.strip("/")
-    if normalized_path.startswith(("api/", "static/", "debug/")) or normalized_path in {"docs", "redoc", "openapi.json", "health"}:
+    if normalized_path == "sample-models" or normalized_path.startswith(("api/", "static/", "debug/", "sample-models/")) or normalized_path in {"docs", "redoc", "openapi.json", "health"}:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
     background_tasks.add_task(
         admin_report.report_page_view,

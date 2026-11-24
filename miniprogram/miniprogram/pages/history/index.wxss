@@ -1,0 +1,128 @@
+.center-box {
+  text-align: center;
+  padding: 30rpx;
+}
+
+.history-card {
+  display: flex;
+  gap: 18rpx;
+  align-items: center;
+}
+
+.history-thumb {
+  width: 136rpx;
+  height: 168rpx;
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+
+.history-thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2997ff;
+  font-weight: 700;
+}
+
+.history-summary {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 25rpx;
+  color: #ffffff;
+  line-height: 1.45;
+}
+
+.history-time {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 21rpx;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.modal-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 1200;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: flex-end;
+}
+
+.modal-sheet {
+  width: 100%;
+  max-height: 82vh;
+  background: #161619;
+  border-top-left-radius: 32rpx;
+  border-top-right-radius: 32rpx;
+  border-top: 1rpx solid rgba(255, 255, 255, 0.12);
+  padding: 28rpx 26rpx calc(26rpx + env(safe-area-inset-bottom));
+}
+
+.close-btn {
+  font-size: 25rpx;
+  color: #2997ff;
+}
+
+.modal-scroll {
+  max-height: 68vh;
+}
+
+.summary-box {
+  padding: 16rpx 18rpx;
+  border-radius: 16rpx;
+  background: rgba(0, 113, 227, 0.12);
+  margin-bottom: 18rpx;
+}
+
+.summary-text {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.restore-btn {
+  margin-bottom: 18rpx;
+}
+
+.detail-item {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 14rpx;
+}
+
+.detail-thumb {
+  width: 120rpx;
+  height: 150rpx;
+  border-radius: 14rpx;
+  flex-shrink: 0;
+}
+
+.detail-item-title {
+  display: block;
+  font-size: 25rpx;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 6rpx;
+}
+
+.detail-price {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #f5a623;
+  margin-bottom: 10rpx;
+}
+
+.detail-btn-row {
+  display: flex;
+  gap: 12rpx;
+}
+
+.detail-tryon-btn {
+  min-height: 58rpx;
+  font-size: 23rpx;
+  padding: 0 22rpx;
+}

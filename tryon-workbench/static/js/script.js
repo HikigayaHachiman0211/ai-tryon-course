@@ -10,6 +10,20 @@
         resultPreviews: [],
         selected: new Set(),
         modelType: 'flash',
+        provider: 'gemini',
+        totokensProfile: 'auto',
+        modelId: 'gemini-3.1-flash-image-preview',
+        useCustomModel: false,
+        customModelId: '',
+        detailOptions: {
+            aspect_ratio: 'auto',
+            image_size: 'auto',
+            quality: 'auto',
+            temperature: '',
+            seed: '',
+        },
+        capabilities: null,
+        step3PrefsTouched: false,
         running: false,
         abort: false,
         errors: [],
@@ -21,11 +35,45 @@
         frontendConfig: null,
         trustedMessageOrigin: '',
         runtimeAvailable: false,
+        runtimeStatus: null,
+        intakeStatus: {},
+        integrationAlert: null,
+        feedback: null,
+        taskToken: '',
+        unloading: false,
     };
+    const ACTIVE_TASK_STORAGE_KEY = 'tryon_active_task_v1';
+
+    function generateIdempotencyKey() {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            return window.crypto.randomUUID();
+        }
+        return `idem-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+
+    function persistActiveTask(taskId, taskToken) {
+        try {
+            if (!taskId) {
+                sessionStorage.removeItem(ACTIVE_TASK_STORAGE_KEY);
+                return;
+            }
+            sessionStorage.setItem(ACTIVE_TASK_STORAGE_KEY, JSON.stringify({ taskId, taskToken: taskToken || '' }));
+        } catch (_) { }
+    }
+
+    function readActiveTask() {
+        try {
+            const raw = sessionStorage.getItem(ACTIVE_TASK_STORAGE_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch (_) {
+            return null;
+        }
+    }
 
     const MODEL_LIMITS = {
         flash: { name: 'Gemini Flash Image', rpm: 100, tpm: 200000, rpd: 1000 },
         pro: { name: 'Gemini Pro Image', rpm: 20, tpm: 100000, rpd: 250 },
+        chatgpt: { name: 'ChatGPT Image', rpm: 30, tpm: 120000, rpd: 300 },
     };
 
     const SAMPLE_MODELS = [
@@ -36,6 +84,9 @@
     ];
 
     const $ = id => document.getElementById(id);
+    function uiText(key, params, fallback = '') {
+        return window.WorkbenchI18n?.t(key, params) || fallback || key;
+    }
     function _clearImgError(img) {
         if (!img) return;
         delete img.dataset.errorHandled;
@@ -78,6 +129,35 @@
         freedom: $('freedom-slider'),
         freedomVal: $('freedom-value'),
         freedomRnd: $('freedom-random'),
+        providerSelect: $('tryon-provider-select'),
+        totokensProfileField: $('tryon-totokens-profile-field'),
+        totokensProfileSelect: $('tryon-totokens-profile-select'),
+        totokensProfileHint: $('tryon-totokens-profile-hint'),
+        modelSelect: $('tryon-model-select'),
+        customModelToggle: $('tryon-custom-model-toggle'),
+        customModelWrap: $('tryon-custom-model-wrap'),
+        customModelInput: $('tryon-custom-model-input'),
+        customModelHint: $('tryon-custom-model-hint'),
+        modelMeta: $('tryon-model-meta'),
+        refreshModelsBtn: $('tryon-refresh-models-btn'),
+        resetParamsBtn: $('tryon-reset-params-btn'),
+        aspectRatioSelect: $('tryon-aspect-ratio'),
+        imageSizeField: $('tryon-image-size-field'),
+        imageSizeSelect: $('tryon-image-size'),
+        qualityField: $('tryon-quality-field'),
+        qualitySelect: $('tryon-quality'),
+        temperatureField: $('tryon-temperature-field'),
+        temperatureSlider: $('tryon-temperature-slider'),
+        temperatureInput: $('tryon-temperature'),
+        temperatureVal: $('tryon-temperature-val'),
+        temperatureClear: $('tryon-temperature-clear'),
+        temperatureHint: $('tryon-temperature-hint'),
+        seedField: $('tryon-seed-field'),
+        seedInput: $('tryon-seed'),
+        seedRandomBtn: $('tryon-seed-random-btn'),
+        seedClear: $('tryon-seed-clear'),
+        seedHint: $('tryon-seed-hint'),
+        effectiveSummary: $('tryon-effective-summary'),
         parallelToggle: $('parallel-gen-toggle'),
         parallelConcurrency: $('parallel-concurrency'),
         parallelConcurrencySlider: $('parallel-concurrency-slider'),
@@ -99,6 +179,7 @@
         interval: $('download-interval'),
         intervalVal: $('download-interval-value'),
         footerModel: $('footer-model-name'),
+        footerProvider: $('footer-provider-name'),
         promptModal: $('prompt-modal'),
         promptOpen: $('open-prompt-btn'),
         promptClose: $('close-modal-btn'),
@@ -204,7 +285,7 @@
         return String(value ?? '').trim();
     }
 
-    function safeText(value, fallback = '待传入') {
+    function safeText(value, fallback = uiText('runtime.pending', undefined, 'Pending')) {
         const text = asTrimmedString(value);
         return text || fallback;
     }
@@ -220,15 +301,17 @@
     }
 
     function numericOrNull(value) {
+        if (value === null || value === undefined || asTrimmedString(value) === '') return null;
         const n = Number(value);
         return Number.isFinite(n) ? n : null;
     }
 
     function formatPrice(value) {
         const text = asTrimmedString(value);
-        if (!text) return '待传入';
+        if (!text) return window.WorkbenchI18n?.t('legacy.pending') || 'Pending';
         const n = numericOrNull(text);
         if (n == null) return text;
+        if (window.WorkbenchI18n?.formatCurrency) return window.WorkbenchI18n.formatCurrency(n);
         return `¥${n.toFixed(Number.isInteger(n) ? 0 : 2)}`;
     }
 
@@ -282,7 +365,7 @@
     }
 
     function isImageDataUrl(value) {
-        return /^data:image\/(png|jpe?g|webp);base64,/.test(value);
+        return /^data:image\/(png|jpe?g|webp);base64,/i.test(value);
     }
 
     function capStr(value) {
@@ -292,17 +375,12 @@
 
     function isTrustedBridgeOrigin(origin) {
         const current = asTrimmedString(origin);
-        // Accept empty origin (same-window edge cases)
-        if (!current) return true;
+        if (!current) return false;
         // Same-origin is always allowed
         if (current === window.location.origin) return true;
         // Check against the configured recommend app origin only
         const trusted = asTrimmedString(recommendOriginFromConfig());
         if (trusted) return trusted === current;
-        // Fallback: trust the origin derived from the URL-channel payload's returnUrl.
-        // This allows photo delivery via postMessage when recommend_app_url is not configured in admin.
-        const fallback = asTrimmedString(state.trustedMessageOrigin);
-        if (fallback) return fallback === current;
         return false;
     }
 
@@ -321,6 +399,14 @@
         const rawReturnUrl = asTrimmedString(raw.returnUrl || raw.recommendationUrl);
         const rawProductUrl = asTrimmedString(raw.productUrl || raw.product_url);
 
+        const source = raw.presentationSource;
+        let presentationSource = null;
+        if (source && typeof source === 'object' && ['recommend', 'style-lab', 'product'].includes(source.kind)
+            && source.result && typeof source.result === 'object') {
+            try {
+                if (JSON.stringify(source).length <= 50000) presentationSource = source;
+            } catch (_) { /* Ignore malformed optional presentation data. */ }
+        }
         const payload = {
             source: rawSource || BRIDGE_SOURCE,
             // URL fields: strip if not a valid http/https URL to prevent open redirect
@@ -341,6 +427,7 @@
             sceneHint: capStr(raw.sceneHint || raw.scene || raw.occasionHint),
             fitNote: capStr(raw.fitNote || raw.silhouetteNote),
             productUrl: isHttpUrl(rawProductUrl) ? capStr(rawProductUrl) : '',
+            presentationSource,
         };
         const hasValue = Object.entries(payload).some(([key, value]) => {
             if (key === 'source') return false;
@@ -387,29 +474,36 @@
 
     function defaultIntakeStatus(kind) {
         return kind === 'model'
-            ? '支持自动接收推荐系统传来的用户全身照；若自动注入失败，会明确提示重新上传。'
-            : '优先导入推荐系统传来的商品图；未收到推荐图时自动回退为手动上传模式。';
+            ? 'runtime.modelDefault'
+            : 'runtime.garmentDefault';
     }
 
-    function setUploadIntakeStatus(kind, text, tone = 'neutral') {
+    function setUploadIntakeStatus(kind, key, tone = 'neutral', params = {}) {
         const node = kind === 'model' ? el.targetIntakeStatus : el.garmentIntakeStatus;
         if (!node) return;
-        node.textContent = asTrimmedString(text) || defaultIntakeStatus(kind);
+        state.intakeStatus[kind] = { key: key || defaultIntakeStatus(kind), tone, params };
+        node.textContent = uiText(state.intakeStatus[kind].key, params);
         node.dataset.tone = tone;
     }
 
-    function setIntegrationAlert(message, tone = 'info') {
+    function setIntegrationAlert(key, tone = 'info') {
         if (!el.integrationAlert) return;
-        const text = asTrimmedString(message);
+        state.integrationAlert = key ? { key, tone } : null;
+        const text = key ? uiText(key) : '';
         el.integrationAlert.textContent = text;
         el.integrationAlert.dataset.tone = tone;
         el.integrationAlert.classList.toggle('hidden', !text);
     }
 
-    function setResultFeedback(tone, title, detail = '') {
+    function setResultFeedback(tone, titleKey, detailKey = '', params = {}) {
         if (!el.resultFeedback) return;
-        const heading = asTrimmedString(title);
-        const body = asTrimmedString(detail);
+        state.feedback = { tone, titleKey, detailKey, params };
+        const localizedParams = { ...params };
+        if (Array.isArray(localizedParams.missing)) {
+            localizedParams.missing = localizedParams.missing.map(key => uiText(key)).join(', ');
+        }
+        const heading = titleKey ? uiText(titleKey, localizedParams) : '';
+        const body = detailKey ? uiText(detailKey, localizedParams) : '';
         if (!heading && !body) {
             el.resultFeedback.className = 'result-feedback hidden';
             el.resultFeedback.innerHTML = '';
@@ -435,9 +529,9 @@
     }
 
     function updateCompareStage() {
-        updateCompareImage(el.compareUserImg, el.compareUserPlaceholder, _modelDisplayUrl(), '等待用户全身照');
-        updateCompareImage(el.compareGarmentImg, el.compareGarmentPlaceholder, _garmentDisplayUrl(0), '等待羽绒服商品图');
-        updateCompareImage(el.compareResultImg, el.compareResultPlaceholder, getResultPreviewUrl(0), '生成后自动展示');
+        updateCompareImage(el.compareUserImg, el.compareUserPlaceholder, _modelDisplayUrl(), uiText('runtime.userPhotoPending', undefined, 'Waiting for a full-body user photo'));
+        updateCompareImage(el.compareGarmentImg, el.compareGarmentPlaceholder, _garmentDisplayUrl(0), uiText('runtime.garmentPhotoPending', undefined, 'Waiting for a down-jacket product image'));
+        updateCompareImage(el.compareResultImg, el.compareResultPlaceholder, getResultPreviewUrl(0), uiText('runtime.resultPending', undefined, 'Shown after generation'));
     }
 
     function getResultPreviewUrl(index) {
@@ -451,27 +545,27 @@
     function updateRecommendationUi() {
         const payload = state.recommendation;
         const linked = Boolean(payload);
-        const priceText = linked ? formatPrice(payload.productPrice) : '待传入';
+        const priceText = linked ? formatPrice(payload.productPrice) : uiText('runtime.pending', undefined, 'Pending');
         const scoreText = linked ? formatScore(payload.score) : '--';
-        const styleText = linked ? safeText(payload.styleType) : '待传入';
-        const colorText = linked ? safeText(payload.colorFamily) : '待传入';
-        const sizeText = linked ? safeText(payload.sizeHint) : '待传入';
-        const titleText = linked ? safeText(payload.productTitle, '已接收推荐商品') : '等待推荐系统传入羽绒服商品';
-        const idText = linked ? safeText(payload.productId, '商品 ID 待传入') : '商品 ID 待传入';
+        const styleText = linked ? safeText(payload.styleType) : uiText('runtime.pending', undefined, 'Pending');
+        const colorText = linked ? safeText(payload.colorFamily) : uiText('runtime.pending', undefined, 'Pending');
+        const sizeText = linked ? safeText(payload.sizeHint) : uiText('runtime.pending', undefined, 'Pending');
+        const titleText = linked ? safeText(payload.productTitle, uiText('runtime.productReceived', undefined, 'Recommended product received')) : uiText('runtime.recommendTitleFallback', undefined, 'Waiting for a recommended down jacket');
+        const idText = linked ? safeText(payload.productId, uiText('runtime.productIdPending', undefined, 'Product ID pending')) : uiText('runtime.productIdPending', undefined, 'Product ID pending');
         const reasonText = linked
-            ? safeText(payload.recommendationReason, '推荐系统未附带推荐理由。')
-            : '等待推荐系统传入本次商品摘要。未联动时也可直接上传用户图与羽绒服商品图进行手动试穿。';
+            ? safeText(payload.recommendationReason, uiText('runtime.reasonFallback', undefined, 'No recommendation reason was provided.'))
+            : uiText('runtime.summaryWaiting', undefined, 'Waiting for the recommendation summary. You can also upload images manually.');
         const sceneText = linked
-            ? safeText(payload.sceneHint, '已从推荐结果进入当前试穿工作台')
-            : '适合场景待补充';
+            ? safeText(payload.sceneHint, uiText('runtime.sceneLinked', undefined, 'Opened from the recommendation result'))
+            : uiText('runtime.scenePending', undefined, 'Scene pending');
 
         if (el.recommendationEntryBanner) el.recommendationEntryBanner.classList.toggle('hidden', !linked);
-        if (el.heroSourceTag) el.heroSourceTag.textContent = linked ? '已接入推荐链路' : '手动上传模式';
+        if (el.heroSourceTag) el.heroSourceTag.textContent = linked ? uiText('runtime.recommendLinked', undefined, 'Recommendation link connected') : uiText('runtime.manualMode', undefined, 'Manual upload mode');
         if (el.heroProductTitle) el.heroProductTitle.textContent = titleText;
         if (el.heroSubtitle) {
             el.heroSubtitle.textContent = linked
-                ? '已同步推荐商品摘要、用户图与商品图。你可以直接微调风格并开始试穿。'
-                : '优先读取推荐系统传来的用户全身照与商品图，自动预填后直接进入试穿流程；若未传值，则回退到手动上传模式。';
+                ? uiText('runtime.subtitleLinked', undefined, 'The recommended product summary and images are ready. Adjust the style and start try-on.')
+                : uiText('runtime.subtitleManual', undefined, 'Recommendation images are used first; manual upload is available when no values are provided.');
         }
         if (el.heroProductId) el.heroProductId.textContent = idText;
         if (el.heroSceneHint) el.heroSceneHint.textContent = sceneText;
@@ -497,7 +591,7 @@
             const productUrl = linked ? asTrimmedString(payload.productUrl) : '';
             if (productUrl) {
                 el.heroProductUrl.href = productUrl;
-                el.heroProductUrl.textContent = '🛒 去选购';
+                el.heroProductUrl.textContent = uiText('runtime.shop', undefined, '🛒 Shop now');
                 el.heroProductUrl.classList.remove('hidden');
             } else {
                 el.heroProductUrl.classList.add('hidden');
@@ -516,6 +610,48 @@
         }
     }
 
+    let recommendationLocaleRequest = 0;
+    async function localizeLinkedRecommendation() {
+        const payload = state.recommendation;
+        const source = payload?.presentationSource;
+        if (!source) return;
+        const targetLocale = window.WorkbenchI18n?.locale || 'zh-CN';
+        const requestId = ++recommendationLocaleRequest;
+        const origin = recommendOriginFromConfig();
+        try {
+            if (!origin) throw new Error('Recommendation service unavailable');
+            const response = await fetch(new URL('/api/localize-result', origin).toString(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept-Language': targetLocale },
+                body: JSON.stringify({ kind: source.kind, result: source.result, locale: targetLocale }),
+            });
+            if (!response.ok) throw new Error('Recommendation localization failed');
+            const localized = await response.json();
+            if (requestId !== recommendationLocaleRequest || state.recommendation !== payload
+                || payload.presentationSource !== source || window.WorkbenchI18n?.locale !== targetLocale) return;
+            const product = source.kind === 'recommend'
+                ? localized.items?.[0]
+                : (source.kind === 'style-lab' ? localized.product : localized);
+            if (!product) throw new Error('Recommendation localization was empty');
+            payload.productTitle = capStr(product.display?.title || product.title);
+            payload.styleType = capStr(product.display?.styleType || product.style_type);
+            payload.colorFamily = capStr(product.display?.colorFamily || product.color_family);
+            payload.fitNote = capStr(product.display?.sizeNotes || product.size_notes);
+            if (source.kind === 'recommend') {
+                payload.recommendationReason = capStr(product.reason);
+                payload.sceneHint = capStr(localized.inference?.display?.style || payload.sceneHint);
+            } else if (source.kind === 'style-lab') {
+                payload.recommendationReason = capStr(localized.analysis?.reason || payload.recommendationReason);
+                payload.sceneHint = capStr(localized.inference?.display?.style || payload.sceneHint);
+            }
+            updateRecommendationUi();
+        } catch (_) {
+            if (requestId === recommendationLocaleRequest && state.recommendation === payload) {
+                notify(uiText('runtime.recommendRelocalizeFailed'), 'warning');
+            }
+        }
+    }
+
     async function importBridgeImage(kind, imageUrl, imageDataUrl) {
         const r = await fetch('/api/intake-image', {
             method: 'POST',
@@ -523,46 +659,116 @@
             body: JSON.stringify({
                 source: state.recommendation?.source || BRIDGE_SOURCE,
                 role: kind,
+                locale: window.WorkbenchI18n?.locale || 'zh-CN',
                 image_url: asTrimmedString(imageUrl),
                 image_data_url: asTrimmedString(imageDataUrl),
             }),
         });
         const d = await r.json().catch(() => ({}));
         if (!r.ok || !d?.ok || !d?.filename) {
-            throw new Error(d?.error || '自动导入失败');
+            throw new Error(d?.error || uiText('runtime.autoImportFailed', undefined, 'Automatic import failed'));
         }
         return { filename: d.filename, cloud_url: d.cloud_url || '' };
     }
 
-    let _applyGen = 0;
-    let _lastAppliedPayloadKey = '';
+    let _applyChain = Promise.resolve();
+    const _appliedBridgeState = {
+        hasPostMessage: false,
+        productId: '',
+        userImageUrl: '',
+        userImageDataUrl: '',
+        garmentImageUrl: '',
+        garmentImageDataUrl: '',
+    };
 
-    async function applyRecommendationPayload(rawPayload, meta = {}) {
+    function mergeBridgePayload(existing, incoming) {
+        if (!existing) return incoming;
+        return {
+            ...existing,
+            ...incoming,
+            userImageUrl: incoming.userImageUrl || existing.userImageUrl || '',
+            userImageDataUrl: incoming.userImageDataUrl || existing.userImageDataUrl || '',
+            garmentImageUrl: incoming.garmentImageUrl || existing.garmentImageUrl || '',
+            garmentImageDataUrl: incoming.garmentImageDataUrl || existing.garmentImageDataUrl || '',
+            sizeHint: incoming.sizeHint || existing.sizeHint || '',
+            recommendationReason: incoming.recommendationReason || existing.recommendationReason || '',
+            score: numericOrNull(incoming.score) !== null ? incoming.score : (existing.score ?? ''),
+            sceneHint: incoming.sceneHint || existing.sceneHint || '',
+            fitNote: incoming.fitNote || existing.fitNote || '',
+            presentationSource: incoming.presentationSource || existing.presentationSource || null,
+        };
+    }
+
+    async function tryImportLocalSampleFallback(userImageUrl) {
+        const raw = asTrimmedString(userImageUrl);
+        if (!raw) return null;
+        const match = raw.match(/\/sample-models\/(male|female)\/([^/?#]+)$/i);
+        if (!match) return null;
+        const gender = match[1].toLowerCase();
+        const filename = match[2];
+        const sample = SAMPLE_MODELS.find(m => m.gender === gender && m.filename.toLowerCase() === filename.toLowerCase());
+        if (!sample) return null;
+        const resp = await fetch(`/static/sample-models/${sample.gender}/${sample.filename}`);
+        if (!resp.ok) return null;
+        const blob = await resp.blob();
+        const file = new File([blob], sample.filename, { type: blob.type || 'image/jpeg' });
+        return await upload(file, '/upload/model');
+    }
+
+    function applyRecommendationPayload(rawPayload, meta = {}) {
+        const task = _applyChain.then(() => _applyRecommendationPayloadImpl(rawPayload, meta));
+        _applyChain = task.catch(() => {});
+        return task;
+    }
+
+    async function _applyRecommendationPayloadImpl(rawPayload, meta = {}) {
         const payload = normalizeBridgePayload(rawPayload);
         if (!payload) return;
 
-        // Deduplicate: skip if same payload already applied (postMessage retries)
-        const payloadKey = JSON.stringify([payload.userImageUrl, payload.userImageDataUrl, payload.garmentImageUrl, payload.garmentImageDataUrl]);
-        if (payloadKey === _lastAppliedPayloadKey && state.model) return;
-        _lastAppliedPayloadKey = payloadKey;
+        const isQueryChannel = meta.channel === 'query';
+        const isPostMessage = meta.channel === 'postMessage';
+        const sameProductContext = Boolean(state.recommendation)
+            && ((payload.productId && payload.productId === _appliedBridgeState.productId)
+                || (payload.garmentImageUrl && payload.garmentImageUrl === _appliedBridgeState.garmentImageUrl));
 
-        // Generation counter: if a newer call starts, earlier calls discard their results
-        const gen = ++_applyGen;
-
-        state.recommendation = payload;
-        // Record the opener's origin from returnUrl so postMessage photo delivery works
-        // even when recommend_app_url is not configured in the workbench admin settings.
-        if (meta.channel === 'query' && !state.trustedMessageOrigin && isHttpUrl(payload.returnUrl)) {
-            try {
-                const retOrigin = new URL(payload.returnUrl).origin;
-                if (retOrigin && retOrigin !== window.location.origin) state.trustedMessageOrigin = retOrigin;
-            } catch (_) {}
+        // Do not let a late query-channel run overwrite an already-applied postMessage payload.
+        if (isQueryChannel && _appliedBridgeState.hasPostMessage && sameProductContext) {
+            state.recommendation = mergeBridgePayload(state.recommendation, payload);
+            updateRecommendationUi();
+            updateCompareStage();
+            ready();
+            return;
         }
-        state.results = [];
-        state.resultPreviews = [];
-        state.selected.clear();
-        resetResult();
-        renderGallery();
+        if (isPostMessage) {
+            _appliedBridgeState.hasPostMessage = true;
+        }
+
+        const hasUserInput = Boolean(payload.userImageUrl || payload.userImageDataUrl);
+        const hasGarmentInput = Boolean(payload.garmentImageUrl || payload.garmentImageDataUrl);
+        const sameModelInput = payload.userImageUrl === _appliedBridgeState.userImageUrl
+            && (!payload.userImageDataUrl || payload.userImageDataUrl === _appliedBridgeState.userImageDataUrl);
+        const sameGarmentInput = payload.garmentImageUrl === _appliedBridgeState.garmentImageUrl
+            && payload.garmentImageDataUrl === _appliedBridgeState.garmentImageDataUrl;
+        const modelAlreadyReady = Boolean(state.model) && (sameModelInput || (Boolean(payload.userImageUrl) && payload.userImageUrl === _appliedBridgeState.userImageUrl));
+        const garmentAlreadyReady = state.garments.length > 0 && sameGarmentInput;
+
+        if (sameProductContext && (!hasUserInput || modelAlreadyReady) && (!hasGarmentInput || garmentAlreadyReady)) {
+            state.recommendation = mergeBridgePayload(state.recommendation, payload);
+            updateRecommendationUi();
+            updateCompareStage();
+            ready();
+            return;
+        }
+
+        const mergedPayload = sameProductContext ? mergeBridgePayload(state.recommendation, payload) : payload;
+        state.recommendation = mergedPayload;
+        if (!sameProductContext) {
+            state.results = [];
+            state.resultPreviews = [];
+            state.selected.clear();
+            resetResult();
+            renderGallery();
+        }
         updateRecommendationUi();
 
         if (el.garmentTypeInput && !asTrimmedString(el.garmentTypeInput.value)) {
@@ -571,82 +777,90 @@
 
         let modelReady = Boolean(state.model);
         let garmentReady = state.garments.length > 0;
+        const needModelImport = hasUserInput && !modelAlreadyReady;
+        const needGarmentImport = hasGarmentInput && !garmentAlreadyReady;
 
-        if (payload.userImageUrl || payload.userImageDataUrl) {
+        if (needModelImport) {
             state.model = '';
             state.modelCloudUrl = '';
             updateModel();
-            setUploadIntakeStatus('model', '正在自动导入推荐系统传来的用户全身照...', 'loading');
+            setUploadIntakeStatus('model', 'runtime.modelImporting', 'loading');
             try {
-                const modelResult = await importBridgeImage('model', payload.userImageUrl, payload.userImageDataUrl);
-                if (gen !== _applyGen) return; // superseded by newer call
+                let modelResult;
+                try {
+                    modelResult = await importBridgeImage('model', payload.userImageUrl, payload.userImageDataUrl);
+                } catch (firstErr) {
+                    modelResult = await tryImportLocalSampleFallback(payload.userImageUrl);
+                    if (!modelResult) throw firstErr;
+                }
                 state.model = modelResult.filename;
                 state.modelCloudUrl = modelResult.cloud_url;
+                _appliedBridgeState.userImageUrl = payload.userImageUrl;
+                _appliedBridgeState.userImageDataUrl = payload.userImageDataUrl;
                 modelReady = true;
                 updateModel();
-                setUploadIntakeStatus('model', '已自动导入推荐系统用户全身照。', 'success');
+                setUploadIntakeStatus('model', 'runtime.modelImported', 'success');
             } catch (e) {
-                if (gen !== _applyGen) return;
                 state.model = '';
                 state.modelCloudUrl = '';
                 modelReady = false;
                 updateModel();
-                setUploadIntakeStatus('model', `自动导入失败：${e.message || e}。请重新上传用户全身照。`, 'error');
-                notify('推荐用户图自动导入失败，请重新上传。', 'warning');
-                reportError(e.message || '推荐用户图自动导入失败', '推荐联动-用户图');
+                setUploadIntakeStatus('model', 'runtime.modelImportError', 'error', { error: e.message || e });
+                notify(uiText('runtime.modelImportError', { error: e.message || e }), 'warning');
+                reportError(e.message || uiText('runtime.autoImportFailed'), 'recommendation-user-image');
             }
         } else if (!state.model) {
-            setUploadIntakeStatus('model', '推荐系统未提供用户图，请手动上传用户全身照。', 'warning');
+            setUploadIntakeStatus('model', 'runtime.modelMissing', 'warning');
         } else {
-            setUploadIntakeStatus('model', '未收到新的用户图，继续沿用当前全身照。', 'info');
+            setUploadIntakeStatus('model', 'runtime.modelRetained', 'info');
         }
 
-        if (payload.garmentImageUrl || payload.garmentImageDataUrl) {
+        if (needGarmentImport) {
             state.garments = [];
             state.garmentCloudUrls = [];
             updateGarments();
-            setUploadIntakeStatus('garment', '正在自动导入推荐商品图...', 'loading');
+            setUploadIntakeStatus('garment', 'runtime.garmentImporting', 'loading');
             try {
                 const garmentResult = await importBridgeImage('garment', payload.garmentImageUrl, payload.garmentImageDataUrl);
-                if (gen !== _applyGen) return; // superseded by newer call
                 state.garments = [garmentResult.filename];
                 state.garmentCloudUrls = [garmentResult.cloud_url];
+                _appliedBridgeState.garmentImageUrl = payload.garmentImageUrl;
+                _appliedBridgeState.garmentImageDataUrl = payload.garmentImageDataUrl;
                 garmentReady = true;
                 updateGarments();
-                setUploadIntakeStatus('garment', '已自动导入推荐商品图。', 'success');
+                setUploadIntakeStatus('garment', 'runtime.garmentImported', 'success');
             } catch (e) {
-                if (gen !== _applyGen) return;
                 state.garments = [];
                 state.garmentCloudUrls = [];
                 garmentReady = false;
                 updateGarments();
-                setUploadIntakeStatus('garment', `自动导入失败：${e.message || e}。请重新上传羽绒服商品图。`, 'error');
-                notify('推荐商品图自动导入失败，请重新上传。', 'warning');
-                reportError(e.message || '推荐商品图自动导入失败', '推荐联动-商品图');
+                setUploadIntakeStatus('garment', 'runtime.garmentImportError', 'error', { error: e.message || e });
+                notify(uiText('runtime.garmentImportError', { error: e.message || e }), 'warning');
+                reportError(e.message || uiText('runtime.autoImportFailed'), 'recommendation-product-image');
             }
         } else if (state.garments.length === 0) {
-            setUploadIntakeStatus('garment', '推荐系统未提供商品图，请手动上传羽绒服商品图。', 'warning');
+            setUploadIntakeStatus('garment', 'runtime.garmentMissing', 'warning');
         } else {
-            setUploadIntakeStatus('garment', '未收到新的商品图，继续沿用当前羽绒服图片。', 'info');
+            setUploadIntakeStatus('garment', 'runtime.garmentRetained', 'info');
         }
 
-        setIntegrationAlert(
-            '已从羽绒服推荐结果进入试穿。若用户图或商品图未能自动注入，页面会明确提示你重新上传，而不会静默失败。',
-            'info'
-        );
+        _appliedBridgeState.productId = mergedPayload.productId || '';
+        setIntegrationAlert('runtime.recommendBridgeInfo', 'info');
 
         if (modelReady && garmentReady) {
-            setResultFeedback('info', '推荐链路已接通', '用户全身照与羽绒服商品图已预填，可以直接开始生成试穿结果。');
+            setResultFeedback('info', 'runtime.recommendReadyTitle', 'runtime.recommendReadyDetail');
         } else {
             const missing = [];
-            if (!modelReady) missing.push('用户全身照');
-            if (!garmentReady) missing.push('羽绒服商品图');
-            setResultFeedback('warning', '推荐链路已接通，但仍需补齐素材', `${missing.join('、')} 未成功自动导入，请根据卡片提示重新上传后再开始试穿。`);
+            if (!modelReady) missing.push('legacy.userPhoto');
+            if (!garmentReady) missing.push('legacy.referencePhoto');
+            setResultFeedback('warning', 'runtime.recommendIncompleteTitle', 'runtime.recommendIncompleteDetail', { missing });
         }
 
         updateCompareStage();
         ready();
-        notify('推荐系统联动信息已同步到试穿工作台。', 'success');
+        if (needModelImport || needGarmentImport || !sameProductContext) {
+            notify(uiText('runtime.recommendSynced'), 'success');
+        }
     }
 
     function bridgeTargetWindow() {
@@ -658,7 +872,8 @@
     function postBridgeEvent(type) {
         const target = bridgeTargetWindow();
         if (!target) return false;
-        const origin = asTrimmedString(state.trustedMessageOrigin || recommendOriginFromConfig()) || '*';
+        const origin = asTrimmedString(recommendOriginFromConfig());
+        if (!origin) return false;
         try {
             target.postMessage({
                 type,
@@ -685,7 +900,7 @@
             window.history.back();
             return;
         }
-        notify('未配置推荐列表地址。', 'warning');
+        notify(uiText('runtime.recommendListMissing'), 'warning');
     }
 
 
@@ -705,7 +920,8 @@
             await applyRecommendationPayload(payload, { channel: 'postMessage', origin: event.origin });
             // Send ACK so the sender can stop retrying
             if (event.source && typeof event.source.postMessage === 'function') {
-                const ackOrigin = asTrimmedString(event.origin) || '*';
+                const ackOrigin = asTrimmedString(event.origin);
+                if (!ackOrigin) return;
                 try {
                     event.source.postMessage({
                         type: BRIDGE_ACK_TYPE,
@@ -715,8 +931,8 @@
                 } catch (_) { /* ignore ACK delivery failure */ }
             }
         } catch (e) {
-            notify(e.message || '推荐系统联动失败', 'error');
-            reportError(e.message || '推荐系统联动失败', '推荐联动-postMessage');
+            notify(e.message || uiText('runtime.bridgeFailed'), 'error');
+            reportError(e.message || uiText('runtime.bridgeFailed'), 'recommendation-postMessage');
         }
     }
 
@@ -799,11 +1015,12 @@
     }
 
     function applyCopy() {
-        document.title = 'AI 羽绒服试穿工作台';
-        if (el.genText) el.genText.textContent = '一键生成试穿结果';
-        if (el.resultImg) el.resultImg.alt = '羽绒服试穿结果';
-        if (el.downOne) el.downOne.innerHTML = '<i class="fas fa-download"></i> 下载主结果';
-        if (el.errorToggle) el.errorToggle.title = '系统错误日志';
+        const i18n = window.WorkbenchI18n;
+        document.title = i18n ? i18n.t('meta.title') : 'AI Down Jacket Try-On Workbench';
+        if (el.genText) el.genText.textContent = i18n ? i18n.t('legacy.generate') : 'Generate try-on result';
+        if (el.resultImg) el.resultImg.alt = i18n ? i18n.t('legacy.result') : 'Try-on result';
+        if (el.downOne) el.downOne.innerHTML = `<i class="fas fa-download"></i> ${i18n ? i18n.t('legacy.downloadMain') : 'Download main result'}`;
+        if (el.errorToggle) el.errorToggle.title = i18n ? i18n.t('legacy.errorLog') : 'Error log';
         if (el.modelInput) el.modelInput.multiple = false;
     }
 
@@ -856,6 +1073,15 @@
         if (el.refPh) el.refPh.classList.toggle('hidden', ok);
         if (el.refCtl) el.refCtl.classList.toggle('hidden', !ok);
         if (el.refCnt) el.refCnt.textContent = String(state.garments.length);
+        window.dispatchEvent(new CustomEvent('workbench:garmentchange', { detail: _garmentDisplayUrl(0) }));
+        window.dispatchEvent(new CustomEvent('workbench:productchange', {
+            detail: {
+                garmentUrl: _garmentDisplayUrl(0),
+                productTitle: state.recommendation?.productTitle || '',
+                styleType: state.recommendation?.styleType || '',
+                colorFamily: state.recommendation?.colorFamily || '',
+            },
+        }));
         updateCompareStage();
         ready();
     }
@@ -872,8 +1098,8 @@
         if (el.batchInfo) el.batchInfo.classList.remove('hidden');
         if (el.fill) el.fill.style.width = `${pct}%`;
         if (el.pct) el.pct.textContent = `${pct}%`;
-        if (el.msg) el.msg.textContent = m || '处理中...';
-        if (el.batchText) el.batchText.textContent = `批量进度: ${Math.min(i, t)} / ${t}`;
+        if (el.msg) el.msg.textContent = m || uiText('legacy.processing');
+        if (el.batchText) el.batchText.textContent = uiText('legacy.batchProgress', { done: Math.min(i, t), total: t });
     }
 
     function syncFreedom() {
@@ -1004,11 +1230,12 @@
         try {
             const params = new URLSearchParams();
             params.set('model', state.modelType);
+            if (state.modelId) params.set('model_id', state.modelId);
 
             const r = await fetch(`/api/rate-status?${params.toString()}`, { cache: 'no-store' });
-            if (!r.ok) throw new Error(`限额状态请求失败 (${r.status})`);
+            if (!r.ok) throw new Error(uiText('runtime.limitRequestFailed', { status: r.status }));
             const d = await r.json();
-            if (!d || !d.ok) throw new Error(d?.error || '限额状态返回异常');
+            if (!d || !d.ok) throw new Error(d?.error || uiText('runtime.limitResponseInvalid'));
 
             state.rateStatus = d;
             state.minuteResetSec = Number.isFinite(Number(d.minute_reset_seconds))
@@ -1020,13 +1247,14 @@
             renderRateStatus(d);
             refreshCountdowns();
         } catch (e) {
-            if (!silent) writeLog(e.message || '限额状态刷新失败');
+            if (!silent) writeLog(e.message || uiText('runtime.limitRefreshFailed'));
         }
     }
 
     function closeAllSidebars() {
         el.errorSidebar?.classList.remove('open');
         el.errorOverlay?.classList.add('hidden');
+        document.body.classList.remove('sidebar-open');
     }
 
     function openSidebar(which) {
@@ -1038,10 +1266,11 @@
         if (!pair) return;
         pair[0]?.classList.add('open');
         pair[1]?.classList.remove('hidden');
+        document.body.classList.add('sidebar-open');
         if (which === 'error') refreshErrors();
     }
 
-    async function reportError(message, context = '前端') {
+    async function reportError(message, context = 'frontend') {
         try {
             const fd = new FormData();
             fd.append('message', String(message || ''));
@@ -1065,15 +1294,15 @@
             const r = await fetch('/analyze-error', { method: 'POST', body: fd });
             const d = await r.json();
             const analysis = String(d?.analysis || '').trim();
-            if (!analysis) throw new Error('分析结果为空');
+            if (!analysis) throw new Error(uiText('runtime.analysisEmpty'));
 
             const fd2 = new FormData();
             fd2.append('analysis', analysis);
             await fetch(`/api/errors/${encodeURIComponent(id)}/analysis`, { method: 'PUT', body: fd2 });
             await refreshErrors();
-            notify('错误日志 AI 分析完成', 'success');
+            notify(uiText('runtime.analysisComplete'), 'success');
         } catch (e) {
-            notify(e.message || '错误日志分析失败', 'error');
+            notify(e.message || uiText('runtime.analysisFailed'), 'error');
         } finally {
             state.errorAnalyzing.delete(id);
             renderErrors();
@@ -1083,17 +1312,17 @@
     function renderErrors() {
         const list = state.errors || [];
         const html = list.length === 0
-            ? '<div class="usage-empty"><i class="fas fa-check-circle"></i> 暂无错误</div>'
+            ? `<div class="usage-empty"><i class="fas fa-check-circle"></i> ${uiText('legacy.emptyError')}</div>`
             : list.map(e => `
-                <div class="errorlog-item" style="padding:10px;border:1px solid rgba(239,68,68,0.2);border-radius:10px;background:rgba(239,68,68,0.06);margin-bottom:8px;">
-                    <div style="font-size:11px;color:rgba(255,255,255,0.45);">${e.time || ''} ${e.context ? `· ${e.context}` : ''}</div>
-                    <div style="font-size:12px;color:rgba(255,255,255,0.85);margin-top:4px;word-break:break-word;">${e.message || ''}</div>
-                    <div style="margin-top:8px;">
-                        <button type="button" data-analyze-error="${e.id}" class="errorlog-action-btn" style="padding:4px 8px;">
-                            <i class="fas fa-robot"></i> ${state.errorAnalyzing.has(e.id) ? '分析中...' : (e.analysis ? '重新分析' : 'AI分析')}
+                <div class="errorlog-item">
+                    <div class="errorlog-time">${escapeHtml(e.time)} ${e.context ? `· ${escapeHtml(e.context)}` : ''}</div>
+                    <div class="errorlog-msg">${escapeHtml(e.message)}</div>
+                    <div class="errorlog-actions">
+                        <button type="button" data-analyze-error="${escapeHtml(e.id)}" class="errorlog-action-btn">
+                            <i class="fas fa-robot"></i> ${state.errorAnalyzing.has(e.id) ? uiText('legacy.errorAnalyze') : (e.analysis ? uiText('legacy.retry') : uiText('legacy.aiAnalyze'))}
                         </button>
                     </div>
-                    ${e.analysis ? `<div style="font-size:12px;color:#93c5fd;margin-top:6px;white-space:pre-wrap;"><i class="fas fa-robot"></i> ${e.analysis}</div>` : ''}
+                    ${e.analysis ? `<div class="errorlog-analysis"><i class="fas fa-robot"></i> ${escapeHtml(e.analysis)}</div>` : ''}
                 </div>`).join('');
         if (el.errorSidebarList) el.errorSidebarList.innerHTML = html;
         if (el.errorPanelList) el.errorPanelList.innerHTML = html;
@@ -1161,7 +1390,7 @@
         fd.append('file', file);
         const r = await fetch(endpoint, { method: 'POST', body: fd });
         if (!r.ok) {
-            let msg = `上传失败 (${r.status})`;
+            let msg = uiText('runtime.uploadFailed', { status: r.status });
             try {
                 const d = await r.json();
                 msg = d.error || msg;
@@ -1169,26 +1398,26 @@
             throw new Error(msg);
         }
         const d = await r.json();
-        if (!d.filename) throw new Error('服务器未返回文件名');
+        if (!d.filename) throw new Error(uiText('runtime.filenameMissing'));
         return { filename: d.filename, cloud_url: d.cloud_url || '' };
     }
 
     async function onModel(files) {
         const list = Array.from(files || []).filter(f => f.type.startsWith('image/'));
         if (list.length === 0) return;
-        if (list.length > 1) notify('模特照片只能上传 1 张，已自动使用第一张。', 'warning');
+        if (list.length > 1) notify(uiText('runtime.modelOnlyOne'), 'warning');
         try {
-            notify('正在上传模特照片...', 'info');
+            notify(uiText('runtime.modelUploading'), 'info');
             const result = await upload(list[0], '/upload/model');
             state.model = result.filename;
             state.modelCloudUrl = result.cloud_url;
             updateModel();
-            setUploadIntakeStatus('model', '已手动上传用户全身照。', 'success');
-            notify('模特照片上传成功。', 'success');
+            setUploadIntakeStatus('model', 'runtime.modelUploaded', 'success');
+            notify(uiText('runtime.modelUploadSuccess'), 'success');
         } catch (e) {
-            notify(e.message || '模特照片上传失败。', 'error');
-            writeLog(e.message || '模特照片上传失败。');
-            reportError(e.message || '模特照片上传失败', '上传模特');
+            notify(e.message || uiText('runtime.modelUploadFailed'), 'error');
+            writeLog(e.message || uiText('runtime.modelUploadFailed'));
+            reportError(e.message || uiText('runtime.modelUploadFailed'), 'model-upload');
         }
     }
 
@@ -1196,23 +1425,23 @@
         const list = Array.from(files || []).filter(f => f.type.startsWith('image/'));
         if (list.length === 0) return;
         if (state.garments.length + list.length > 50) {
-            notify(`服装照片最多 50 张，当前已上传 ${state.garments.length} 张。`, 'warning');
+            notify(uiText('runtime.garmentMax', { count: state.garments.length }), 'warning');
             return;
         }
         try {
-            notify(`正在上传 ${list.length} 张服装照片...`, 'info');
+            notify(uiText('runtime.garmentUploading', { count: list.length }), 'info');
             for (const f of list) {
                 const result = await upload(f, '/upload/garment');
                 state.garments.push(result.filename);
                 state.garmentCloudUrls.push(result.cloud_url);
             }
             updateGarments();
-            setUploadIntakeStatus('garment', `已手动上传 ${state.garments.length} 张商品图。`, 'success');
-            notify(`服装照片上传完成，共 ${state.garments.length} 张。`, 'success');
+            setUploadIntakeStatus('garment', 'runtime.garmentUploaded', 'success', { count: state.garments.length });
+            notify(uiText('runtime.garmentUploadComplete', { count: state.garments.length }), 'success');
         } catch (e) {
-            notify(e.message || '服装照片上传失败。', 'error');
-            writeLog(e.message || '服装照片上传失败。');
-            reportError(e.message || '服装照片上传失败', '上传服装');
+            notify(e.message || uiText('runtime.garmentUploadFailed'), 'error');
+            writeLog(e.message || uiText('runtime.garmentUploadFailed'));
+            reportError(e.message || uiText('runtime.garmentUploadFailed'), 'garment-upload');
         }
     }
 
@@ -1258,10 +1487,375 @@
         return String(el.garmentTypeInput?.value || '').trim();
     }
 
-    function setModel(type) {
-        state.modelType = type === 'pro' ? 'pro' : 'flash';
+    const TRYON_PREFS_STORAGE = 'tryon_step3_prefs_v1';
+
+    function loadStep3Prefs() {
+        try {
+            const raw = localStorage.getItem(TRYON_PREFS_STORAGE);
+            if (!raw) return;
+            const prefs = JSON.parse(raw);
+            if (!prefs || typeof prefs !== 'object') return;
+            if (typeof prefs.provider === 'string' && prefs.provider) state.provider = prefs.provider;
+            if (typeof prefs.totokensProfile === 'string' && prefs.totokensProfile) state.totokensProfile = prefs.totokensProfile;
+            if (typeof prefs.modelId === 'string' && prefs.modelId) state.modelId = prefs.modelId;
+            if (typeof prefs.useCustomModel === 'boolean') state.useCustomModel = prefs.useCustomModel;
+            if (typeof prefs.customModelId === 'string') state.customModelId = prefs.customModelId;
+            if (prefs.detailOptions && typeof prefs.detailOptions === 'object') {
+                state.detailOptions = { ...state.detailOptions, ...prefs.detailOptions };
+            }
+        } catch (_) { }
+    }
+
+    function saveStep3Prefs() {
+        try {
+            localStorage.setItem(TRYON_PREFS_STORAGE, JSON.stringify({
+                provider: state.provider,
+                totokensProfile: state.totokensProfile,
+                modelId: state.modelId,
+                useCustomModel: state.useCustomModel,
+                customModelId: state.customModelId,
+                detailOptions: state.detailOptions,
+            }));
+        } catch (_) { }
+    }
+
+    function getProviderDisplayLabel(providerKey, fallbackLabel = '') {
+        if (providerKey === 'totokens') return uiText('runtime.providerTotokensLabel', undefined, fallbackLabel || 'ToTokens Relay');
+        if (providerKey === 'gemini') return uiText('runtime.providerGeminiLabel', undefined, fallbackLabel || 'Google Gemini Direct');
+        return fallbackLabel || providerKey;
+    }
+
+    function getAspectOptionLabel(value) {
+        const keyMap = {
+            'auto': 'runtime.aspectAuto',
+            '3:4': 'runtime.aspect34',
+            '4:5': 'runtime.aspect45',
+            '9:16': 'runtime.aspect916',
+            '1:1': 'runtime.aspect11',
+            '4:3': 'runtime.aspect43',
+            '3:2': 'runtime.aspect32',
+            '2:3': 'runtime.aspect23',
+            '5:4': 'runtime.aspect54',
+            '16:9': 'runtime.aspect169',
+            '21:9': 'runtime.aspect219',
+        };
+        const key = keyMap[value];
+        return key ? uiText(key, undefined, value) : value;
+    }
+
+    function getSizeOptionLabel(value) {
+        const keyMap = {
+            'auto': 'runtime.sizeAuto',
+            '1K': 'runtime.size1K',
+            '2K': 'runtime.size2K',
+            '4K': 'runtime.size4K',
+        };
+        const key = keyMap[value];
+        return key ? uiText(key, undefined, value) : value;
+    }
+
+    function getQualityOptionLabel(value) {
+        const keyMap = {
+            'auto': 'runtime.qualityAuto',
+            'low': 'runtime.qualityLow',
+            'medium': 'runtime.qualityMedium',
+            'high': 'runtime.qualityHigh',
+        };
+        const key = keyMap[value];
+        return key ? uiText(key, undefined, value) : value;
+    }
+
+    function syncFooterProvider() {
+        if (!el.footerProvider) return;
+        const relay = state.provider === 'totokens' || state.modelType === 'chatgpt';
+        el.footerProvider.textContent = relay ? 'ToTokens' : 'Google AI Studio';
+    }
+
+    function setModel(type, skipRateFetch = false) {
+        state.modelType = (type === 'pro' || type === 'chatgpt') ? type : 'flash';
+        syncFooterProvider();
         refreshModelRateUi();
-        refreshRateStatus(true);
+        if (!skipRateFetch) refreshRateStatus(true);
+    }
+
+    function renderEffectiveSummary(providerObj) {
+        if (!el.effectiveSummary) return;
+        const providerLabel = getProviderDisplayLabel(state.provider, providerObj?.label);
+        const activeModel = state.modelId || state.modelType;
+        const opts = state.detailOptions || {};
+        const specParts = [];
+        if (opts.aspect_ratio && opts.aspect_ratio !== 'auto') specParts.push(opts.aspect_ratio);
+        if (state.capabilities?.supports_image_size && opts.image_size && opts.image_size !== 'auto') {
+            specParts.push(opts.image_size);
+        }
+        if (state.capabilities?.supports_quality && opts.quality && opts.quality !== 'auto') {
+            specParts.push(opts.quality.toUpperCase());
+        }
+        if (state.capabilities?.supports_temperature && opts.temperature !== '') {
+            specParts.push(`T=${opts.temperature}`);
+        }
+        if (state.capabilities?.supports_seed && opts.seed !== '') {
+            specParts.push(`Seed=${opts.seed}`);
+        }
+        const specsText = specParts.length ? specParts.join(' · ') : uiText('runtime.sizeAuto', undefined, 'Auto specs');
+        const freedomVal = el.freedom?.value ?? '5';
+        el.effectiveSummary.textContent = uiText(
+            'runtime.summaryTemplate',
+            { provider: providerLabel, model: activeModel, specs: specsText, freedom: freedomVal },
+            `${providerLabel} / ${activeModel} · ${specsText}`
+        );
+    }
+
+    function syncTryonRoutingUi(options = {}) {
+        const tf = window.TryonForm;
+        if (!tf) return;
+        const resolved = tf.resolveSelectionState(state.runtimeStatus, {
+            provider: state.provider,
+            totokensProfile: state.totokensProfile,
+            modelId: state.modelId,
+            useCustomModel: state.useCustomModel,
+            customModelId: state.customModelId,
+            detailOptions: state.detailOptions,
+        });
+
+        state.provider = resolved.provider;
+        state.modelId = resolved.effectiveModelId;
+        state.capabilities = resolved.capabilities;
+        state.detailOptions = tf.sanitizeOptionsForCapabilities(state.detailOptions, state.capabilities);
+        const matchInfo = tf.resolveTotokensRouteMatch
+            ? (resolved.provider === 'totokens'
+                ? tf.resolveTotokensRouteMatch(resolved.providerObj, resolved.effectiveModelId, state.detailOptions, state.totokensProfile)
+                : null)
+            : resolved.totokensMatch;
+        if (matchInfo) {
+            state.totokensProfile = matchInfo.selectedProfileId || 'auto';
+        }
+
+        if (MODEL_LIMITS[resolved.presetKey] && state.modelId) {
+            MODEL_LIMITS[resolved.presetKey].name = state.modelId;
+        }
+
+        // 1. Provider select
+        if (el.providerSelect) {
+            el.providerSelect.innerHTML = '';
+            resolved.providers.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.key;
+                const tags = [];
+                if (p.is_default) tags.push(uiText('runtime.providerDefaultTag', undefined, 'Default'));
+                if (!p.configured) tags.push(uiText('runtime.providerUnconfiguredTag', undefined, 'Not configured'));
+                const label = getProviderDisplayLabel(p.key, p.label);
+                opt.textContent = tags.length ? `${label} (${tags.join(' · ')})` : label;
+                el.providerSelect.appendChild(opt);
+            });
+            el.providerSelect.value = resolved.provider;
+        }
+
+        // 1b. ToTokens API key group selector
+        if (el.totokensProfileField && el.totokensProfileSelect) {
+            const showProfiles = resolved.provider === 'totokens' && Boolean(matchInfo?.profiles?.length);
+            el.totokensProfileField.classList.toggle('hidden', !showProfiles);
+            if (showProfiles && matchInfo) {
+                el.totokensProfileSelect.innerHTML = '';
+                const autoOpt = document.createElement('option');
+                autoOpt.value = 'auto';
+                autoOpt.textContent = uiText('runtime.totokensAutoRoute', undefined, 'Auto-match key group');
+                el.totokensProfileSelect.appendChild(autoOpt);
+                matchInfo.profiles.forEach(prof => {
+                    const opt = document.createElement('option');
+                    opt.value = prof.id;
+                    const tag = prof.configured
+                        ? uiText('runtime.totokensRouteConfigured', undefined, 'Configured')
+                        : uiText('runtime.totokensRouteUnconfigured', undefined, 'No key');
+                    opt.textContent = `${prof.label || prof.id} (${tag})`;
+                    el.totokensProfileSelect.appendChild(opt);
+                });
+                el.totokensProfileSelect.value = matchInfo.selectedProfileId || 'auto';
+                if (el.totokensProfileHint) {
+                    el.totokensProfileHint.classList.toggle('is-error', matchInfo.issue === 'mismatch');
+                    if (matchInfo.issue === 'mismatch') {
+                        el.totokensProfileHint.textContent = uiText('runtime.totokensRouteMismatchHint', undefined, 'Incompatible route');
+                    } else if (matchInfo.issue === 'missing') {
+                        const lbl = matchInfo.matchedProfile?.label || 'ToTokens';
+                        el.totokensProfileHint.textContent = uiText('runtime.totokensRouteMissingHint', { label: lbl }, `Missing ${lbl} key`);
+                    } else {
+                        el.totokensProfileHint.textContent = uiText('runtime.totokensRouteAutoHint', undefined, 'Auto route enabled');
+                    }
+                }
+            }
+        }
+
+        // 2. Model select
+        if (el.modelSelect) {
+            el.modelSelect.innerHTML = '';
+            resolved.models.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                const badgeText = m.badge ? ` [${m.badge}]` : '';
+                opt.textContent = `${m.id}${badgeText}`;
+                el.modelSelect.appendChild(opt);
+            });
+            if (resolved.selectedListModelId) {
+                el.modelSelect.value = resolved.selectedListModelId;
+            }
+            el.modelSelect.disabled = Boolean(state.useCustomModel);
+        }
+
+        // 3. Custom Model ID controls
+        if (el.customModelToggle) el.customModelToggle.checked = Boolean(state.useCustomModel);
+        if (el.customModelWrap) el.customModelWrap.classList.toggle('hidden', !state.useCustomModel);
+        if (el.customModelInput && el.customModelInput.value !== state.customModelId) {
+            el.customModelInput.value = state.customModelId;
+        }
+        if (el.customModelInput && el.customModelHint) {
+            if (state.useCustomModel) {
+                const v = resolved.customModelValidation;
+                el.customModelInput.setAttribute('aria-invalid', String(!v.valid));
+                el.customModelHint.classList.toggle('is-error', !v.valid);
+                if (!v.valid) {
+                    el.customModelHint.textContent = v.reason === 'empty'
+                        ? uiText('runtime.customModelEmptyTip')
+                        : uiText('runtime.customModelInvalidTip');
+                } else {
+                    el.customModelHint.textContent = '';
+                }
+            } else {
+                el.customModelInput.removeAttribute('aria-invalid');
+                el.customModelHint.textContent = '';
+                el.customModelHint.classList.remove('is-error');
+            }
+        }
+
+        // 4. Capability metadata pills
+        const caps = state.capabilities;
+        const selectedModelObj = resolved.models.find(m => m.id === resolved.selectedListModelId);
+        const maxConcurrency = Number(selectedModelObj?.max_concurrency || (resolved.presetKey === 'flash' ? 5 : 3));
+        if (el.modelMeta) {
+            el.modelMeta.innerHTML = '';
+            const addPill = (text, tone = 'neutral') => {
+                const span = document.createElement('span');
+                span.className = `tryon-meta-pill tone-${tone}`;
+                span.textContent = text;
+                el.modelMeta.appendChild(span);
+            };
+            addPill(
+                caps.protocol === 'openai_images_edit'
+                    ? uiText('runtime.protocolOpenaiEdit')
+                    : uiText('runtime.protocolGeminiNative'),
+                'accent'
+            );
+            addPill(
+                resolved.providerObj?.configured
+                    ? getProviderDisplayLabel(resolved.provider, resolved.providerObj?.label)
+                    : `${getProviderDisplayLabel(resolved.provider)} · ${uiText('runtime.providerUnconfiguredTag')}`,
+                resolved.providerObj?.configured ? 'ok' : 'warn'
+            );
+            if (resolved.provider === 'totokens' && matchInfo) {
+                if (matchInfo.issue === 'mismatch') {
+                    addPill(uiText('runtime.totokensRouteMismatchPill', undefined, 'Route mismatch'), 'warn');
+                } else if (matchInfo.issue === 'missing') {
+                    addPill(uiText('runtime.totokensRouteMissingPill', { label: matchInfo.matchedProfile?.label || 'ToTokens' }, 'Key missing'), 'warn');
+                } else if (matchInfo.matchedProfile) {
+                    addPill(uiText('runtime.totokensRouteActivePill', { label: matchInfo.matchedProfile.label }, matchInfo.matchedProfile.label), 'ok');
+                }
+            }
+            addPill(uiText('runtime.capAspectRatio'));
+            addPill(caps.supports_image_size ? uiText('runtime.capResolution1to4k') : uiText('runtime.capResolution1kOnly'));
+            if (caps.supports_quality) {
+                addPill(uiText('runtime.capQualityTiers'));
+                addPill(uiText('runtime.capGptNoSeed'), 'warn');
+            } else {
+                addPill(uiText('runtime.capTempSeed'));
+            }
+            addPill(uiText('runtime.concurrencyHintShort', { max: maxConcurrency }));
+        }
+
+        // 5. Detail parameters UI & capability gating
+        if (el.aspectRatioSelect) {
+            el.aspectRatioSelect.innerHTML = '';
+            (caps.aspect_ratio_options || tf.ASPECT_RATIOS).forEach(val => {
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.textContent = getAspectOptionLabel(val);
+                el.aspectRatioSelect.appendChild(opt);
+            });
+            el.aspectRatioSelect.value = state.detailOptions.aspect_ratio || 'auto';
+        }
+
+        if (el.imageSizeField && el.imageSizeSelect) {
+            const showImageSize = Boolean(caps.supports_image_size || !caps.supports_quality);
+            el.imageSizeField.classList.toggle('hidden', !showImageSize);
+            el.imageSizeSelect.innerHTML = '';
+            const optionsList = caps.supports_image_size ? (caps.image_size_options || tf.GEMINI_IMAGE_SIZES) : ['auto', '1K'];
+            optionsList.forEach(val => {
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.textContent = getSizeOptionLabel(val);
+                el.imageSizeSelect.appendChild(opt);
+            });
+            el.imageSizeSelect.value = state.detailOptions.image_size || 'auto';
+            el.imageSizeSelect.disabled = !caps.supports_image_size;
+            el.imageSizeField.classList.toggle('is-disabled', !caps.supports_image_size);
+            el.imageSizeSelect.title = caps.supports_image_size
+                ? ''
+                : uiText(caps.protocol === 'openai_images_edit' ? 'runtime.sizeGpt1kHint' : 'runtime.size25FlashHint');
+        }
+
+        if (el.qualityField && el.qualitySelect) {
+            el.qualityField.classList.toggle('hidden', !caps.supports_quality);
+            el.qualitySelect.innerHTML = '';
+            (caps.quality_options || tf.GPT_QUALITIES).forEach(val => {
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.textContent = getQualityOptionLabel(val);
+                el.qualitySelect.appendChild(opt);
+            });
+            el.qualitySelect.value = state.detailOptions.quality || 'auto';
+        }
+
+        if (el.temperatureField) {
+            const canTemp = Boolean(caps.supports_temperature);
+            el.temperatureField.classList.toggle('is-disabled', !canTemp);
+            if (el.temperatureSlider) {
+                el.temperatureSlider.disabled = !canTemp;
+                el.temperatureSlider.value = state.detailOptions.temperature !== '' ? state.detailOptions.temperature : '1';
+            }
+            if (el.temperatureInput) {
+                el.temperatureInput.disabled = !canTemp;
+                el.temperatureInput.value = canTemp ? (state.detailOptions.temperature || '') : '';
+            }
+            if (el.temperatureClear) el.temperatureClear.disabled = !canTemp;
+            if (el.temperatureVal) {
+                el.temperatureVal.textContent = canTemp && state.detailOptions.temperature !== ''
+                    ? String(state.detailOptions.temperature)
+                    : uiText('runtime.tempDefaultPill', undefined, 'Default');
+            }
+            if (el.temperatureHint) {
+                el.temperatureHint.textContent = canTemp
+                    ? uiText('tryon.temperatureHint')
+                    : uiText('runtime.tempUnsupportedHint');
+            }
+        }
+
+        if (el.seedField) {
+            const canSeed = Boolean(caps.supports_seed);
+            el.seedField.classList.toggle('is-disabled', !canSeed);
+            if (el.seedInput) {
+                el.seedInput.disabled = !canSeed;
+                el.seedInput.value = canSeed ? (state.detailOptions.seed || '') : '';
+            }
+            if (el.seedRandomBtn) el.seedRandomBtn.disabled = !canSeed;
+            if (el.seedClear) el.seedClear.disabled = !canSeed;
+            if (el.seedHint) {
+                el.seedHint.textContent = canSeed
+                    ? uiText('tryon.seedHint')
+                    : uiText('runtime.seedUnsupportedHint');
+            }
+        }
+
+        setModel(resolved.presetKey, Boolean(options.skipRateFetch));
+        renderEffectiveSummary(resolved.providerObj);
+        if (!options.skipSavePrefs) saveStep3Prefs();
     }
 
     function promptPayload() {
@@ -1284,8 +1878,8 @@
         if (el.downSel) el.downSel.classList.toggle('hidden', selected === 0);
         if (el.selAll) {
             el.selAll.innerHTML = all
-                ? '<i class="fas fa-times"></i> 取消全选'
-                : '<i class="fas fa-check-double"></i> 全选';
+                ? `<i class="fas fa-times"></i> ${uiText('legacy.cancelSelect')}`
+                : `<i class="fas fa-check-double"></i> ${uiText('legacy.selectAll')}`;
         }
     }
 
@@ -1312,11 +1906,11 @@
             item.className = 'batch-gallery-item';
             if (state.selected.has(i)) item.classList.add('selected');
             item.innerHTML = `
-                <img src="${previewUrl}" alt="试衣结果 ${i + 1}" loading="lazy" width="140" height="140">
-                <button class="select-check" type="button" title="选择"><i class="fas fa-check"></i></button>
+                <img src="${previewUrl}" alt="${uiText('runtime.resultAlt', { index: i + 1 })}" loading="lazy" width="140" height="140">
+                <button class="select-check" type="button" title="${uiText('runtime.select')}"><i class="fas fa-check"></i></button>
                 <div class="item-overlay">
                     <span class="item-index">#${i + 1}</span>
-                    <button class="item-download" type="button" title="下载"><i class="fas fa-download"></i></button>
+                    <button class="item-download" type="button" title="${uiText('runtime.download')}"><i class="fas fa-download"></i></button>
                 </div>
             `;
             item.addEventListener('click', () => toggleSel(i));
@@ -1326,7 +1920,7 @@
             });
             item.querySelector('.item-download')?.addEventListener('click', async e => {
                 e.stopPropagation();
-                await downloadImage(url, '试衣结果', i + 1);
+                await downloadImage(url, uiText('legacy.result'), i + 1);
             });
             el.gallery.appendChild(item);
         });
@@ -1359,10 +1953,10 @@
     }
 
     function buildDownloadFilename(baseName, ext, index = null) {
-        const safeBase = String(baseName || '试衣结果')
+        const safeBase = String(baseName || 'ai-tryon-result')
             .replace(/\.[^.]+$/, '')
             .replace(/[\\/:*?"<>|]+/g, '_')
-            .trim() || '试衣结果';
+            .trim() || 'ai-tryon-result';
         const suffix = index == null ? '' : `_${padNumber(index)}`;
         return `${safeBase}_${buildDownloadTimestamp()}${suffix}.${ext}`;
     }
@@ -1428,7 +2022,7 @@
             // 跨域 URL（如 GCS）直接 fetch 会被 CORS 拦截，
             // 回退到后端代理 /download-single 端点
             const r2 = await fetch('/download-single?url=' + encodeURIComponent(url));
-            if (!r2.ok) throw new Error(`下载失败 (${r2.status})`);
+            if (!r2.ok) throw new Error(uiText('runtime.uploadFailed', { status: r2.status }));
             blob = await r2.blob();
         }
         saveBlob(blob, buildDownloadFilename(baseName, 'png', index));
@@ -1436,14 +2030,14 @@
 
     async function downloadZip(urls, baseName) {
         if (!urls || urls.length === 0) {
-            notify('没有可打包下载的图片。', 'warning');
+            notify(uiText('runtime.zipUnavailable'), 'warning');
             return;
         }
         const fd = new FormData();
         fd.append('filenames', JSON.stringify(urls));
         const r = await fetch('/download-batch', { method: 'POST', body: fd });
         if (!r.ok) {
-            let msg = `ZIP 下载失败 (${r.status})`;
+            let msg = uiText('runtime.zipFailed');
             try {
                 const d = await r.json();
                 msg = d.error || msg;
@@ -1455,52 +2049,66 @@
 
     async function downloadAll() {
         try {
-            await downloadZip(getSessionResultUrls(), `试衣结果_${state.results.length}张`);
-            notify('ZIP 下载已开始。', 'success');
+            await downloadZip(getSessionResultUrls(), `${uiText('legacy.result')}_${state.results.length}`);
+            notify(uiText('runtime.downloadStarted'), 'success');
         } catch (e) {
-            notify(e.message || 'ZIP 下载失败。', 'error');
-            reportError(e.message || 'ZIP 下载失败', '批量下载');
+            notify(e.message || uiText('runtime.zipFailed'), 'error');
+            reportError(e.message || uiText('runtime.zipFailed'), 'batch-download');
         }
     }
 
     async function downloadSelected() {
         const urls = selectedUrls();
         if (urls.length === 0) {
-            notify('请先选择至少 1 张图片。', 'warning');
+            notify(uiText('runtime.selectionRequired'), 'warning');
             return;
         }
         try {
-            await downloadZip(urls, `选中结果_${urls.length}张`);
-            notify(`已打包 ${urls.length} 张选中图片。`, 'success');
+            await downloadZip(urls, `${uiText('legacy.result')}_${urls.length}`);
+            notify(uiText('runtime.selectedPacked', { count: urls.length }), 'success');
         } catch (e) {
-            notify(e.message || '选中 ZIP 下载失败。', 'error');
+            notify(e.message || uiText('runtime.zipFailed'), 'error');
         }
     }
 
     async function downloadEach() {
         const urls = selectedUrls().length > 0 ? selectedUrls() : state.results;
         if (urls.length === 0) {
-            notify('没有可下载的图片。', 'warning');
+            notify(uiText('runtime.downloadUnavailable'), 'warning');
             return;
         }
         const ms = el.interval ? clamp(Number(el.interval.value || '1500'), 500, 5000) : 1500;
         for (let i = 0; i < urls.length; i++) {
             try {
-                await downloadImage(urls[i], '试衣结果', i + 1);
+                await downloadImage(urls[i], uiText('legacy.result'), i + 1);
             } catch (e) {
-                writeLog(`第 ${i + 1} 张下载失败: ${e.message || e}`);
+                writeLog(uiText('runtime.downloadItemFailed', { index: i + 1, error: e.message || e }));
             }
             if (i < urls.length - 1) await sleep(ms);
         }
-        notify(`已完成逐张下载，共 ${urls.length} 张。`, 'success');
+        notify(uiText('runtime.downloadComplete', { count: urls.length }), 'success');
     }
 
-    async function submitTask(garment, freedom) {
+    async function submitTask(garment, freedom, idempotencyKey = '') {
+        const idemKey = idempotencyKey || generateIdempotencyKey();
         const fd = new FormData();
         fd.append('target_image', state.model);
         fd.append('reference_image', garment);
         fd.append('model', state.modelType);
         fd.append('freedom', String(freedom));
+        fd.append('locale', window.WorkbenchI18n?.locale || 'zh-CN');
+        fd.append('idempotency_key', idemKey);
+        if (state.provider) fd.append('provider', state.provider);
+        if (state.provider === 'totokens' && state.totokensProfile && state.totokensProfile !== 'auto') {
+            fd.append('totokens_profile', state.totokensProfile);
+        }
+        if (state.modelId) fd.append('model_id', state.modelId);
+        const detailOpts = window.TryonForm?.collectSubmissionOptions(state.detailOptions, state.capabilities) || {};
+        ['aspect_ratio', 'image_size', 'quality', 'temperature', 'seed'].forEach(key => {
+            if (detailOpts[key] !== undefined && detailOpts[key] !== '') {
+                fd.append(key, String(detailOpts[key]));
+            }
+        });
         if (state.modelCloudUrl) fd.append('target_image_cloud_url', state.modelCloudUrl);
         const garmentIdx = state.garments.indexOf(garment);
         const garmentCloudUrl = garmentIdx >= 0 ? state.garmentCloudUrls[garmentIdx] : '';
@@ -1512,9 +2120,21 @@
             fd.append('custom_prompt', p.text);
             fd.append('prompt_mode', p.mode);
         }
-        const r = await fetch('/submit-task', { method: 'POST', body: fd });
+        const headers = {
+            'Accept-Language': window.WorkbenchI18n?.locale || 'zh-CN',
+            'X-Idempotency-Key': idemKey,
+        };
+        if (state.taskToken) headers['X-Task-Token'] = state.taskToken;
+
+        let r;
+        try {
+            r = await fetch('/submit-task', { method: 'POST', body: fd, headers, credentials: 'same-origin' });
+        } catch (_netErr) {
+            // Retry once with the exact same idempotency key on transient network interruption
+            r = await fetch('/submit-task', { method: 'POST', body: fd, headers, credentials: 'same-origin' });
+        }
         if (!r.ok) {
-            let msg = `任务提交失败 (${r.status})`;
+            let msg = uiText('runtime.taskSubmitFailed', { status: r.status });
             try {
                 const d = await r.json();
                 msg = d.error || d.detail || msg;
@@ -1522,50 +2142,136 @@
             throw new Error(msg);
         }
         const d = await r.json();
-        if (!d.task_id) throw new Error('缺少 task_id');
+        if (!d.task_id) throw new Error(uiText('runtime.taskIdMissing'));
+        if (d.task_token) state.taskToken = String(d.task_token);
+        persistActiveTask(d.task_id, state.taskToken);
         return d.task_id;
+    }
+
+    async function waitForPollInterval(ms) {
+        if (!document.hidden) {
+            await sleep(ms);
+            return;
+        }
+        await new Promise(resolve => {
+            const timer = setTimeout(() => {
+                document.removeEventListener('visibilitychange', onVis);
+                resolve();
+            }, Math.max(ms, 6000));
+            const onVis = () => {
+                if (!document.hidden) {
+                    clearTimeout(timer);
+                    document.removeEventListener('visibilitychange', onVis);
+                    resolve();
+                }
+            };
+            document.addEventListener('visibilitychange', onVis);
+        });
     }
 
     async function pollTask(taskId, index, total) {
         let logged = 0;
         let transientErrors = 0;
         for (let t = 0; t < 240; t++) {
-            if (state.abort) throw new Error('用户已中止生成');
+            if (state.unloading) return null;
+            if (state.abort) {
+                persistActiveTask('', '');
+                throw new Error(uiText('runtime.userAborted'));
+            }
+            let d;
             try {
-                const r = await fetch(`/task/${encodeURIComponent(taskId)}`, { cache: 'no-store' });
-                if (!r.ok) throw new Error(`任务轮询失败 (${r.status})`);
-                const d = await r.json();
-                transientErrors = 0;
-                const tp = clamp(Number(d.progress || 0), 0, 100);
-                const op = ((index + tp / 100) / total) * 100;
-                progress(op, d.message || '处理中...', index + 1, total);
-                if (Array.isArray(d.logs) && d.logs.length > logged) {
-                    for (let i = logged; i < d.logs.length; i++) writeLog(d.logs[i]);
-                    logged = d.logs.length;
+                const taskLocale = window.WorkbenchI18n?.locale || 'zh-CN';
+                const headers = { 'Accept-Language': taskLocale };
+                if (state.taskToken) headers['X-Task-Token'] = state.taskToken;
+                const r = await fetch(
+                    `/task/${encodeURIComponent(taskId)}?lang=${encodeURIComponent(taskLocale)}`,
+                    { cache: 'no-store', headers, credentials: 'same-origin' }
+                );
+                if (r.status === 403 || r.status === 404) {
+                    persistActiveTask('', '');
+                    throw new Error(uiText('runtime.pollFailed', { status: r.status }));
                 }
-                if (d.status === 'completed') return d;
-                if (d.status === 'failed') throw new Error(d.error || d.message || '任务失败');
+                if (!r.ok) throw new Error(uiText('runtime.pollFailed', { status: r.status }));
+                d = await r.json();
+                transientErrors = 0;
             } catch (err) {
+                if (String(err.message || '').includes('403') || String(err.message || '').includes('404')) {
+                    throw err;
+                }
                 transientErrors += 1;
-                writeLog(`轮询临时错误 (${transientErrors}/3): ${err.message || err}`);
+                writeLog(uiText('runtime.transientPollError', { count: transientErrors, error: err.message || err }));
                 if (transientErrors >= 3) throw err;
-                await sleep(1500);
+                await waitForPollInterval(1500);
                 continue;
             }
-            await sleep(1500);
+
+            const tp = clamp(Number(d.progress || 0), 0, 100);
+            const op = ((index + tp / 100) / total) * 100;
+            progress(op, d.message || uiText('legacy.processing'), index + 1, total);
+            if (Array.isArray(d.logs) && d.logs.length > logged) {
+                for (let i = logged; i < d.logs.length; i++) writeLog(d.logs[i]);
+                logged = d.logs.length;
+            }
+            if (d.status === 'completed') {
+                persistActiveTask('', '');
+                return d;
+            }
+            if (d.status === 'failed') {
+                persistActiveTask('', '');
+                throw new Error(d.error || d.message || uiText('task.failed'));
+            }
+            if (d.status === 'unknown') {
+                persistActiveTask('', '');
+                throw new Error(d.error || d.message || uiText('task.unknown'));
+            }
+            await waitForPollInterval(1500);
         }
-        throw new Error('任务轮询超时');
+        throw new Error(uiText('runtime.pollTimeout'));
     }
 
     async function generate() {
         if (state.running) return;
         if (!state.model) {
-            notify('请先上传 1 张模特照片。', 'warning');
+            notify(uiText('runtime.modelRequired'), 'warning');
             return;
         }
         if (state.garments.length === 0) {
-            notify('请先上传至少 1 张服装照片。', 'warning');
+            notify(uiText('runtime.garmentRequired'), 'warning');
             return;
+        }
+        const tf = window.TryonForm;
+        if (tf && state.useCustomModel) {
+            const customCheck = tf.validateCustomModelId(state.customModelId);
+            if (!customCheck.valid) {
+                notify(
+                    customCheck.reason === 'empty'
+                        ? uiText('runtime.customModelEmptyTip')
+                        : uiText('runtime.customModelInvalidTip'),
+                    'warning'
+                );
+                return;
+            }
+        }
+        const providersList = Array.isArray(state.runtimeStatus?.providers) ? state.runtimeStatus.providers : [];
+        if (providersList.length > 0) {
+            const selectedProvider = providersList.find(p => p.key === state.provider);
+            if (selectedProvider && (!selectedProvider.configured || selectedProvider.enabled === false)) {
+                notify(
+                    selectedProvider.key === 'totokens' && state.modelType === 'chatgpt'
+                        ? uiText('runtime.chatgptKeyMissingTip')
+                        : uiText('runtime.providerDisabledError'),
+                    'warning'
+                );
+                return;
+            }
+        }
+        if (tf) {
+            try {
+                tf.collectSubmissionOptions(state.detailOptions, state.capabilities);
+            } catch (err) {
+                notify(err.message || uiText('runtime.providerDisabledError'), 'warning');
+                return;
+            }
         }
         const batch = getBatchCount();
         const list = [];
@@ -1588,25 +2294,26 @@
         let fail = 0;
         const parallel = getParallelSettings(list.length);
 
-        writeLog(`开始生成，共 ${list.length} 个任务。`);
+        writeLog(uiText('runtime.generationStarted', { count: list.length }));
         if (parallel.enabled) {
-            writeLog(`并行生成已开启，并发=${parallel.concurrency}`);
+            writeLog(uiText('runtime.generationParallel', { count: parallel.concurrency }));
         }
-        setResultFeedback('info', 'AI 正在生成试穿结果', '你可以留在当前页面等待，也可以展开高级区查看系统日志与通道状态。');
+        setResultFeedback('info', 'runtime.generationStarted', 'runtime.generationStartedDetail');
 
         const runOneTask = async (i) => {
             if (state.abort) return;
             const g = list[i];
             const f = getFreedom();
             const garmentType = getGarmentType();
-            const garmentTypeLabel = garmentType ? `, 衣物类型=${garmentType}` : '';
-            writeLog(`任务 ${i + 1}/${list.length}: 服装=${g}, 自由度=${f}${garmentTypeLabel}`);
+            const garmentTypeLabel = garmentType ? `, type=${garmentType}` : '';
+            writeLog(uiText('runtime.generationItem', { index: i + 1, total: list.length, garment: g, freedom: f, type: garmentTypeLabel }));
             try {
                 const id = await submitTask(g, f);
                 const t = await pollTask(id, i, list.length);
+                if (!t) return;
                 const stableUrl = String(t.result_display_url || t.result_cloud_url || t.result_url || '').trim();
                 const previewUrl = String(t.result_data_url || stableUrl || '').trim();
-                if (!previewUrl) throw new Error('任务成功但结果图片为空');
+                if (!previewUrl) throw new Error(uiText('runtime.generationNone'));
                 state.results.push(stableUrl || previewUrl);
                 state.resultPreviews.push(previewUrl);
                 ok += 1;
@@ -1615,14 +2322,14 @@
                 refreshRateStatus(true);
             } catch (e) {
                 fail += 1;
-                writeLog(`任务 ${i + 1} 失败: ${e.message || e}`);
-                notify(`任务 ${i + 1} 失败: ${e.message || e}`, 'error');
-                reportError(e.message || '任务失败', '生成任务');
+                writeLog(uiText('runtime.generationItemFailed', { index: i + 1, error: e.message || e }));
+                notify(uiText('runtime.generationItemFailed', { index: i + 1, error: e.message || e }), 'error');
+                reportError(e.message || uiText('task.failed'), 'generation-task');
                 refreshRateStatus(true);
             }
             if (parallel.enabled) {
                 const done = ok + fail;
-                progress((done / list.length) * 100, '并行生成处理中...', done, list.length);
+                progress((done / list.length) * 100, uiText('runtime.generationParallelProgress'), done, list.length);
             }
         };
 
@@ -1650,25 +2357,24 @@
         }
 
         if (state.abort) {
-            notify(`已中止生成，成功 ${ok} 张，失败 ${fail} 张。`, 'warning');
-            setResultFeedback('warning', '生成已中止', `当前已完成 ${ok} 张，失败 ${fail} 张。你可以调整参数后重新生成。`);
+            notify(uiText('runtime.generationAborted', { success: ok, failed: fail }), 'warning');
+            setResultFeedback('warning', 'runtime.userAborted', 'runtime.generationAbortedDetail', { done: ok, failed: fail });
         } else if (ok > 0) {
-            progress(100, '试穿完成', list.length, list.length);
-            notify(`试穿完成：成功 ${ok} 张，失败 ${fail} 张。`, fail > 0 ? 'warning' : 'success');
+            progress(100, uiText('task.completed'), list.length, list.length);
+            notify(uiText('runtime.generationFinished', { success: ok, failed: fail }), fail > 0 ? 'warning' : 'success');
             playCompletionSound(fail > 0 ? 'warning' : 'success');
-            writeLog(`生成结束：成功 ${ok} 张，失败 ${fail} 张。`);
+            writeLog(uiText('runtime.generationFinished', { success: ok, failed: fail }));
             setResultFeedback(
                 fail > 0 ? 'warning' : 'success',
-                fail > 0 ? '生成完成，但部分任务失败' : '试穿结果已生成',
-                fail > 0
-                    ? `已成功生成 ${ok} 张，另有 ${fail} 张失败。可直接下载结果或调整通道后重试。`
-                    : `共生成 ${ok} 张试穿结果。可直接下载，或切换风格后重新生成。`
+                fail > 0 ? 'runtime.generationPartial' : 'task.completed',
+                fail > 0 ? 'runtime.generationPartial' : 'runtime.generationFinished',
+                { success: ok, failed: fail }
             );
         } else {
-            notify('生成失败，未获得任何试穿结果。', 'error');
+            notify(uiText('runtime.generationNone'), 'error');
             playCompletionSound('warning');
-            writeLog('生成结束：所有任务均失败，未返回可用图片。');
-            setResultFeedback('error', '未获得可用试穿结果', '请优先检查用户图/商品图是否清晰、生成通道与 API Key 是否可用，必要时重新上传图片后再试。');
+            writeLog(uiText('runtime.generationNone'));
+            setResultFeedback('error', 'runtime.generationNone', 'runtime.generationNone');
         }
     }
 
@@ -1698,16 +2404,16 @@
                 const resp = await fetch(`/static/sample-models/${model.gender}/${model.filename}`);
                 const blob = await resp.blob();
                 const file = new File([blob], model.filename, { type: blob.type });
-                notify('正在上传示例模特照片...', 'info');
+                notify(uiText('runtime.sampleUploading'), 'info');
                 const result = await upload(file, '/upload/model');
                 state.model = result.filename;
                 state.modelCloudUrl = result.cloud_url;
                 updateModel();
-                setUploadIntakeStatus('model', `已选用示例模特「${model.name}」。`, 'success');
-                notify(`已选用示例模特「${model.name}」。`, 'success');
+                setUploadIntakeStatus('model', 'runtime.sampleSelected', 'success', { name: model.name });
+                notify(uiText('runtime.sampleSelected', { name: model.name }), 'success');
             } catch (e) {
                 card.classList.remove('selected');
-                notify(e.message || '示例模特照片加载失败。', 'error');
+                notify(e.message || uiText('runtime.sampleLoadFailed'), 'error');
             }
         }
 
@@ -1736,7 +2442,7 @@
             state.modelCloudUrl = '';
             updateModel();
             setUploadIntakeStatus('model', defaultIntakeStatus('model'), 'neutral');
-            notify('已清空模特照片。', 'info');
+            notify(uiText('runtime.clearedModel'), 'info');
         });
         el.refClear?.addEventListener('click', e => {
             e.stopPropagation();
@@ -1744,19 +2450,19 @@
             state.garmentCloudUrls = [];
             updateGarments();
             setUploadIntakeStatus('garment', defaultIntakeStatus('garment'), 'neutral');
-            notify('已清空服装照片。', 'info');
+            notify(uiText('runtime.clearedGarment'), 'info');
         });
 
         el.modelPreview?.addEventListener('click', e => {
             e.stopPropagation();
-            if (!state.model) return notify('暂无模特照片。', 'warning');
+            if (!state.model) return notify(uiText('runtime.noModel'), 'warning');
             window.open(_modelDisplayUrl(), '_blank');
         });
         el.refPreview?.addEventListener('click', e => {
             e.stopPropagation();
-            if (state.garments.length === 0) return notify('暂无服装照片。', 'warning');
+            if (state.garments.length === 0) return notify(uiText('runtime.noGarment'), 'warning');
             window.open(_garmentDisplayUrl(0), '_blank');
-            notify(`已打开第一张服装图（共 ${state.garments.length} 张）。`, 'info');
+            notify(uiText('runtime.openedGarment', { count: state.garments.length }), 'info');
         });
 
         el.minus?.addEventListener('click', () => { if (el.batchCount) el.batchCount.value = String(clamp(Number(el.batchCount.value || '1') - 1, 1, 50)); });
@@ -1774,7 +2480,7 @@
         el.genBtn?.addEventListener('click', generate);
         el.abortBtn?.addEventListener('click', () => {
             state.abort = true;
-            notify('已请求中止，等待当前任务结束...', 'warning');
+            notify(uiText('runtime.stopRequested'), 'warning');
         });
 
         el.selAll?.addEventListener('click', () => {
@@ -1789,16 +2495,20 @@
         el.downEach?.addEventListener('click', downloadEach);
         el.downOne?.addEventListener('click', async () => {
             if (!el.resultImg?.src) return;
-            try { await downloadImage(el.resultImg.src, '试衣结果'); }
-            catch (e) { notify(e.message || '下载失败。', 'error'); }
+            try { await downloadImage(el.resultImg.src, 'ai-tryon-result'); }
+            catch (e) { notify(e.message || uiText('runtime.downloadUnavailable'), 'error'); }
         });
         el.resultRetryBtn?.addEventListener('click', generate);
         el.returnToRecommendBtn?.addEventListener('click', () => navigateToRecommendation('return'));
         el.switchProductBtn?.addEventListener('click', () => navigateToRecommendation('switch'));
 
-        el.promptOpen?.addEventListener('click', () => el.promptModal?.classList.remove('hidden'));
-        el.promptClose?.addEventListener('click', () => el.promptModal?.classList.add('hidden'));
-        el.promptModal?.addEventListener('click', e => { if (e.target === el.promptModal) el.promptModal.classList.add('hidden'); });
+        const setPromptModalOpen = (open) => {
+            el.promptModal?.classList.toggle('hidden', !open);
+            document.body.classList.toggle('modal-open', Boolean(open));
+        };
+        el.promptOpen?.addEventListener('click', () => setPromptModalOpen(true));
+        el.promptClose?.addEventListener('click', () => setPromptModalOpen(false));
+        el.promptModal?.addEventListener('click', e => { if (e.target === el.promptModal) setPromptModalOpen(false); });
 
         const syncPromptMode = () => {
             const over = Boolean(el.promptToggle?.checked);
@@ -1825,14 +2535,168 @@
         });
         syncParallelUi();
 
-        const cards = [...document.querySelectorAll('#model-selector .model-card')];
-        cards.forEach(c => c.addEventListener('click', () => {
-            cards.forEach(x => x.classList.remove('active'));
-            c.classList.add('active');
-            setModel(c.dataset.model || 'flash');
-        }));
-        const active = cards.find(c => c.classList.contains('active'));
-        setModel(active ? (active.dataset.model || 'flash') : 'flash');
+        loadStep3Prefs();
+        const urlModelHint = new URLSearchParams(window.location.search).get('model');
+        if (urlModelHint) {
+            state.step3PrefsTouched = true;
+            const hint = urlModelHint.trim();
+            const low = hint.toLowerCase();
+            if (low === 'chatgpt') {
+                state.provider = 'totokens';
+                state.modelId = 'gpt-image-2';
+                state.useCustomModel = false;
+            } else if (low === 'pro') {
+                state.provider = 'gemini';
+                state.modelId = 'gemini-3-pro-image-preview';
+                state.useCustomModel = false;
+            } else if (low === 'flash') {
+                state.provider = 'gemini';
+                state.modelId = 'gemini-3.1-flash-image-preview';
+                state.useCustomModel = false;
+            } else if (hint) {
+                state.modelId = hint;
+            }
+        }
+
+        el.providerSelect?.addEventListener('change', () => {
+            state.step3PrefsTouched = true;
+            state.provider = el.providerSelect.value;
+            state.useCustomModel = false;
+            state.modelId = '';
+            syncTryonRoutingUi();
+        });
+        el.totokensProfileSelect?.addEventListener('change', () => {
+            state.step3PrefsTouched = true;
+            state.totokensProfile = el.totokensProfileSelect.value || 'auto';
+            syncTryonRoutingUi({ skipRateFetch: true });
+        });
+        el.modelSelect?.addEventListener('change', () => {
+            state.step3PrefsTouched = true;
+            state.modelId = el.modelSelect.value;
+            state.useCustomModel = false;
+            syncTryonRoutingUi();
+        });
+        el.customModelToggle?.addEventListener('change', () => {
+            state.step3PrefsTouched = true;
+            state.useCustomModel = Boolean(el.customModelToggle.checked);
+            if (state.useCustomModel && !String(state.customModelId || '').trim()) {
+                state.customModelId = state.modelId || '';
+            }
+            syncTryonRoutingUi();
+            if (state.useCustomModel) el.customModelInput?.focus();
+        });
+        el.customModelInput?.addEventListener('input', () => {
+            state.step3PrefsTouched = true;
+            state.customModelId = el.customModelInput.value;
+            syncTryonRoutingUi();
+        });
+        el.refreshModelsBtn?.addEventListener('click', async () => {
+            el.refreshModelsBtn.disabled = true;
+            try {
+                const ok = await fetchRuntimeStatus(true);
+                if (ok) {
+                    notify(uiText('runtime.modelCatalogRefreshed'), 'success');
+                } else {
+                    notify(uiText('runtime.modelCatalogRefreshFailed'), 'warning');
+                }
+            } finally {
+                el.refreshModelsBtn.disabled = false;
+            }
+        });
+        el.resetParamsBtn?.addEventListener('click', () => {
+            state.step3PrefsTouched = true;
+            state.totokensProfile = 'auto';
+            const tf = window.TryonForm;
+            state.detailOptions = tf
+                ? tf.defaultDetailOptions()
+                : { aspect_ratio: 'auto', image_size: 'auto', quality: 'auto', temperature: '', seed: '' };
+            syncTryonRoutingUi();
+            notify(uiText('runtime.paramsResetDone'), 'info');
+        });
+        el.aspectRatioSelect?.addEventListener('change', () => {
+            state.step3PrefsTouched = true;
+            state.detailOptions.aspect_ratio = el.aspectRatioSelect.value || 'auto';
+            renderEffectiveSummary();
+            saveStep3Prefs();
+        });
+        el.imageSizeSelect?.addEventListener('change', () => {
+            state.step3PrefsTouched = true;
+            state.detailOptions.image_size = el.imageSizeSelect.value || 'auto';
+            syncTryonRoutingUi({ skipRateFetch: true });
+        });
+        el.qualitySelect?.addEventListener('change', () => {
+            state.step3PrefsTouched = true;
+            state.detailOptions.quality = el.qualitySelect.value || 'auto';
+            renderEffectiveSummary();
+            saveStep3Prefs();
+        });
+        el.temperatureSlider?.addEventListener('input', () => {
+            state.step3PrefsTouched = true;
+            state.detailOptions.temperature = el.temperatureSlider.value;
+            if (el.temperatureInput) el.temperatureInput.value = el.temperatureSlider.value;
+            if (el.temperatureVal) el.temperatureVal.textContent = el.temperatureSlider.value;
+            renderEffectiveSummary();
+            saveStep3Prefs();
+        });
+        el.temperatureInput?.addEventListener('input', () => {
+            state.step3PrefsTouched = true;
+            const raw = el.temperatureInput.value.trim();
+            if (raw === '') {
+                state.detailOptions.temperature = '';
+                if (el.temperatureSlider) el.temperatureSlider.value = '1';
+                if (el.temperatureVal) el.temperatureVal.textContent = uiText('runtime.tempDefaultPill', undefined, 'Default');
+            } else {
+                const num = Number(raw);
+                if (Number.isFinite(num)) {
+                    const clamped = Math.min(2, Math.max(0, Math.round(num * 100) / 100));
+                    state.detailOptions.temperature = String(clamped);
+                    if (el.temperatureSlider) el.temperatureSlider.value = String(clamped);
+                    if (el.temperatureVal) el.temperatureVal.textContent = String(clamped);
+                } else {
+                    state.detailOptions.temperature = raw;
+                }
+            }
+            renderEffectiveSummary();
+            saveStep3Prefs();
+        });
+        el.temperatureClear?.addEventListener('click', () => {
+            state.step3PrefsTouched = true;
+            state.detailOptions.temperature = '';
+            if (el.temperatureInput) el.temperatureInput.value = '';
+            if (el.temperatureSlider) el.temperatureSlider.value = '1';
+            if (el.temperatureVal) el.temperatureVal.textContent = uiText('runtime.tempDefaultPill', undefined, 'Default');
+            renderEffectiveSummary();
+            saveStep3Prefs();
+        });
+        el.seedInput?.addEventListener('input', () => {
+            state.step3PrefsTouched = true;
+            const cleaned = el.seedInput.value.replace(/[^\d]/g, '');
+            if (el.seedInput.value !== cleaned) el.seedInput.value = cleaned;
+            state.detailOptions.seed = cleaned;
+            renderEffectiveSummary();
+            saveStep3Prefs();
+        });
+        el.seedRandomBtn?.addEventListener('click', () => {
+            state.step3PrefsTouched = true;
+            const seedNum = Math.floor(Math.random() * 2147483647);
+            state.detailOptions.seed = String(seedNum);
+            if (el.seedInput) el.seedInput.value = String(seedNum);
+            renderEffectiveSummary();
+            saveStep3Prefs();
+            notify(uiText('runtime.seedRolled', { seed: seedNum }), 'info');
+        });
+        el.seedClear?.addEventListener('click', () => {
+            state.step3PrefsTouched = true;
+            state.detailOptions.seed = '';
+            if (el.seedInput) el.seedInput.value = '';
+            renderEffectiveSummary();
+            saveStep3Prefs();
+            notify(uiText('runtime.seedCleared'), 'info');
+        });
+        el.freedom?.addEventListener('input', () => renderEffectiveSummary());
+
+        syncTryonRoutingUi({ skipRateFetch: true, skipSavePrefs: true });
+        refreshRateStatus(true);
 
         // Sidebar open/close
         const bindSidebar = (toggleBtn, openBtn, closeBtn, overlay, name) => {
@@ -1863,8 +2727,8 @@
             if (ev.key !== 'Escape') return;
             closeAllSidebars();
             el.promptModal?.classList.add('hidden');
+            document.body.classList.remove('modal-open');
         });
-        window.addEventListener('message', event => { void handleBridgeMessage(event); });
     }
 
     // ===== Garment Browser Module =====
@@ -1875,12 +2739,19 @@
         let _currentFilters = { query: '', platform: '', gender: '', style_type: '', color: '', price_min: null, price_max: null };
         let _totalItems = 0;
         let _debounceTimer = null;
+        let _filterRequest = 0;
+        let _pageRequest = 0;
 
         function $(id) { return document.getElementById(id); }
 
+        function wbT(key, params) {
+            return window.WorkbenchI18n?.t(`legacy.${key}`, params) || key;
+        }
+
         async function fetchFilters() {
             try {
-                const resp = await fetch('/api/products/filters');
+                const lang = window.WorkbenchI18n?.locale || 'zh-CN';
+                const resp = await fetch('/api/products/filters?lang=' + encodeURIComponent(lang), { headers: { 'Accept-Language': lang } });
                 if (!resp.ok) return null;
                 return await resp.json();
             } catch { return null; }
@@ -1897,8 +2768,10 @@
             if (_currentFilters.price_max != null) params.set('price_max', String(_currentFilters.price_max));
             params.set('offset', String(offset));
             params.set('limit', String(PAGE_SIZE));
+            params.set('lang', window.WorkbenchI18n?.locale || 'zh-CN');
             try {
-                const resp = await fetch(`/api/products?${params.toString()}`);
+                const lang = window.WorkbenchI18n?.locale || 'zh-CN';
+                const resp = await fetch(`/api/products?${params.toString()}`, { headers: { 'Accept-Language': lang } });
                 if (!resp.ok) return { items: [], total: 0 };
                 return await resp.json();
             } catch { return { items: [], total: 0 }; }
@@ -1934,7 +2807,7 @@
                 <div class="garment-card-body">
                     <div class="garment-card-title">${item.title || ''}</div>
                     <div class="garment-card-meta">
-                        <span class="garment-card-price">¥${item.price || 0}</span>
+                        <span class="garment-card-price">${window.WorkbenchI18n?.formatCurrency ? window.WorkbenchI18n.formatCurrency(item.price || 0) : `¥${item.price || 0}`}</span>
                         <span class="garment-card-tag">${item.platform || ''}</span>
                     </div>
                     <div class="garment-card-tags">
@@ -1952,19 +2825,21 @@
             // Import the selected garment image into the workbench
             const imageUrl = item.image_url || '';
             if (!imageUrl) {
-                notify('该商品没有可用图片', 'warning');
+                notify(uiText('runtime.catalogNoImage'), 'warning');
                 return;
             }
             try {
-                notify(`正在导入「${(item.title || '').slice(0, 20)}…」`, 'info');
+                const shortTitle = (item.title || '').slice(0, 20);
+                notify(uiText('runtime.catalogImporting', { title: shortTitle }), 'info');
                 const result = await importBridgeImage('garment', imageUrl, '');
                 state.garments = [result.filename];
                 state.garmentCloudUrls = [result.cloud_url || ''];
                 updateGarments();
-                setUploadIntakeStatus('garment', `已从商品库导入「${(item.title || '').slice(0, 30)}…」`, 'success');
+                setUploadIntakeStatus('garment', 'runtime.catalogImported', 'success', { title: (item.title || '').slice(0, 30) });
                 // Also update recommendation info
                 state.recommendation = state.recommendation || {};
                 state.recommendation.productTitle = item.title || '';
+                state.recommendation.presentationSource = null;
                 state.recommendation.productId = String(item.id || '');
                 state.recommendation.productPrice = item.price;
                 state.recommendation.styleType = item.style_type || '';
@@ -1972,13 +2847,13 @@
                 state.recommendation.garmentImageUrl = imageUrl;
                 updateRecommendationUi();
                 updateCompareStage();
-                notify(`已选择「${(item.title || '').slice(0, 25)}…」作为试穿商品`, 'success');
+                notify(uiText('runtime.catalogSelected', { title: (item.title || '').slice(0, 25) }), 'success');
                 // Highlight selected card
                 document.querySelectorAll('.garment-card').forEach(c => c.classList.remove('selected'));
                 const selectedCard = document.querySelector(`.garment-card[data-id="${item.id}"]`);
                 if (selectedCard) selectedCard.classList.add('selected');
             } catch (e) {
-                notify(`导入商品图失败: ${e.message || e}`, 'error');
+                notify(uiText('runtime.catalogImportFailed', { error: e.message || e }), 'error');
             }
         }
 
@@ -1990,21 +2865,23 @@
             const nextBtn = $('garment-grid-next');
             if (!grid) return;
 
-            grid.innerHTML = '<div class="garment-grid-loading"><i class="fas fa-spinner fa-spin"></i> 加载中...</div>';
+            grid.innerHTML = `<div class="garment-grid-loading"><i class="fas fa-spinner fa-spin"></i> ${wbT('loading')}</div>`;
 
             const offset = _currentPage * PAGE_SIZE;
+            const requestId = ++_pageRequest;
             const data = await fetchProducts(offset);
+            if (requestId !== _pageRequest) return;
             _totalItems = data.total || 0;
 
-            if (countEl) countEl.textContent = `共 ${_totalItems} 件`;
+            if (countEl) countEl.textContent = wbT('productCount', { count: _totalItems });
             const totalPages = Math.max(1, Math.ceil(_totalItems / PAGE_SIZE));
-            if (pageInfo) pageInfo.textContent = `第 ${_currentPage + 1} / ${totalPages} 页`;
+            if (pageInfo) pageInfo.textContent = wbT('page', { page: _currentPage + 1, total: totalPages });
             if (prevBtn) prevBtn.disabled = _currentPage === 0;
             if (nextBtn) nextBtn.disabled = _currentPage >= totalPages - 1;
 
             grid.innerHTML = '';
             if (!data.items || data.items.length === 0) {
-                grid.innerHTML = '<div class="garment-grid-loading">没有找到匹配的商品</div>';
+                grid.innerHTML = `<div class="garment-grid-loading">${wbT('noProducts')}</div>`;
                 return;
             }
             data.items.forEach(item => grid.appendChild(renderCard(item)));
@@ -2017,18 +2894,24 @@
         }
 
         async function initFilters() {
-            _filters = await fetchFilters();
+            const requestId = ++_filterRequest;
+            const filters = await fetchFilters();
+            if (requestId !== _filterRequest) return;
+            _filters = filters;
             if (!_filters) return;
 
             // Populate style type chips
             const styleContainer = $('filter-style');
             if (styleContainer && _filters.style_types) {
+                styleContainer.querySelectorAll('.filter-chip[data-value]:not([data-value=""])').forEach(chip => chip.remove());
+                styleContainer.querySelector('.filter-chip[data-value=""]')?.classList.toggle('active', !_currentFilters.style_type);
                 _filters.style_types.forEach(st => {
                     const btn = document.createElement('button');
                     btn.type = 'button';
                     btn.className = 'filter-chip';
-                    btn.dataset.value = st;
-                    btn.textContent = st;
+                    btn.dataset.value = st.key || st;
+                    btn.textContent = st.label || st;
+                    btn.classList.toggle('active', btn.dataset.value === _currentFilters.style_type);
                     styleContainer.appendChild(btn);
                 });
             }
@@ -2036,14 +2919,17 @@
             // Populate color chips
             const colorContainer = $('filter-color');
             if (colorContainer && _filters.color_families) {
+                colorContainer.querySelectorAll('.filter-chip[data-value]:not([data-value=""])').forEach(chip => chip.remove());
+                colorContainer.querySelector('.filter-chip[data-value=""]')?.classList.toggle('active', !_currentFilters.color);
                 // Only show top colors (limit to avoid overflow)
                 const topColors = _filters.color_families.slice(0, 15);
                 topColors.forEach(c => {
                     const btn = document.createElement('button');
                     btn.type = 'button';
                     btn.className = 'filter-chip';
-                    btn.dataset.value = c;
-                    btn.textContent = c;
+                    btn.dataset.value = c.key || c;
+                    btn.textContent = c.label || c;
+                    btn.classList.toggle('active', btn.dataset.value === _currentFilters.color);
                     colorContainer.appendChild(btn);
                 });
             }
@@ -2170,32 +3056,92 @@
                 await initFilters();
                 bindEvents();
             },
+            async refreshLocale() {
+                await initFilters();
+                await loadPage();
+            },
             loadPage,
         };
     })();
 
-    async function fetchRuntimeStatus() {
+    function applyRuntimeModels(status) {
+        const prevName = MODEL_LIMITS[state.modelType]?.name;
+        state.runtimeStatus = status || null;
+        if (!state.step3PrefsTouched) {
+            loadStep3Prefs();
+        }
+        const providers = Array.isArray(status?.providers) ? status.providers : [];
+        const rawLabels = status?.model_labels || {};
+        const findModelName = (presetKey, fallbackName) => {
+            for (const p of providers) {
+                const match = (p.models || []).find(m => m.preset_key === presetKey);
+                if (match?.id) return match.id;
+            }
+            return rawLabels[presetKey] || fallbackName;
+        };
+
+        const flashTechName = findModelName('flash', 'Gemini Flash Image');
+        const proTechName = findModelName('pro', 'Gemini Pro Image');
+        const chatgptModelId = String(status?.chatgpt_model || findModelName('chatgpt', 'gpt-image-2')).trim();
+        const chatgptTechName = chatgptModelId ? `ChatGPT Image (${chatgptModelId})` : 'ChatGPT Image';
+
+        if (MODEL_LIMITS.flash) MODEL_LIMITS.flash.name = flashTechName;
+        if (MODEL_LIMITS.pro) MODEL_LIMITS.pro.name = proTechName;
+        if (MODEL_LIMITS.chatgpt) MODEL_LIMITS.chatgpt.name = chatgptTechName;
+
+        syncTryonRoutingUi({ skipRateFetch: true });
+
+        const nextName = MODEL_LIMITS[state.modelType]?.name;
+        if (nextName !== prevName) {
+            refreshModelRateUi();
+            refreshRateStatus(true);
+        } else {
+            refreshModelRateUi();
+        }
+    }
+
+    async function fetchRuntimeStatus(silent = false) {
         try {
             const r = await fetch('/api/runtime-status', { cache: 'no-store' });
             const d = await r.json();
             state.runtimeAvailable = Boolean(
                 r.ok && d.tryon_enabled === true && d.configured === true
             );
-            if (d.tryon_enabled === false) {
-                notify('试衣服务暂时停用', 'warning');
-            } else if (d.configured === false) {
-                notify('试衣服务配置未完成，请联系管理员', 'warning');
+            applyRuntimeModels(d);
+            if (!silent && d.tryon_enabled === false) {
+                notify(uiText('runtime.servicePaused'), 'warning');
+            } else if (!silent && d.configured === false) {
+                notify(uiText('runtime.serviceConfigured'), 'warning');
             }
+            ready();
+            return Boolean(r.ok);
         } catch (_) {
             state.runtimeAvailable = false;
-            notify('暂时无法确认试衣服务状态，请稍后刷新重试', 'warning');
+            if (!silent) notify(uiText('runtime.serviceStatusFailed'), 'warning');
+            ready();
+            return false;
         }
-        ready();
     }
+
+    const _pendingBridgeEvents = [];
+    let _bridgeConfigReady = false;
+    window.addEventListener('message', event => {
+        if (!_bridgeConfigReady) {
+            if (event?.data && typeof event.data === 'object') {
+                _pendingBridgeEvents.push(event);
+            }
+            return;
+        }
+        void handleBridgeMessage(event);
+    });
 
     async function init() {
         applyCopy();
         state.frontendConfig = normalizeFrontendConfig(FRONTEND_CONFIG_DEFAULT);
+        const urlPayload = parseBridgePayloadFromUrl();
+        if (urlPayload) {
+            state.recommendation = urlPayload;
+        }
         initErrorPanelState();
         if (el.parallelToggle) {
             el.parallelToggle.checked = localStorage.getItem(PARALLEL_ENABLED_STORAGE) === '1';
@@ -2203,13 +3149,11 @@
         syncParallelConcurrencyControls(localStorage.getItem(PARALLEL_CONCURRENCY_STORAGE) || PARALLEL_CONCURRENCY_DEFAULT, false);
         if (el.promptSystem) {
             fetch('/prompt').then(r => r.json()).then(d => { el.promptSystem.value = d.prompt || ''; }).catch(() => {
-                el.promptSystem.value = '系统提示词读取失败';
+                el.promptSystem.value = uiText('runtime.promptLoadFailed');
             });
         }
         bind();
         initSampleModelPicker();
-        await garmentBrowser.init();
-        await fetchFrontendConfig();
         updateRecommendationUi();
         syncFreedom();
         syncInterval();
@@ -2218,26 +3162,90 @@
         resetResult();
         renderGallery();
         refreshModelRateUi();
+        await fetchFrontendConfig();
+        _bridgeConfigReady = true;
+        while (_pendingBridgeEvents.length > 0) {
+            const queuedEvent = _pendingBridgeEvents.shift();
+            void handleBridgeMessage(queuedEvent);
+        }
+        postBridgeEvent('DOWN_JACKET_TRYON_READY');
+        await garmentBrowser.init();
         refreshCountdowns();
-        setInterval(refreshCountdowns, 1000);
+        const countdownTimer = setInterval(refreshCountdowns, 1000);
         refreshRateStatus(true);
-        setInterval(() => refreshRateStatus(true), 8000);
+        const rateTimer = setInterval(() => {
+            if (!document.hidden && !state.unloading) refreshRateStatus(true);
+        }, 8000);
         refreshErrors();
         await fetchRuntimeStatus();
-        const urlPayload = parseBridgePayloadFromUrl();
+        const runtimeTimer = setInterval(() => {
+            if (!document.hidden && !state.unloading) fetchRuntimeStatus(true);
+        }, 15000);
+        const stopBackgroundTimers = () => {
+            state.unloading = true;
+            clearInterval(countdownTimer);
+            clearInterval(rateTimer);
+            clearInterval(runtimeTimer);
+        };
+        window.addEventListener('pagehide', stopBackgroundTimers);
+        window.addEventListener('beforeunload', stopBackgroundTimers);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && !state.unloading) {
+                refreshRateStatus(true);
+                fetchRuntimeStatus(true);
+            }
+        });
+        const pendingSaved = readActiveTask();
+        if (pendingSaved && pendingSaved.taskId && !state.running) {
+            if (pendingSaved.taskToken) state.taskToken = pendingSaved.taskToken;
+            setRunning(true);
+            pollTask(pendingSaved.taskId, 0, 1).then(t => {
+                if (t) {
+                    const url = String(t.result_display_url || t.result_cloud_url || t.result_url || '').trim();
+                    if (url) {
+                        state.results = [url];
+                        state.resultPreviews = [url];
+                        showResult(url);
+                        renderGallery();
+                    }
+                }
+            }).catch(() => { }).finally(() => setRunning(false));
+        }
         if (urlPayload) {
             await applyRecommendationPayload(urlPayload, { channel: 'query' });
         } else {
             setUploadIntakeStatus('model', defaultIntakeStatus('model'), 'neutral');
             setUploadIntakeStatus('garment', defaultIntakeStatus('garment'), 'neutral');
-            setResultFeedback('info', '等待开始试穿', '可先上传用户全身照和羽绒服商品图，或从推荐系统一键带入素材。');
+            setResultFeedback('info', 'legacy.feedbackStart', 'legacy.feedbackStartHelp');
         }
         ready();
+        const modeParam = new URLSearchParams(window.location.search).get('mode');
+        if (window.location.hash === '#section-realtime' || modeParam === 'realtime') {
+            document.getElementById('section-realtime')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     }
 
-    init().catch(err => {
-        notify(err.message || '页面初始化失败', 'error');
-        reportError(err.message || '页面初始化失败', '初始化');
+    const start = window.WorkbenchI18n?.ready || Promise.resolve();
+    start.then(() => init()).catch(err => {
+        notify(err.message || 'Page initialization failed', 'error');
+        reportError(err.message || 'Page initialization failed', 'initialization');
+    });
+    window.addEventListener('localechange', () => {
+        applyCopy();
+        if (state.runtimeStatus) {
+            applyRuntimeModels(state.runtimeStatus);
+        } else {
+            syncTryonRoutingUi({ skipRateFetch: true, skipSavePrefs: true });
+        }
+        void garmentBrowser.refreshLocale();
+        updateRecommendationUi();
+        void localizeLinkedRecommendation();
+        updateCompareStage();
+        renderGallery();
+        Object.entries(state.intakeStatus).forEach(([kind, status]) => setUploadIntakeStatus(kind, status.key, status.tone, status.params));
+        if (state.integrationAlert) setIntegrationAlert(state.integrationAlert.key, state.integrationAlert.tone);
+        if (state.feedback) setResultFeedback(state.feedback.tone, state.feedback.titleKey, state.feedback.detailKey, state.feedback.params);
+        renderErrors();
     });
 })();
 

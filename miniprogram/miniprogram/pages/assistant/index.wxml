@@ -1,0 +1,256 @@
+<view class="assistant-page">
+  <view class="assistant-top">
+    <lang-switcher bind:localechange="onLocaleChange" />
+
+    <view class="card header-card">
+      <view class="flex-between">
+        <view>
+          <text class="assistant-title">{{texts.title}}</text>
+          <view class="status-row">
+            <view class="online-dot {{assistantConfig && !assistantConfig.enabled ? 'dot-off' : ''}}"></view>
+            <text class="muted-text">
+              {{assistantConfig && !assistantConfig.enabled ? texts.statusDisabled : texts.statusOnline}}
+            </text>
+          </view>
+        </view>
+        <view class="header-btns">
+          <button class="btn-ghost hdr-btn" bindtap="onToggleFaq">{{texts.faqToggleBtn}}</button>
+          <button class="btn-ghost hdr-btn" bindtap="onOpenVoiceSettings">{{texts.voiceSettingsBtn}}</button>
+          <button class="btn-primary hdr-call-btn" bindtap="onStartVoiceCall">{{texts.voiceCallBtn}}</button>
+        </view>
+      </view>
+
+      <view wx:if="{{faqOpen}}" class="faq-drawer">
+        <view class="faq-search-row">
+          <input
+            class="dark-input flex-1"
+            value="{{faqQuery}}"
+            placeholder="{{texts.faqPlaceholder}}"
+            placeholder-class="input-placeholder"
+            bindinput="onFaqInput"
+            bindconfirm="onSearchFaq"
+          />
+          <button class="btn-secondary faq-btn" bindtap="onSearchFaq">{{texts.search}}</button>
+        </view>
+        <view wx:if="{{faqItems.length}}">
+          <view wx:for="{{faqItems}}" wx:key="id" class="card-subtle faq-item">
+            <text class="faq-q">Q: {{item.question}}</text>
+            <text class="faq-a">{{item.answer}}</text>
+          </view>
+        </view>
+        <text wx:elif="{{!faqLoading}}" class="muted-text">{{texts.faqEmpty}}</text>
+      </view>
+    </view>
+  </view>
+
+  <scroll-view scroll-y scroll-into-view="{{scrollIntoId}}" class="chat-scroll">
+    <view wx:if="{{messages.length <= 1}}" class="quick-prompts-box">
+      <text class="quick-title">{{texts.quickPromptsTitle}}</text>
+      <view
+        wx:for="{{quickPrompts}}"
+        wx:key="*this"
+        class="quick-prompt-pill"
+        data-text="{{item}}"
+        bindtap="onTapQuickPrompt"
+      >
+        <text>{{item}}</text>
+      </view>
+    </view>
+
+    <view
+      wx:for="{{messages}}"
+      wx:key="id"
+      id="msg-{{item.id}}"
+      class="msg-row {{item.role === 'user' ? 'msg-row-user' : 'msg-row-assistant'}}"
+    >
+      <view class="msg-bubble {{item.role === 'user' ? 'bubble-user' : 'bubble-assistant'}}">
+        <text class="msg-text" user-select>{{item.content}}</text>
+
+        <view wx:if="{{item.role === 'assistant'}}" class="msg-footer">
+          <text wx:if="{{item.debug}}" class="msg-meta">{{item.debug.provider}} · {{item.debug.latency_ms}}ms</text>
+          <view
+            class="tts-pill {{playingMessageId === item.id ? 'tts-pill-active' : ''}}"
+            data-id="{{item.id}}"
+            bindtap="onToggleMessageTts"
+          >
+            <text>{{playingMessageId === item.id ? texts.stopTts : texts.playTts}}</text>
+          </view>
+        </view>
+
+        <view wx:if="{{item.patchLabels && item.patchLabels.length}}" class="patch-card">
+          <text class="patch-title">{{texts.patchTitle}}</text>
+          <view class="tag-row">
+            <text wx:for="{{item.patchLabels}}" wx:for-item="chip" wx:key="key" class="tag tag-blue">
+              {{chip.key}}: {{chip.value}}
+            </text>
+          </view>
+          <view class="patch-actions">
+            <button
+              class="btn-secondary patch-btn"
+              data-id="{{item.id}}"
+              data-autorun="false"
+              bindtap="onApplyPatch"
+            >{{texts.patchApplyOnly}}</button>
+            <button
+              class="btn-primary patch-btn"
+              data-id="{{item.id}}"
+              data-autorun="true"
+              bindtap="onApplyPatch"
+            >{{texts.patchApplyAndRun}}</button>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{sending}}" class="msg-row msg-row-assistant">
+      <view class="msg-bubble bubble-assistant">
+        <text class="muted-text">…</text>
+      </view>
+    </view>
+  </scroll-view>
+
+  <view class="composer-bar">
+    <view wx:if="{{recognizing}}" class="recognizing-hint">
+      <text>{{texts.recognizing}}</text>
+    </view>
+    <view class="composer-row">
+      <button
+        class="voice-btn {{recordingMode === 'composer' ? 'voice-btn-recording' : ''}}"
+        bindtap="onToggleComposerVoice"
+      >
+        {{recordingMode === 'composer' ? texts.recordingTapStop : texts.holdOrTapVoice}}
+      </button>
+      <input
+        class="dark-input composer-input"
+        value="{{inputText}}"
+        placeholder="{{texts.inputPlaceholder}}"
+        placeholder-class="input-placeholder"
+        confirm-type="send"
+        bindinput="onInputChange"
+        bindconfirm="onSendInput"
+      />
+      <button class="btn-primary send-btn" disabled="{{sending || !inputText}}" bindtap="onSendInput">
+        {{texts.sendBtn}}
+      </button>
+    </view>
+  </view>
+
+  <!-- Voice Settings Bottom Sheet -->
+  <view wx:if="{{voiceSettingsOpen}}" class="modal-mask" bindtap="onCloseVoiceSettings">
+    <view class="modal-sheet" catchtap="">
+      <view class="card-title-row">
+        <text class="card-title">{{texts.settingsTitle}}</text>
+        <text class="close-link" bindtap="onCloseVoiceSettings">{{texts.close}}</text>
+      </view>
+
+      <view class="setting-switch-row">
+        <text class="field-label">{{texts.autoPlayTts}}</text>
+        <switch checked="{{voiceSettings.autoPlayTts}}" color="#0071e3" data-field="autoPlayTts" bindchange="onSwitchVoiceSetting" />
+      </view>
+      <view class="setting-switch-row">
+        <text class="field-label">{{texts.autoSendAsr}}</text>
+        <switch checked="{{voiceSettings.autoSendAsr}}" color="#0071e3" data-field="autoSendAsr" bindchange="onSwitchVoiceSetting" />
+      </view>
+
+      <view wx:if="{{voiceOptionLabels.length}}" class="setting-block">
+        <view class="field-label-row"><text class="field-label">{{texts.voiceSelect}}</text></view>
+        <picker mode="selector" range="{{voiceOptionLabels}}" value="{{voiceOptionIndex}}" bindchange="onPickVoiceOption">
+          <view class="dark-picker">
+            <text>{{voiceOptionLabels[voiceOptionIndex]}}</text>
+            <text>▾</text>
+          </view>
+        </picker>
+      </view>
+
+      <view class="setting-block">
+        <view class="field-label-row"><text class="field-label">{{texts.tonePreset}}</text></view>
+        <view class="chip-wrap">
+          <view
+            wx:for="{{toneOptions}}"
+            wx:key="id"
+            class="chip {{voiceSettings.tonePreset === item.id ? 'chip-active' : ''}}"
+            data-tone="{{item.id}}"
+            bindtap="onSelectTonePreset"
+          >{{item.label}}</view>
+        </view>
+      </view>
+
+      <view class="setting-block">
+        <view class="field-label-row"><text class="field-label">{{texts.asrLang}}</text></view>
+        <view class="chip-wrap">
+          <view
+            wx:for="{{asrLanguages}}"
+            wx:key="value"
+            class="chip {{voiceSettings.asrLanguage === item.value ? 'chip-active' : ''}}"
+            data-lang="{{item.value}}"
+            bindtap="onSelectAsrLang"
+          >{{item.label}}</view>
+        </view>
+      </view>
+
+      <view class="setting-block">
+        <view class="field-label-row">
+          <text class="field-label">{{texts.volume}}</text>
+          <text class="muted-text">{{voiceSettings.volume}}</text>
+        </view>
+        <slider
+          min="20"
+          max="100"
+          step="5"
+          value="{{voiceSettings.volume * 100}}"
+          activeColor="#0071e3"
+          backgroundColor="rgba(255,255,255,0.16)"
+          block-size="18"
+          bindchange="onChangeVolume"
+        />
+      </view>
+    </view>
+  </view>
+
+  <!-- Full-Screen Voice Call Overlay -->
+  <view wx:if="{{callOpen}}" class="call-overlay">
+    <view class="call-header">
+      <text class="call-title">{{texts.callTitle}}</text>
+      <text class="call-timer">{{callDurationText}}</text>
+    </view>
+
+    <view class="call-orb-stage">
+      <view class="call-orb orb-{{callState}}">
+        <text class="call-orb-glyph">◎</text>
+      </view>
+      <text class="call-state-text">{{callStateLabel}}</text>
+      <text wx:if="{{callError}}" class="call-error-text">{{callError}}</text>
+    </view>
+
+    <scroll-view scroll-y class="call-captions">
+      <view wx:if="{{callTranscript}}" class="caption-card">
+        <text class="caption-role">YOU</text>
+        <text class="caption-copy">{{callTranscript}}</text>
+      </view>
+      <view wx:if="{{callReplyText}}" class="caption-card caption-ai">
+        <text class="caption-role">AI</text>
+        <text class="caption-copy">{{callReplyText}}</text>
+      </view>
+    </scroll-view>
+
+    <view class="call-controls">
+      <button class="btn-secondary call-side-btn" bindtap="onToggleCallMute">
+        {{callMuted ? texts.callUnmuteBtn : texts.callMuteBtn}}
+      </button>
+      <button
+        class="btn-primary call-mic-btn {{callState === 'recording' ? 'call-mic-recording' : ''}}"
+        bindtap="onToggleCallSpeak"
+      >
+        {{callState === 'recording' ? texts.callStopSpeakBtn : texts.callSpeakBtn}}
+      </button>
+      <button
+        wx:if="{{callState === 'speaking'}}"
+        class="btn-secondary call-side-btn"
+        bindtap="onInterruptCallTts"
+      >
+        {{texts.callInterruptBtn}}
+      </button>
+      <button class="btn-danger call-side-btn" bindtap="onHangUpCall">{{texts.callEndBtn}}</button>
+    </view>
+  </view>
+</view>

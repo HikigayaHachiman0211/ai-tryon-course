@@ -1,4 +1,5 @@
-FROM node:22-alpine AS frontend-builder
+# node:22-alpine (reviewed 2026-08-12; linux/amd64 digest)
+FROM node:22-alpine@sha256:76789712cd1ae89a1225eac9077010d68987a423588042dac30446f502f1858c AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -11,12 +12,13 @@ ENV VITE_TRYON_BASE_URL=$VITE_TRYON_BASE_URL
 ENV VITE_ADMIN_BASE_URL=$VITE_ADMIN_BASE_URL
 
 COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm install --no-audit --no-fund
+RUN npm ci --no-audit --no-fund
 
 COPY frontend ./
 RUN npm run build
 
-FROM python:3.11-slim
+# python:3.11-slim (reviewed 2026-08-12; linux/amd64 digest)
+FROM python:3.11-slim@sha256:78b39ef14d8e2b4d71f8dc304f1328c37df95fe0ef99477c2ae6bd3d03784553
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

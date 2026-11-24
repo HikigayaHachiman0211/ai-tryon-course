@@ -8,6 +8,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.i18n.locale import DEFAULT_LOCALE, normalize_locale
+
 logger = logging.getLogger(__name__)
 
 # Preset voices — always available
@@ -24,6 +26,28 @@ PRESET_VOICES: list[dict[str, Any]] = [
 
 DEFAULT_VOICE = "茉莉"
 AVAILABLE_VOICE_NAMES = [v["id"] for v in PRESET_VOICES]
+
+VOICE_DISPLAY_NAMES = {
+    "冰糖": {"en": "Bingtang", "ja": "ビンタン"},
+    "茉莉": {"en": "Jasmine", "ja": "ジャスミン"},
+    "苏打": {"en": "Soda", "ja": "ソーダ"},
+    "白桦": {"en": "Birch", "ja": "バーチ"},
+}
+
+
+def localize_voice_item(item: dict[str, Any], locale: str) -> dict[str, Any]:
+    resolved = normalize_locale(locale) or DEFAULT_LOCALE
+    voice_id = str(item.get("id") or item.get("name") or "")
+    display_name = voice_id if resolved == "zh-CN" else VOICE_DISPLAY_NAMES.get(voice_id, {}).get(resolved) or voice_id
+    source_description = str(item.get("description") or "")
+    description = source_description
+    if resolved == "en" and any("\u3400" <= char <= "\u9fff" for char in source_description):
+        description = "Preset voice"
+    elif (resolved == "ja" and any("\u3400" <= char <= "\u9fff" for char in source_description)
+          and not any("\u3040" <= char <= "\u30ff" for char in source_description)
+          and normalize_locale(item.get("language")) != "ja"):
+        description = "プリセット音声"
+    return {**item, "display_name": display_name, "display_description": description}
 
 
 def get_published_clone_voices() -> list[dict[str, str]]:

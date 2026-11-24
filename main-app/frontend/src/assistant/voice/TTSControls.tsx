@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Volume2, VolumeX } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   ttsEnabled: boolean;
@@ -11,14 +12,16 @@ interface Props {
 }
 
 export const TTSControls: React.FC<Props> = ({ ttsEnabled, isPlaying, onToggleTTS, onStop }) => {
+  const { t } = useTranslation('voice');
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
       <button
         onClick={onToggleTTS}
-        title={ttsEnabled ? '关闭语音播报' : '开启语音播报'}
+        title={ttsEnabled ? t('action.stop') : t('settings.tts')}
+        aria-label={ttsEnabled ? t('action.stop') : t('settings.tts')}
         style={{
-          width: 28,
-          height: 28,
+          width: 36,
+          height: 36,
           borderRadius: 8,
           background: ttsEnabled ? 'rgba(0, 113, 227, 0.15)' : 'rgba(255,255,255,0.04)',
           border: ttsEnabled ? '1px solid rgba(0, 113, 227, 0.3)' : '1px solid rgba(255,255,255,0.08)',
@@ -34,11 +37,13 @@ export const TTSControls: React.FC<Props> = ({ ttsEnabled, isPlaying, onToggleTT
       </button>
       {isPlaying && (
         <button
+          type="button"
           onClick={onStop}
-          title="停止播报"
+          title={t('action.stop')}
+          aria-label={t('action.stop')}
           style={{
-            width: 28,
-            height: 28,
+            width: 36,
+            height: 36,
             borderRadius: 8,
             background: 'rgba(239, 68, 68, 0.1)',
             border: '1px solid rgba(239, 68, 68, 0.2)',

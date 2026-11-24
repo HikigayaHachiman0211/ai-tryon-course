@@ -1,0 +1,12 @@
+<view wx:if="{{rows.length}}" class="breakdown-box">
+  <text class="breakdown-title">{{title}}</text>
+  <view wx:for="{{rows}}" wx:key="label" class="breakdown-row">
+    <view class="breakdown-head">
+      <text class="breakdown-name">{{item.label}}</text>
+      <text class="breakdown-score">{{item.score}}</text>
+    </view>
+    <view class="breakdown-track">
+      <view class="breakdown-fill {{item.toneClass}}" style="width: {{item.widthPct}}%;"></view>
+    </view>
+  </view>
+</view>

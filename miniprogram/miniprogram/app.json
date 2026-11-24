@@ -1,0 +1,46 @@
+{
+  "pages": [
+    "pages/recommend/index",
+    "pages/catalog/index",
+    "pages/tryon/index",
+    "pages/assistant/index",
+    "pages/style-lab/index",
+    "pages/history/index",
+    "pages/settings/index"
+  ],
+  "window": {
+    "backgroundColor": "#000000",
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#0a0a0c",
+    "navigationBarTitleText": "AI 羽绒服智选与试穿",
+    "navigationBarTextStyle": "white"
+  },
+  "tabBar": {
+    "custom": true,
+    "color": "#8e8e93",
+    "selectedColor": "#2997ff",
+    "backgroundColor": "#111114",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/recommend/index",
+        "text": "AI 推荐"
+      },
+      {
+        "pagePath": "pages/catalog/index",
+        "text": "羽绒服库"
+      },
+      {
+        "pagePath": "pages/tryon/index",
+        "text": "AI 试穿"
+      },
+      {
+        "pagePath": "pages/assistant/index",
+        "text": "AI 导购"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

@@ -15,13 +15,17 @@ from app.recommendation_rules import ensure_list
 def build_public_image_url(image_path: str) -> str:
     if image_path.startswith(("http://", "https://")):
         return image_path
+    if image_path.startswith("/static/products/"):
+        return image_path
 
     normalized_path = image_path.replace("\\", "/").lstrip("/")
     filename = Path(normalized_path).name
     public_base_url = os.getenv("PUBLIC_IMAGE_BASE_URL")
     if public_base_url:
-        return f"{public_base_url.rstrip('/')}/{quote(filename)}"
-    return f"/static/products/{quote(normalized_path, safe='/')}"
+        return f"{public_base_url.rstrip('/')}/{quote(filename, safe='%')}"
+    if normalized_path.startswith("static/products/"):
+        return f"/{normalized_path}"
+    return f"/static/products/{quote(normalized_path, safe='/%')}"
 
 
 def get_product_brand(product: Product) -> str | None:

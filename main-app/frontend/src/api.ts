@@ -1,6 +1,9 @@
-import axios, { isAxiosError } from 'axios';
+import axios, { AxiosHeaders, isAxiosError } from 'axios';
+import i18n from './i18n';
+import { DEFAULT_LOCALE, normalizeLocale, type AppLocale } from './i18n/locale';
 import type {
   HistoryListResponse,
+  ProductCatalogItem,
   ProductCatalogResponse,
   RecommendationRequest,
   RecommendationResponse,
@@ -21,8 +24,16 @@ const resolveApiBaseURL = (): string => {
 
 const API_BASE_URL = resolveApiBaseURL();
 
-const api = axios.create({
+export const api = axios.create({
   baseURL: API_BASE_URL,
+});
+
+const getActiveLocale = (): AppLocale => normalizeLocale(i18n.resolvedLanguage) ?? DEFAULT_LOCALE;
+
+api.interceptors.request.use((config) => {
+  config.headers = AxiosHeaders.from(config.headers);
+  config.headers.set('Accept-Language', getActiveLocale());
+  return config;
 });
 
 export const getHealth = async () => {
@@ -30,7 +41,8 @@ export const getHealth = async () => {
   return res.data;
 };
 
-const appendProfileFields = (formData: FormData, data: RecommendationRequest) => {
+const appendProfileFields = (formData: FormData, data: RecommendationRequest, locale = getActiveLocale()) => {
+  formData.append('locale', locale);
   if (data.photo) formData.append('photo', data.photo);
   formData.append('color_preference', data.color_preference);
   if (data.brand_preference) formData.append('brand_preference', data.brand_preference);
@@ -46,6 +58,8 @@ const appendProfileFields = (formData: FormData, data: RecommendationRequest) =>
   if (data.deepseek_model) formData.append('deepseek_model', data.deepseek_model);
   if (data.mimo_api_key) formData.append('mimo_api_key', data.mimo_api_key);
   if (data.mimo_model) formData.append('mimo_model', data.mimo_model);
+  if (data.opencode_go_api_key) formData.append('opencode_go_api_key', data.opencode_go_api_key);
+  if (data.opencode_go_model) formData.append('opencode_go_model', data.opencode_go_model);
   if (data.ai_provider) formData.append('ai_provider', data.ai_provider);
   if (data.vision_provider) formData.append('vision_provider', data.vision_provider);
 };
@@ -61,6 +75,18 @@ export const getRecommend = async (data: RecommendationRequest): Promise<Recomme
   });
   return res.data;
 };
+
+export function localizeResult(kind: 'recommend', result: RecommendationResponse, locale: AppLocale): Promise<RecommendationResponse>;
+export function localizeResult(kind: 'style-lab', result: StyleLabAnalysisResponse, locale: AppLocale): Promise<StyleLabAnalysisResponse>;
+export function localizeResult(kind: 'product', result: ProductCatalogItem, locale: AppLocale): Promise<ProductCatalogItem>;
+export async function localizeResult(
+  kind: 'recommend' | 'style-lab' | 'product',
+  result: RecommendationResponse | StyleLabAnalysisResponse | ProductCatalogItem,
+  locale: AppLocale,
+): Promise<RecommendationResponse | StyleLabAnalysisResponse | ProductCatalogItem> {
+  const response = await api.post('/api/localize-result', { kind, result, locale });
+  return response.data;
+}
 
 export const getDebugErrorCodes = async () => {
   try {
@@ -90,7 +116,7 @@ export const getCatalogProducts = async (params: {
   price_min?: number;
   price_max?: number;
 }): Promise<ProductCatalogResponse> => {
-  const res = await api.get('/api/products', { params });
+  const res = await api.get('/api/products', { params: { ...params, locale: getActiveLocale() } });
   return res.data;
 };
 
@@ -131,12 +157,12 @@ export const buildImageURL = (path: string) => {
 };
 
 export const getHistory = async (limit = 50): Promise<HistoryListResponse> => {
-  const res = await api.get('/api/history', { params: { limit } });
+  const res = await api.get('/api/history', { params: { limit, locale: getActiveLocale() } });
   return res.data;
 };
 
 export const getHistoryDetail = async (resultId: string) => {
-  const res = await api.get(`/api/history/${resultId}`);
+  const res = await api.get(`/api/history/${resultId}`, { params: { locale: getActiveLocale() } });
   return res.data;
 };
 
@@ -168,6 +194,7 @@ export interface AssistantChatRequest {
   session_id: string;
   message: string;
   page_context?: AssistantPageContext;
+  locale?: AppLocale;
 }
 
 export interface RecommendFormPatch {
@@ -184,6 +211,7 @@ export interface RecommendFormPatch {
   mimo_model?: string;
   gemini_model?: string;
   deepseek_model?: string;
+  opencode_go_model?: string;
 }
 
 export interface AssistantAction {
@@ -220,16 +248,16 @@ export interface KnowledgeSearchResponse {
 }
 
 export const getAssistantConfig = async (): Promise<AssistantPublicConfig> => {
-  const res = await api.get('/api/assistant/config/public');
+  const res = await api.get('/api/assistant/config/public', { params: { locale: getActiveLocale() } });
   return res.data;
 };
 
 export const postAssistantChat = async (data: AssistantChatRequest): Promise<AssistantChatResponse> => {
-  const res = await api.post('/api/assistant/chat', data);
+  const res = await api.post('/api/assistant/chat', { ...data, locale: data.locale ?? getActiveLocale() });
   return res.data;
 };
 
 export const searchAssistantKnowledge = async (q: string, limit = 5): Promise<KnowledgeSearchResponse> => {
-  const res = await api.get('/api/assistant/knowledge/search', { params: { q, limit } });
+  const res = await api.get('/api/assistant/knowledge/search', { params: { q, limit, locale: getActiveLocale() } });
   return res.data;
 };

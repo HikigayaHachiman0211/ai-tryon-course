@@ -29,6 +29,18 @@ import os
 from pathlib import Path
 from typing import Any
 
+from app.deepseek_models import (
+    DEFAULT_DEEPSEEK_MODEL,
+    is_deepseek_vision_capable,
+    normalize_deepseek_model,
+)
+from app.mimo_models import DEFAULT_MIMO_MODEL, normalize_mimo_model
+from app.opencode_go import (
+    DEFAULT_OPENCODE_GO_BASE_URL,
+    DEFAULT_OPENCODE_GO_MODEL,
+    is_opencode_go_vision_capable,
+)
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -37,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 _BACKEND_APP_ROOT = Path(__file__).resolve().parent  # backend/app/
 _BACKEND_ROOT = _BACKEND_APP_ROOT.parent             # backend/
-_PROJECT_ROOT = _BACKEND_ROOT.parent                 # Project4.15-AI-Try-on-with-frontend/
+_PROJECT_ROOT = _BACKEND_ROOT.parent                 # main-app/
 _LOCAL_ADMIN_DB = _PROJECT_ROOT / "admin" / "backend" / "admin_local.db"
 
 
@@ -387,11 +399,12 @@ def _query_feature_raw(feature_key: str) -> dict[str, Any] | None:
 _PROVIDER_DEFAULTS: dict[str, dict[str, str]] = {
     "mimo": {
         "base_url": "https://api.xiaomimimo.com/v1",
-        "default_model": "mimo-v2.5",
+        "default_model": DEFAULT_MIMO_MODEL,
         "auth_type": "api_key_header",
         "auth_header_name": "api-key",
         "env_key_var": "MIMO_API_KEY",
         "env_base_var": "MIMO_API_BASE",
+        "env_model_var": "MIMO_MODEL",
     },
     "mimo_asr": {
         "base_url": "https://api.xiaomimimo.com/v1",
@@ -419,26 +432,36 @@ _PROVIDER_DEFAULTS: dict[str, dict[str, str]] = {
     },
     "deepseek": {
         "base_url": "https://api.deepseek.com",
-        "default_model": "deepseek-v4-flash",
+        "default_model": DEFAULT_DEEPSEEK_MODEL,
         "auth_type": "bearer",
         "auth_header_name": "Authorization",
         "env_key_var": "DEEPSEEK_API_KEY",
         "env_base_var": "",
+        "env_model_var": "DEEPSEEK_MODEL",
+    },
+    "opencode_go": {
+        "base_url": DEFAULT_OPENCODE_GO_BASE_URL,
+        "default_model": DEFAULT_OPENCODE_GO_MODEL,
+        "auth_type": "bearer",
+        "auth_header_name": "Authorization",
+        "env_key_var": "OPENCODE_GO_API_KEY",
+        "env_base_var": "OPENCODE_GO_BASE_URL",
+        "env_model_var": "OPENCODE_GO_MODEL",
     },
 }
 
 _FEATURE_DEFAULTS: dict[str, dict[str, Any]] = {
     "recommendation": {
         "default_provider": "mimo",
-        "fallback_order": ["mimo", "gemini", "deepseek", "rule"],
+        "fallback_order": ["mimo", "gemini", "deepseek", "opencode_go", "rule"],
     },
     "vision_analysis": {
         "default_provider": "mimo",
-        "fallback_order": ["mimo", "gemini"],
+        "fallback_order": ["mimo", "gemini", "deepseek", "opencode_go"],
     },
     "assistant_chat": {
         "default_provider": "mimo",
-        "fallback_order": ["mimo", "deepseek", "rule"],
+        "fallback_order": ["mimo", "deepseek", "opencode_go", "rule"],
     },
     "voice_asr": {
         "default_provider": "mimo_asr",
@@ -526,7 +549,7 @@ def get_diagnostics() -> dict[str, Any]:
 
     # Check providers
     providers: dict[str, dict[str, Any]] = {}
-    for pk in ("mimo", "mimo_asr", "mimo_tts", "mimo_voice_clone", "gemini", "deepseek"):
+    for pk in ("mimo", "mimo_asr", "mimo_tts", "mimo_voice_clone", "gemini", "deepseek", "opencode_go"):
         raw = _query_provider_raw(pk)
         if raw:
             providers[pk] = raw
@@ -615,7 +638,7 @@ def resolve_provider_config(
     Resolution order:
       1. request_api_key / request_model / request_base_url overrides
       2. Admin DB row (enabled rows only; disabled row is *authoritative* — no env fallback)
-      3. Environment variables (only when DB row is absent or DB is unreachable)
+      3. Environment variables for fields still empty after the DB lookup
       4. Code defaults
 
     feature_key is used to apply the Gemini image-model guard: text features
@@ -628,6 +651,7 @@ def resolve_provider_config(
     defaults = _PROVIDER_DEFAULTS.get(provider_key, {})
     env_key_var = defaults.get("env_key_var", "")
     env_base_var = defaults.get("env_base_var", "")
+    env_model_var = defaults.get("env_model_var", "")
 
     # Step 1: request override (api_key, model, base_url only — not auth fields)
     api_key = (request_api_key or "").strip()
@@ -672,17 +696,37 @@ def resolve_provider_config(
         if db_header:
             auth_header_name = db_header
 
-    # Step 3: environment variables (only reached when DB row is absent/unreachable)
+    # Step 3: environment variables for fields not supplied by the request or DB.
     if not api_key and env_key_var:
         api_key = os.getenv(env_key_var, "").strip()
     if not base_url and env_base_var:
         base_url = os.getenv(env_base_var, "").strip()
+    if not model and env_model_var:
+        model = os.getenv(env_model_var, "").strip()
 
     # Step 4: code defaults (only for fields still empty)
     if not model:
         model = defaults.get("default_model", "")
     if not base_url:
         base_url = defaults.get("base_url", "")
+
+    if provider_key == "mimo":
+        model = normalize_mimo_model(model)
+    elif provider_key == "deepseek":
+        model = normalize_deepseek_model(model)
+        if feature_key == "vision_analysis" and not is_deepseek_vision_capable(model):
+            logger.warning(
+                "DeepSeek model '%s' does not support vision input for '%s'; substituting '%s'",
+                model, feature_key, DEFAULT_DEEPSEEK_MODEL,
+            )
+            model = DEFAULT_DEEPSEEK_MODEL
+    elif provider_key == "opencode_go":
+        if feature_key == "vision_analysis" and not is_opencode_go_vision_capable(model):
+            logger.warning(
+                "OpenCode Go model '%s' is text-only for '%s'; substituting '%s'",
+                model, feature_key, DEFAULT_OPENCODE_GO_MODEL,
+            )
+            model = DEFAULT_OPENCODE_GO_MODEL
 
     # Gemini image-model guard: text/chat features must not use image-gen models.
     # Image-generation Gemini models (e.g. gemini-*-image-preview) cannot process

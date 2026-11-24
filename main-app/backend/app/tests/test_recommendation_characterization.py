@@ -114,7 +114,7 @@ class TestRecommendProductsApiShape(unittest.TestCase):
 
     def test_top_level_keys(self):
         result = self._call()
-        self.assertSetEqual(set(result.keys()), {"filters", "inference", "items"})
+        self.assertSetEqual(set(result.keys()), {"filters", "inference", "items", "locale"})
 
     def test_filters_keys(self):
         result = self._call()
@@ -138,6 +138,7 @@ class TestRecommendProductsApiShape(unittest.TestCase):
                 "ai_provider", "vision_provider", "vision_provider_used",
                 "mimo_model", "mimo_used", "mimo_multimodal_used",
                 "ai_attempted", "rule_fallback_used", "provider_error_summary",
+                "display",
             },
         )
 
@@ -150,6 +151,8 @@ class TestRecommendProductsApiShape(unittest.TestCase):
             "product_url", "style_type", "color_family", "body_fit",
             "style_features", "function_features", "size_tags", "size_notes",
             "total_score", "score_breakdown", "radar_chart", "brand_score", "reason",
+            "product_gender", "gender_label", "is_child_product",
+            "canonical", "display", "product_key", "locale",
         }
         self.assertSetEqual(set(item.keys()), expected)
         # Internal ranking keys must be popped before returning
@@ -208,7 +211,7 @@ class TestListCatalogProductsApiShape(unittest.TestCase):
         result = self._call()
         self.assertSetEqual(
             set(result.keys()),
-            {"items", "total", "offset", "limit", "mode", "user_gender", "gender_fallback"},
+            {"items", "total", "offset", "limit", "mode", "user_gender", "gender_fallback", "locale"},
         )
 
     def test_item_keys(self):
@@ -220,6 +223,7 @@ class TestListCatalogProductsApiShape(unittest.TestCase):
             "product_url", "style_type", "color_family", "body_fit",
             "style_features", "function_features", "size_tags", "size_notes",
             "product_gender", "gender_label", "is_child_product",
+            "canonical", "display", "product_key", "locale",
         }
         self.assertSetEqual(set(item.keys()), expected)
 
@@ -275,14 +279,14 @@ class TestAnalyzeSelectedProductApiShape(unittest.TestCase):
 
     def test_top_level_keys(self):
         result = self._call()
-        self.assertSetEqual(set(result.keys()), {"product", "inference", "analysis"})
+        self.assertSetEqual(set(result.keys()), {"product", "inference", "analysis", "locale"})
 
     def test_analysis_keys(self):
         result = self._call()
         self.assertSetEqual(
             set(result["analysis"].keys()),
             {
-                "total_score", "score_breakdown", "radar_chart", "reason",
+                "total_score", "score_breakdown", "radar_chart", "reason", "canonical_reason",
                 "styling_advice", "brand_score", "budget_note", "brand_note",
                 "gender_note", "personality_note",
             },

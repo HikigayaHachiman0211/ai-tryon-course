@@ -1,8 +1,18 @@
+import { useTranslation } from 'react-i18next';
+
 interface ScoreBreakdownProps {
   breakdown: Record<string, number>;
 }
 
 export function ScoreBreakdown({ breakdown }: ScoreBreakdownProps) {
+  const { t } = useTranslation(['styleLab', 'common']);
+  const codeByLegacyLabel: Record<string, string> = {
+    '颜色适配度': 'color',
+    '身材适配度': 'size',
+    '款式适配度': 'style',
+    '品牌偏好度': 'brand',
+    '性格适配度': 'personality',
+  };
   return (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
       {Object.entries(breakdown).map(([label, score]) => (
@@ -17,7 +27,7 @@ export function ScoreBreakdown({ breakdown }: ScoreBreakdownProps) {
             color: 'var(--text-secondary)',
           }}
         >
-          {label} {score}
+          {t(`score.dimension.${codeByLegacyLabel[label] ?? label}`)} {score}
         </span>
       ))}
     </div>

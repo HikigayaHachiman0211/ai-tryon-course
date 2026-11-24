@@ -2,6 +2,7 @@ import React from 'react';
 import type { AssistantChatMessage } from '../assistantTypes';
 import type { UseMessageTTSReturn } from '../voice/useMessageTTS';
 import { MessageBubble } from './MessageBubble';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   messages: AssistantChatMessage[];
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export const MessageList: React.FC<Props> = ({ messages, messageTTS }) => {
+  const { t } = useTranslation('assistant');
   const listRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -29,7 +31,7 @@ export const MessageList: React.FC<Props> = ({ messages, messageTTS }) => {
         padding: 24,
         textAlign: 'center',
       }}>
-        你好！我是你的羽绒服 AI 导购助手。告诉我你的穿搭需求吧。
+        {t('welcome')}
       </div>
     );
   }

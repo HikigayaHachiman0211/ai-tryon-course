@@ -1,0 +1,73 @@
+{
+    email {$ACME_EMAIL}
+    auto_https prefer_wildcard
+}
+
+https://{$PUBLIC_FQDN} {
+    encode gzip
+    request_body {
+        max_size 20MB
+    }
+    log {
+        output file /data/access-main.log {
+            roll_size 25MiB
+            roll_keep 5
+            roll_keep_for 168h
+        }
+        format json
+    }
+    handle_path /mp-tryon/* {
+        reverse_proxy workbench:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+    handle {
+        reverse_proxy main:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+}
+
+https://{$PUBLIC_FQDN}:8443 {
+    encode gzip
+    request_body {
+        max_size 20MB
+    }
+    log {
+        output file /data/access-admin.log {
+            roll_size 25MiB
+            roll_keep 5
+            roll_keep_for 168h
+        }
+        format json
+    }
+    reverse_proxy admin:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+https://{$PUBLIC_FQDN}:9443 {
+    encode gzip
+    request_body {
+        max_size 20MB
+    }
+    log {
+        output file /data/access-workbench.log {
+            roll_size 25MiB
+            roll_keep 5
+            roll_keep_for 168h
+        }
+        format json
+    }
+    reverse_proxy workbench:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}

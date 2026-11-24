@@ -15,10 +15,12 @@ import os
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_admin
 from app.database import AIAPIProvider, AdminUser, VoiceCloneProfile, get_db
+from app.services import gcs
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,7 @@ router = APIRouter(prefix="/api/voice-clones", tags=["voice-clones"])
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 ALLOWED_EXTENSIONS = {".wav", ".mp3"}
 
-# Upload directory — configurable via env, defaults to data/uploads
+# Upload directory — configurable via env, defaults to data/uploads (used only as local dev fallback)
 _UPLOAD_DIR = os.environ.get(
     "VOICE_CLONE_UPLOAD_DIR",
     os.path.join(os.path.dirname(__file__), "..", "..", "data", "uploads", "voice_clones"),
@@ -37,6 +39,20 @@ _UPLOAD_DIR = os.environ.get(
 
 def _ensure_upload_dir():
     os.makedirs(_UPLOAD_DIR, exist_ok=True)
+
+
+def _cleanup_stored_audio(stored_path: str | None) -> None:
+    if not stored_path:
+        return
+    if os.path.isfile(stored_path):
+        try:
+            os.remove(stored_path)
+        except OSError:
+            pass
+    try:
+        gcs.delete_blob(stored_path)
+    except Exception:
+        pass
 
 
 def _validate_audio_header(data: bytes, filename: str) -> str | None:
@@ -161,19 +177,61 @@ async def upload_reference_audio(
     if header_error:
         raise HTTPException(status_code=400, detail=header_error)
 
-    # Save to upload directory
-    _ensure_upload_dir()
+    # Save to private object storage (Blob) with cleanup of any previous audio
     ext = os.path.splitext(filename)[1].lower() or ".wav"
     safe_filename = f"{profile_id}_{uuid.uuid4().hex[:8]}{ext}"
-    filepath = os.path.join(_UPLOAD_DIR, safe_filename)
-    with open(filepath, "wb") as f:
-        f.write(data)
+    blob_name = f"{gcs.VOICE_CLONES_GCS_PREFIX}/{profile_id}/{safe_filename}"
+    content_type = "audio/mpeg" if ext == ".mp3" else "audio/wav"
 
-    profile.source_audio_path = filepath
+    previous_path = profile.source_audio_path
+    stored_path = blob_name
+    try:
+        gcs.upload_blob(blob_name, data, content_type=content_type)
+    except Exception as exc:
+        logger.warning("Object storage upload failed for voice clone %s, falling back to local disk: %s", profile_id, exc)
+        _ensure_upload_dir()
+        filepath = os.path.join(_UPLOAD_DIR, safe_filename)
+        with open(filepath, "wb") as f:
+            f.write(data)
+        stored_path = filepath
+
+    if previous_path and previous_path != stored_path:
+        _cleanup_stored_audio(previous_path)
+
+    profile.source_audio_path = stored_path
     profile.updated_by = admin.username
     db.commit()
 
-    return {"ok": True, "filename": safe_filename}
+    return {"ok": True, "filename": safe_filename, "blob_path": stored_path}
+
+
+@router.get("/{profile_id}/audio")
+def download_reference_audio(
+    profile_id: int,
+    admin: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Download stored reference audio for an admin-authenticated voice clone profile."""
+    del admin
+    profile = db.query(VoiceCloneProfile).get(profile_id)
+    if not profile or not profile.source_audio_path:
+        raise HTTPException(status_code=404, detail="Audio not found")
+
+    stored_path = profile.source_audio_path
+    data: bytes | None = None
+    if os.path.isfile(stored_path):
+        try:
+            with open(stored_path, "rb") as f:
+                data = f.read()
+        except OSError:
+            data = None
+    if data is None:
+        data = gcs.download_blob(stored_path)
+    if not data:
+        raise HTTPException(status_code=404, detail="Audio not found")
+
+    media_type = "audio/mpeg" if stored_path.lower().endswith(".mp3") else "audio/wav"
+    return Response(content=data, media_type=media_type, headers={"Cache-Control": "private, max-age=300"})
 
 
 @router.put("/{profile_id}")
@@ -311,11 +369,13 @@ def delete_voice_clone(
     admin: AdminUser = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """Disable (soft delete) a voice clone profile."""
+    """Disable (soft delete) a voice clone profile and purge stored reference audio."""
     profile = db.query(VoiceCloneProfile).get(profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
 
+    _cleanup_stored_audio(profile.source_audio_path)
+    profile.source_audio_path = None
     profile.enabled = False
     profile.is_published = False
     profile.updated_by = admin.username

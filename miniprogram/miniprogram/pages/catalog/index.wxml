@@ -1,0 +1,92 @@
+<view class="page-shell">
+  <lang-switcher bind:localechange="onLocaleChange" />
+
+  <view class="section-hero">
+    <view class="hero-title">{{texts.title}}</view>
+    <view class="hero-copy">{{texts.subtitle}}</view>
+  </view>
+
+  <view class="card filter-card">
+    <view class="search-row">
+      <input
+        class="dark-input flex-1"
+        value="{{query}}"
+        placeholder="{{texts.searchPlaceholder}}"
+        placeholder-class="input-placeholder"
+        confirm-type="search"
+        bindinput="onQueryInput"
+        bindconfirm="onSearchConfirm"
+      />
+      <button class="btn-secondary search-btn" bindtap="onSearchConfirm">{{texts.searchBtn}}</button>
+    </view>
+
+    <view class="chip-wrap">
+      <view
+        class="chip {{platform === 'all' ? 'chip-active' : ''}}"
+        data-platform="all"
+        bindtap="onSelectPlatform"
+      >{{texts.platformAll}}</view>
+      <view
+        class="chip {{platform === 'jd' ? 'chip-active' : ''}}"
+        data-platform="jd"
+        bindtap="onSelectPlatform"
+      >{{texts.platformJd}}</view>
+      <view
+        class="chip {{platform === 'taobao' ? 'chip-active' : ''}}"
+        data-platform="taobao"
+        bindtap="onSelectPlatform"
+      >{{texts.platformTaobao}}</view>
+    </view>
+
+    <view class="chip-wrap">
+      <view
+        class="chip {{gender === '' ? 'chip-active' : ''}}"
+        data-gender=""
+        bindtap="onSelectGenderFilter"
+      >{{texts.genderAll}}</view>
+      <view
+        class="chip {{gender === 'female' ? 'chip-active' : ''}}"
+        data-gender="female"
+        bindtap="onSelectGenderFilter"
+      >{{texts.genderFemale}}</view>
+      <view
+        class="chip {{gender === 'male' ? 'chip-active' : ''}}"
+        data-gender="male"
+        bindtap="onSelectGenderFilter"
+      >{{texts.genderMale}}</view>
+    </view>
+  </view>
+
+  <view class="count-row">
+    <text class="muted-text">{{texts.totalCount}}</text>
+  </view>
+
+  <view wx:if="{{errorMsg}}" class="error-banner">{{errorMsg}}</view>
+
+  <view wx:if="{{loading}}" class="card-subtle center-box">
+    <text class="muted-text">{{texts.loading}}</text>
+  </view>
+
+  <block wx:elif="{{items.length}}">
+    <product-card
+      wx:for="{{items}}"
+      wx:key="id"
+      item="{{item}}"
+      rank="{{0}}"
+      locale="{{locale}}"
+      bind:tryon="onCardTryOn"
+      bind:stylelab="onCardStyleLab"
+    />
+    <view class="center-box">
+      <text class="muted-text">
+        {{loadingMore ? texts.loadingMore : (items.length >= total ? texts.noMore : '')}}
+      </text>
+    </view>
+  </block>
+
+  <view wx:else class="card-subtle center-box">
+    <text class="muted-text">{{texts.empty}}</text>
+  </view>
+
+  <view class="safe-tab-spacer"></view>
+</view>

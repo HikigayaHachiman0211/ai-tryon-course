@@ -1,65 +1,15 @@
 """
 Unit tests for the SSRF guard added to main.py.
 
-Run from PJ111ForGemini/Cloud/:
+Run from tryon-workbench/:
     python -m unittest test_ssrf -v
 """
-import os
-import sys
 import socket
-import types
 import unittest
-import importlib.util
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-# Load main.py with temporary dependency stubs. The patch context restores
-# sys.modules after import so this test cannot replace the real ``app`` package
-# for other tests in the same pytest process.
-_HERE = os.path.dirname(os.path.abspath(__file__))
-if _HERE not in sys.path:
-    sys.path.insert(0, _HERE)
+from main import _check_url_safe_for_ssrf
 
-_google = types.ModuleType("google")
-_google.genai = MagicMock()  # type: ignore[attr-defined]
-_pil = types.ModuleType("PIL")
-_pil.Image = MagicMock()  # type: ignore[attr-defined]
-_app = types.ModuleType("app")
-_app_products = MagicMock()
-_app_products.load_catalog = MagicMock()
-_app_products.list_products = MagicMock()
-_app_products.get_filter_options = MagicMock()
-_app_config = MagicMock()
-_app_config.resolve_tryon_runtime_config = MagicMock()
-_app_config.get_tryon_runtime_status = MagicMock()
-
-_temporary_modules = {
-    "google": _google,
-    "google.genai": MagicMock(),
-    "google.cloud": MagicMock(),
-    "google.cloud.firestore": MagicMock(),
-    "google.cloud.storage": MagicMock(),
-    "PIL": _pil,
-    "PIL.Image": MagicMock(),
-    "app": _app,
-    "app.products": _app_products,
-    "app.admin_runtime_config": _app_config,
-    "app.admin_report": MagicMock(),
-}
-
-import fastapi.staticfiles as _fss  # noqa: E402
-
-with patch.dict(sys.modules, _temporary_modules), patch.object(_fss, "StaticFiles", MagicMock()):
-    _spec = importlib.util.spec_from_file_location("_ssrf_main_under_test", Path(_HERE) / "main.py")
-    if _spec is None or _spec.loader is None:
-        raise RuntimeError("Unable to load main.py for SSRF tests")
-    _main_under_test = importlib.util.module_from_spec(_spec)
-    _spec.loader.exec_module(_main_under_test)
-
-_check_url_safe_for_ssrf = _main_under_test._check_url_safe_for_ssrf
-
-
-# ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _addrinfo(ip: str):
     """Minimal getaddrinfo result for a single IP."""
